@@ -68,39 +68,48 @@ def initialize_firestore_client() -> firestore.Client:
       2. FIREBASE_CREDENTIALS / GOOGLE_APPLICATION_CREDENTIALS (file path)
       3. FIRESTORE_EMULATOR_HOST (local emulator mode)
       4. Default Google Application Credentials
+      5. Anonymous fallback for sandbox/local initialization
     """
-    if not firebase_admin._apps:
-        cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
-        cred_path = os.getenv("FIREBASE_CREDENTIALS") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        project_id = os.getenv("FIREBASE_PROJECT_ID", "stroke-cyber-matrix")
+    cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    cred_path = os.getenv("FIREBASE_CREDENTIALS") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    project_id = os.getenv("FIREBASE_PROJECT_ID", "stroke-cyber-matrix")
 
-        if cred_json:
-            try:
-                cred_dict = json.loads(cred_json)
-                cred = credentials.Certificate(cred_dict)
+    if cred_json:
+        try:
+            cred_dict = json.loads(cred_json)
+            cred = credentials.Certificate(cred_dict)
+            if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred, {"projectId": project_id})
-                print("[STROKE DB] Initialized Firebase Admin from FIREBASE_SERVICE_ACCOUNT_JSON", flush=True)
-            except Exception as e:
-                print(f"[STROKE DB WARNING] Failed to load FIREBASE_SERVICE_ACCOUNT_JSON: {e}", file=sys.stderr)
-        elif cred_path and os.path.exists(cred_path):
-            try:
-                cred = credentials.Certificate(cred_path)
+            print("[STROKE DB] Initialized Firebase Admin from FIREBASE_SERVICE_ACCOUNT_JSON", flush=True)
+            return firestore.client()
+        except Exception as e:
+            print(f"[STROKE DB WARNING] Failed to load FIREBASE_SERVICE_ACCOUNT_JSON: {e}", file=sys.stderr)
+
+    if cred_path and os.path.exists(cred_path):
+        try:
+            cred = credentials.Certificate(cred_path)
+            if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred, {"projectId": project_id})
-                print(f"[STROKE DB] Initialized Firebase Admin from certificate file: {cred_path}", flush=True)
-            except Exception as e:
-                print(f"[STROKE DB WARNING] Failed to load certificate from path {cred_path}: {e}", file=sys.stderr)
-        else:
-            try:
-                # Attempts Application Default Credentials or Emulator
-                cred = credentials.ApplicationDefault()
-                firebase_admin.initialize_app(cred, {"projectId": project_id})
-                print(f"[STROKE DB] Initialized Firebase Admin with ApplicationDefault (Project: {project_id})", flush=True)
-            except Exception as e:
-                # Fallback initialization for developer sandboxes or emulator setups
-                print(f"[STROKE DB NOTICE] ApplicationDefault unavailable ({e}). Initializing with mock project '{project_id}'.", flush=True)
+            print(f"[STROKE DB] Initialized Firebase Admin from certificate file: {cred_path}", flush=True)
+            return firestore.client()
+        except Exception as e:
+            print(f"[STROKE DB WARNING] Failed to load certificate from path {cred_path}: {e}", file=sys.stderr)
+
+    # Attempt standard ApplicationDefault credentials
+    try:
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(credentials.ApplicationDefault(), {"projectId": project_id})
+        return firestore.client()
+    except Exception as e:
+        print(f"[STROKE DB NOTICE] Google Application credentials not found ({e}). Initializing sandbox/emulator fallback client.", flush=True)
+        try:
+            from google.auth.credentials import AnonymousCredentials
+            from google.cloud import firestore as g_firestore
+            return g_firestore.Client(project=project_id, credentials=AnonymousCredentials())
+        except Exception:
+            if not firebase_admin._apps:
                 firebase_admin.initialize_app(options={"projectId": project_id})
-
-    return firestore.client()
+            return firestore.client()
 
 # Instantiation of the Firestore client
 db: firestore.Client = initialize_firestore_client()
