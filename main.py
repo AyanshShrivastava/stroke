@@ -45,6 +45,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import DELETE_FIELD
 
+import vfx_service
+
 # ==============================================================================
 # CONFIGURATION & ENVIRONMENT VARIABLES
 # ==============================================================================
@@ -605,22 +607,13 @@ async def feed_database_5x(payload: FeedDatabaseRequest):
     batch = db.batch()
     records_response: List[Dict[str, Any]] = []
 
-    # Batch injection loop for exactly 5 high-density records
-    for i in range(1, 6):
-        record_id = f"STRK-BAT-{i:03d}"
+    # Generate the 5 authentic Elemental Worlds VFX records
+    vfx_records = vfx_service.generate_vfx_5x_records()
+
+    # Batch injection loop for exactly 5 high-density VFX records (STRK-BAT-001..005)
+    for record_data in vfx_records:
+        record_id = record_data["record_id"]
         sub_doc_ref = user_ref.collection("records").document(record_id)
-
-        # Random generated load metric bounded strictly between 85.5 and 100.0
-        metric_load = round(random.uniform(85.5, 100.0), 3)
-        integrity_hash = secrets.token_hex(8)
-
-        record_data = {
-            "record_id": record_id,
-            "metric_load": metric_load,
-            "status": "optimized",
-            "integrity_hash": integrity_hash,
-            "created_at": datetime.now(timezone.utc)
-        }
 
         try:
             batch.set(sub_doc_ref, record_data)
@@ -629,7 +622,8 @@ async def feed_database_5x(payload: FeedDatabaseRequest):
 
         # JSON serialize timestamp for response payload
         record_data_copy = dict(record_data)
-        record_data_copy["created_at"] = record_data["created_at"].isoformat()
+        if isinstance(record_data_copy.get("created_at"), datetime):
+            record_data_copy["created_at"] = record_data_copy["created_at"].isoformat()
         records_response.append(record_data_copy)
 
     # Within the exact same batch boundaries, atomically update parent doc's database_fed to true
@@ -639,15 +633,33 @@ async def feed_database_5x(payload: FeedDatabaseRequest):
     except Exception as exc:
         print(f"[STROKE DB NOTICE] Firestore live batch commit note ({exc}). Batch payload simulated successfully.", flush=True)
 
-    print(f"[STROKE DB] 5x Matrix Batch successfully committed for {email} (STRK-BAT-001..005)", flush=True)
+    print(f"[STROKE DB] 5x Matrix Batch successfully committed for {email} (STRK-BAT-001..005 // Elemental Worlds VFX)", flush=True)
 
     return {
         "status": "success",
-        "message": "5x high-density database injection matrix successfully committed.",
+        "message": "5x high-density Elemental Worlds VFX database injection matrix successfully committed.",
         "email": email,
         "database_fed": True,
         "records_count": len(records_response),
-        "records": records_response
+        "records": records_response,
+        "source": "AyanshShrivastava/elemental-worlds"
+    }
+
+
+@app.get("/database/vfx-stats", tags=["Elemental Worlds VFX Database"])
+async def get_vfx_stats():
+    """Returns top-level metadata of the 4.4MB Elemental Worlds VFX database."""
+    return vfx_service.get_vfx_database_stats()
+
+
+@app.get("/database/vfx/search", tags=["Elemental Worlds VFX Database"])
+async def search_vfx(q: str = Query(..., min_length=1, description="Keyword to search in VFX database")):
+    """Searches models, particle emitters, and textures across the 14,666 Elemental Worlds VFX instances."""
+    results = vfx_service.search_vfx_database(q, max_results=6)
+    return {
+        "query": q,
+        "count": len(results),
+        "results": results
     }
 
 
@@ -1166,6 +1178,23 @@ AI_TOOLS_SCHEMA = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_vfx_database",
+            "description": "Searches the Elemental Worlds Roblox VFX database (14,666 instances, 3,160 textures, 95 models) for particle emitter configurations, textures, beam properties, and ability setups.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The VFX model name, element, or particle effect keyword (e.g. 'Sukuna', 'Hollow purple', 'Fireball', 'Aqua', 'Orb', 'Slash')."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]
 
@@ -1175,11 +1204,10 @@ async def chat_with_neural_ai(payload: AiChatRequest):
     """
     POST /ai/chat
     Autonomous Agent Tool-Calling Chat Endpoint:
-    1. The AI is equipped with the `web_search` tool capability.
-    2. The model AUTONOMOUSLY determines whether it needs live internet search.
-    3. If the model invokes `web_search`, the backend executes the search,
-       feeds results back as a tool response, and lets the model synthesize findings with citations.
-    4. If no web search is needed, the model answers directly with zero search latency.
+    1. The AI is equipped with `web_search` and `search_vfx_database` capabilities.
+    2. The model AUTONOMOUSLY determines whether it needs internet search or internal VFX database lookup.
+    3. If the model invokes a tool, the backend executes it, feeds results back, and synthesizes findings.
+    4. If no tool is needed, the model answers directly from weights with zero tool latency.
     """
     if not payload.messages:
         raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
@@ -1188,11 +1216,12 @@ async def chat_with_neural_ai(payload: AiChatRequest):
     
     system_instruction = (
         "You are Stroke Neural Core, a state-of-the-art cyberpunk software architect and AI engineer. "
-        "You have autonomous access to the 'web_search' tool. "
-        "If the user's prompt asks about current news, recent library changes, specific documentation, "
-        "real-world events, or topics requiring live validation, you MUST call the 'web_search' tool with a clear query. "
-        "If the prompt is general programming, explanation, logic, or math, DO NOT invoke web_search; answer directly. "
-        "When using search results, cite URLs with markdown links [Title](url)."
+        "You have autonomous access to two tools: 'web_search' and 'search_vfx_database'. "
+        "If the user asks about Roblox VFX, particles, beams, textures, or Elemental Worlds abilities "
+        "(such as Sukuna, Hollow Purple, Flames of Fury, Water Vortex, Orbs, Glitch, etc.), you MUST call 'search_vfx_database'. "
+        "If the user asks about current real-time documentation, recent news, or live web info, call 'web_search'. "
+        "If the prompt is general programming, math, or explanation, DO NOT invoke tools; answer directly. "
+        "Always cite sources and texture IDs accurately."
     )
 
     api_messages = [{"role": "system", "content": system_instruction}]
@@ -1204,6 +1233,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
     model_used = payload.model or "llama3.2"
     tool_invoked = False
     tool_query = ""
+    tool_name_used = ""
     sources_used: List[Dict[str, str]] = []
 
     active_groq_key = payload.api_key or GROQ_API_KEY
@@ -1213,7 +1243,6 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         try:
             groq_model = "llama-3.3-70b-versatile" if "70b" in model_used or "3.3" in model_used else "llama-3.1-8b-instant"
             async with httpx.AsyncClient(timeout=35.0) as client:
-                # Pass tools schema to model
                 req_body = {
                     "model": groq_model,
                     "messages": api_messages,
@@ -1230,21 +1259,34 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     choice = res.json()["choices"][0]
                     msg_obj = choice["message"]
 
-                    # Check if the AI autonomously invoked the web_search tool
+                    # Check if the AI autonomously invoked a tool
                     if msg_obj.get("tool_calls"):
                         tool_call = msg_obj["tool_calls"][0]
                         fn_name = tool_call["function"]["name"]
                         fn_args = json.loads(tool_call["function"]["arguments"])
                         tool_query = fn_args.get("query", last_user_message)
                         tool_invoked = True
+                        tool_name_used = fn_name
 
                         print(f"[STROKE AGENT] AI autonomously invoked tool: {fn_name}(query='{tool_query}')", flush=True)
 
-                        # Execute tool
-                        sources_used = await execute_web_search(tool_query, max_results=4)
+                        # Execute the corresponding tool
+                        if fn_name == "search_vfx_database":
+                            vfx_matches = vfx_service.search_vfx_database(tool_query, max_results=4)
+                            tool_msg_content = json.dumps(vfx_matches)
+                            sources_used = [
+                                {
+                                    "title": f"Elemental Worlds VFX: {vm['model_name']}",
+                                    "url": f"https://github.com/AyanshShrivastava/elemental-worlds#vfx-{vm['model_name'].lower().replace(' ', '-')}",
+                                    "snippet": f"Particles: {vm['particle_emitters_count']}, Beams: {vm['beams_count']}. Textures: {', '.join(vm['textures'][:2])}"
+                                }
+                                for vm in vfx_matches
+                            ]
+                        else:
+                            sources_used = await execute_web_search(tool_query, max_results=4)
+                            tool_msg_content = json.dumps(sources_used)
 
                         # Feed tool results back to model for 2nd pass synthesis
-                        tool_msg_content = json.dumps(sources_used)
                         api_messages.append(msg_obj)
                         api_messages.append({
                             "role": "tool",
@@ -1262,7 +1304,6 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                         if res2.status_code == 200:
                             ai_reply_text = res2.json()["choices"][0]["message"]["content"]
                     else:
-                        # AI answered directly without needing web search
                         ai_reply_text = msg_obj.get("content", "")
 
                     provider_used = "groq-agent"
@@ -1308,25 +1349,62 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         provider_used = "stroke-autonomous-agent"
         model_used = "llama-3.2-agentic"
 
-        # Agent autonomously checks if search is helpful
+        # Agent autonomously checks if internal VFX database or external web search is needed
+        vfx_keywords = ["vfx", "particle", "emitter", "texture", "sukuna", "purple", "elemental", "fireball", "aqua", "beam", "hollow", "aura", "slash", "orbs"]
         search_keywords = ["latest", "recent", "today", "news", "documentation", "update", "release", "what is", "who is", "version", "how to", "roblox", "luau", "fastapi"]
-        if payload.web_search and any(k in last_user_message.lower() for k in search_keywords):
+
+        if any(k in last_user_message.lower() for k in vfx_keywords):
             tool_invoked = True
+            tool_name_used = "search_vfx_database"
+            tool_query = last_user_message
+            vfx_matches = vfx_service.search_vfx_database(tool_query, max_results=3)
+
+            if vfx_matches:
+                ai_reply_text = f"### [STROKE AUTONOMOUS AGENT // ELEMENTAL WORLDS VFX DATABASE]\n\n"
+                ai_reply_text += f"> **Autonomous Tool Call**: `search_vfx_database(query='{tool_query}')`\n"
+                ai_reply_text += f"> Retrieved ground truth from **AyanshShrivastava/elemental-worlds** (14,666 instances parsed).\n\n"
+                for vm in vfx_matches:
+                    ai_reply_text += f"#### ⚡ Model: `{vm['model_name']}`\n"
+                    ai_reply_text += f"- **Particle Emitters**: {vm['particle_emitters_count']} | **Beams**: {vm['beams_count']} | **Parts**: {vm['parts_count']}\n"
+                    if vm['textures']:
+                        ai_reply_text += f"- **Referenced Textures**: {', '.join(f'`{t}`' for t in vm['textures'][:2])}\n"
+                    ai_reply_text += f"```luau\n-- Raw VFX Specification Snippet\n{vm['snippet']}\n```\n\n"
+                ai_reply_text += "---\n*Directly synchronized with the 5x database injection matrix.*"
+
+                sources_used = [
+                    {
+                        "title": f"Elemental Worlds: {vm['model_name']}",
+                        "url": f"https://github.com/AyanshShrivastava/elemental-worlds",
+                        "snippet": f"Particles: {vm['particle_emitters_count']}, Beams: {vm['beams_count']}"
+                    }
+                    for vm in vfx_matches
+                ]
+            else:
+                ai_reply_text = (
+                    f"### [STROKE NEURAL AGENT // VFX CATALOG SEARCH]\n\n"
+                    f"Queried Elemental Worlds VFX index for **'{tool_query}'**. "
+                    "The database contains 95 models (including Hollow purple, Sukuna, Fireball, Aura_WaterBubbleTrio). "
+                    "You can inspect the 5 canonical abilities directly in the 5X Injected Matrix below."
+                )
+
+        elif payload.web_search and any(k in last_user_message.lower() for k in search_keywords):
+            tool_invoked = True
+            tool_name_used = "web_search"
             tool_query = last_user_message
             sources_used = await execute_web_search(tool_query, max_results=4)
 
-        if sources_used:
-            ai_reply_text = f"### [STROKE AUTONOMOUS AGENT // WEB SEARCH TOOL INVOKED]\n\n"
-            ai_reply_text += f"> **Autonomous Decision**: Query requires live external validation. Executed `web_search(query='{tool_query}')`.\n\n"
-            ai_reply_text += "Here are the grounded internet findings:\n\n"
-            for s in sources_used:
-                ai_reply_text += f"- **[{s['title']}]({s['url']})**\n  > {s['snippet']}\n\n"
-            ai_reply_text += "---\n\n"
-            ai_reply_text += (
-                "**Offline Weights & Inference**:\n"
-                "- Run `python download_model.py` to download the 770MB Llama 3.2 weights directly into `models/`.\n"
-                "- Or provide a free [Groq API Key](https://console.groq.com) for full 70B autonomous tool execution!"
-            )
+            if sources_used:
+                ai_reply_text = f"### [STROKE AUTONOMOUS AGENT // WEB SEARCH TOOL INVOKED]\n\n"
+                ai_reply_text += f"> **Autonomous Decision**: Query requires live external validation. Executed `web_search(query='{tool_query}')`.\n\n"
+                ai_reply_text += "Here are the grounded internet findings:\n\n"
+                for s in sources_used:
+                    ai_reply_text += f"- **[{s['title']}]({s['url']})**\n  > {s['snippet']}\n\n"
+                ai_reply_text += "---\n\n"
+                ai_reply_text += (
+                    "**Offline Weights & Inference**:\n"
+                    "- Run `python download_model.py` to download the 770MB Llama 3.2 weights directly into `models/`.\n"
+                    "- Or provide a free [Groq API Key](https://console.groq.com) for full 70B autonomous tool execution!"
+                )
         else:
             ai_reply_text = (
                 f"### [STROKE NEURAL AGENT // DIRECT ANSWER]\n\n"
@@ -1342,6 +1420,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "model": model_used,
         "message": ai_reply_text,
         "tool_invoked": tool_invoked,
+        "tool_name": tool_name_used,
         "tool_query": tool_query,
         "sources": sources_used,
         "web_search_active": payload.web_search

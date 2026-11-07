@@ -34,9 +34,14 @@ def run_build():
     add_data = [
         f"index.html{sep}.",
         f"download_model.py{sep}.",
+        f"vfx_service.py{sep}.",
         f"requirements.txt{sep}.",
         f".env.example{sep}."
     ]
+
+    # Embed Elemental Worlds VFX Database if present
+    if os.path.exists("data"):
+        add_data.append(f"data{sep}data")
 
     # If offline neural models exist locally, bundle them directly for all-in-one distribution
     if os.path.exists("models"):

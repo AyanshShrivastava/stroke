@@ -446,17 +446,20 @@
 
           <!-- SECTION 3: 5X HIGH-DENSITY DATABASE INJECTION MATRIX -->
           <div class="rounded-xl border border-matrix-border bg-matrix-card p-6 glow-box relative">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-matrix-border">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-matrix-border">
               <div class="flex items-center gap-2">
                 <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 03</span>
-                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">5X High-Density Data Matrix</h2>
+                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">5X VFX Database Injection Matrix</h2>
               </div>
-              <span id="matrix-fed-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen">UNFED</span>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-glow">ELEMENTAL WORLDS (14,666 INSTANCES)</span>
+                <span id="matrix-fed-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen">UNFED</span>
+              </div>
             </div>
 
             <div class="space-y-4">
               <p class="text-xs text-matrix-muted leading-relaxed">
-                Executes an atomic <code class="text-matrix-green">db.batch()</code> commit writing 5 structural sub-documents to <code class="text-matrix-green">users/{email}/records/</code> (STRK-BAT-001 through 005) and atomically flips <code class="text-matrix-green">database_fed = true</code>.
+                Executes an atomic <code class="text-matrix-green">db.batch()</code> commit writing 5 high-density Elemental Worlds VFX sub-documents to <code class="text-matrix-green">users/{email}/records/</code> (Hollow Purple, Sukuna Cleave, Infernal Flames, Aqua Vortex, 404 Glitch Core) with real Roblox texture IDs and particle emitter matrices.
               </p>
 
               <!-- Trigger Button -->
@@ -491,9 +494,10 @@
                   <table class="w-full text-left text-xs font-mono border-collapse">
                     <thead>
                       <tr class="border-b border-matrix-border/60 text-matrix-muted text-[11px]">
-                        <th class="py-2 px-2">RECORD ID</th>
-                        <th class="py-2 px-2">METRIC LOAD</th>
-                        <th class="py-2 px-2">INTEGRITY HASH</th>
+                        <th class="py-2 px-2">ID</th>
+                        <th class="py-2 px-2">ELEMENT / VFX ABILITY</th>
+                        <th class="py-2 px-2">ASSET / PARTICLES</th>
+                        <th class="py-2 px-2">LOAD</th>
                         <th class="py-2 px-2 text-right">STATUS</th>
                       </tr>
                     </thead>
@@ -1069,11 +1073,17 @@
         progressLabel.textContent = '100% COMPLETE';
 
         logTelemetry('[NET_RES]', 'Status 200 OK — db.batch() committed atomically.');
-        logTelemetry('[FIRESTORE]', `5 Sub-documents injected into users/${email}/records/`, 'Sequence: STRK-BAT-001 -> STRK-BAT-005');
+        logTelemetry('[FIRESTORE]', `5 Sub-documents injected into users/${email}/records/`, 'Sequence: STRK-BAT-001 -> STRK-BAT-005 (Elemental Worlds)');
         logTelemetry('[FIRESTORE]', `Parent flag updated atomically: users/${email}.database_fed = TRUE`);
 
         state.databaseFed = true;
         renderInjectedRecords(data.records || []);
+
+        if (data.records) {
+          data.records.forEach((r) => {
+            logTelemetry('[VFX_MATRIX]', `Injected ${r.record_id}: ${r.vfx_name || 'VFX Record'} (${r.element || 'VFX'})`, `Asset: ${r.primary_asset || 'N/A'} | Load: ${r.metric_load}% | Hash: 0x${r.integrity_hash}`);
+          });
+        }
 
         document.getElementById('matrix-fed-status').textContent = 'SYNCHRONIZED';
         document.getElementById('matrix-fed-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
@@ -1104,24 +1114,43 @@
 
       records.forEach((rec) => {
         const tr = document.createElement('tr');
-        tr.className = 'hover:bg-matrix-black/80 transition-colors';
+        tr.className = 'hover:bg-matrix-black/80 transition-colors border-b border-matrix-border/20';
 
-        // Load Meter calculation (85.5% to 100%)
         const loadVal = parseFloat(rec.metric_load) || 90.0;
-        const hashDisplay = rec.integrity_hash ? `0x${rec.integrity_hash}` : '0x00000000';
+        const colorHex = rec.color_hex || '#00ff66';
+        const vfxName = rec.vfx_name || 'Standard Matrix Record';
+        const element = rec.element || 'CORE';
+        const assetId = rec.primary_asset || (rec.integrity_hash ? `0x${rec.integrity_hash}` : 'N/A');
+        const density = (rec.particle_count !== undefined) 
+          ? `${rec.particle_count} particles • ${rec.beam_count || 0} beams` 
+          : (rec.integrity_hash ? `0x${rec.integrity_hash}` : 'Optimized');
 
         tr.innerHTML = `
-          <td class="py-2.5 px-2 font-bold text-matrix-green tracking-wider">${escapeHtml(rec.record_id)}</td>
+          <td class="py-2.5 px-2 font-bold text-matrix-green tracking-wider whitespace-nowrap text-xs">${escapeHtml(rec.record_id)}</td>
           <td class="py-2.5 px-2">
+            <div class="space-y-0.5">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase border" style="border-color:${colorHex}; color:${colorHex}; background:rgba(0,0,0,0.6)">
+                  ${escapeHtml(element)}
+                </span>
+                <span class="text-white font-bold text-xs">${escapeHtml(vfxName)}</span>
+              </div>
+              <div class="text-[10px] text-matrix-muted font-mono truncate max-w-[220px]">${escapeHtml(rec.description || '')}</div>
+            </div>
+          </td>
+          <td class="py-2.5 px-2 font-mono text-[11px]">
+            <div class="text-matrix-glow truncate max-w-[190px] font-bold">${escapeHtml(assetId)}</div>
+            <div class="text-[10px] text-matrix-muted">${escapeHtml(density)}</div>
+          </td>
+          <td class="py-2.5 px-2 whitespace-nowrap">
             <div class="flex items-center gap-2">
-              <span class="text-white font-mono">${loadVal.toFixed(2)}%</span>
-              <div class="w-16 bg-black h-1.5 rounded-full border border-matrix-border overflow-hidden hidden sm:block">
+              <span class="text-white font-mono text-xs">${loadVal.toFixed(1)}%</span>
+              <div class="w-12 bg-black h-1.5 rounded-full border border-matrix-border overflow-hidden hidden sm:block">
                 <div class="bg-matrix-green h-full" style="width: ${loadVal}%"></div>
               </div>
             </div>
           </td>
-          <td class="py-2.5 px-2 text-matrix-muted font-mono text-[10px] tracking-wider">${escapeHtml(hashDisplay)}</td>
-          <td class="py-2.5 px-2 text-right">
+          <td class="py-2.5 px-2 text-right whitespace-nowrap">
             <span class="px-2 py-0.5 rounded text-[10px] border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold uppercase">
               ${escapeHtml(rec.status)}
             </span>
