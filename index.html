@@ -507,6 +507,111 @@
             </div>
           </div>
 
+
+          <!-- SECTION 4: NEURAL AI & LIVE WEB SEARCH CORE (LLAMA 3.2 / 3.3) -->
+          <div class="rounded-xl border border-matrix-border-bright/80 bg-matrix-card p-6 glow-box relative space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-matrix-border">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 04</span>
+                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">Neural Core & Live Web Search</h2>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="ai-engine-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-green">LLAMA ENGINE READY</span>
+              </div>
+            </div>
+
+            <!-- AI Controls Toolbar -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-lg border border-matrix-border bg-black text-xs font-mono">
+              <!-- Model Selector -->
+              <div class="sm:col-span-5 space-y-1">
+                <label class="text-[10px] uppercase text-matrix-muted">Active AI Model</label>
+                <select id="select-ai-model" class="w-full py-1.5 px-2 rounded border border-matrix-border bg-matrix-card text-matrix-green text-xs font-mono focus:outline-none focus:border-matrix-border-bright">
+                  <option value="llama3.2">Llama 3.2 (3B - Local / Ollama)</option>
+                  <option value="llama-3.3-70b-versatile">Llama 3.3 (70B - Groq Cloud Ultra)</option>
+                  <option value="llama-3.1-8b-instant">Llama 3.1 (8B - Cloud Instant)</option>
+                </select>
+              </div>
+
+              <!-- Web Search Switch -->
+              <div class="sm:col-span-4 space-y-1">
+                <label class="text-[10px] uppercase text-matrix-muted">Internet Grounding</label>
+                <button 
+                  id="btn-toggle-search" 
+                  type="button"
+                  onclick="toggleWebSearch()"
+                  class="w-full py-1.5 px-2 rounded border border-matrix-border-bright bg-matrix-border/50 text-matrix-green text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition"
+                >
+                  <span id="search-status-dot" class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
+                  <span id="search-toggle-label">WEB SEARCH: ON</span>
+                </button>
+              </div>
+
+              <!-- Local Model Pull Action -->
+              <div class="sm:col-span-3 space-y-1">
+                <label class="text-[10px] uppercase text-matrix-muted">Local Pull</label>
+                <button 
+                  id="btn-pull-model"
+                  type="button"
+                  onclick="pullCurrentModel()"
+                  class="w-full py-1.5 px-2 rounded border border-matrix-border bg-black text-matrix-green hover:bg-matrix-green hover:text-black text-xs font-mono font-bold transition flex items-center justify-center gap-1"
+                >
+                  <span>⚡ Pull Model</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Optional Groq Key Field -->
+            <div id="api-key-config-container" class="space-y-1">
+              <div class="flex items-center justify-between text-[10px] font-mono text-matrix-darkgreen">
+                <span>GROQ / OPENAI API KEY (OPTIONAL FOR 300 TOK/S CLOUD):</span>
+                <a href="https://console.groq.com" target="_blank" class="text-matrix-muted underline hover:text-matrix-green">Free at console.groq.com ↗</a>
+              </div>
+              <input 
+                type="password" 
+                id="input-ai-key" 
+                placeholder="gsk_... (Optional: leave empty to use local Ollama or built-in RAG synthesizer)"
+                class="w-full px-3 py-1.5 rounded border border-matrix-border bg-black text-matrix-green text-xs font-mono placeholder:text-matrix-border focus:outline-none focus:border-matrix-border-bright"
+              />
+            </div>
+
+            <!-- Neural Conversation Stream -->
+            <div id="ai-chat-thread" class="min-h-[220px] max-h-[380px] overflow-y-auto space-y-3 p-3.5 rounded-lg border border-matrix-border bg-black/90 font-mono text-xs">
+              <!-- Initial Welcome Message -->
+              <div class="flex gap-2.5 items-start">
+                <div class="h-6 w-6 rounded bg-matrix-border text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border-bright">
+                  AI
+                </div>
+                <div class="p-3 rounded-lg border border-matrix-border bg-matrix-card/80 text-matrix-green space-y-1.5 leading-relaxed max-w-[90%]">
+                  <div class="font-bold text-white flex items-center gap-2">
+                    <span>STROKE NEURAL AGENT // ONLINE</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded border border-matrix-border-bright text-matrix-green font-normal">LLAMA 3.2 / 3.3 READY</span>
+                  </div>
+                  <p class="text-matrix-muted">
+                    Equipped with real-time live internet search grounding. Ask about Roblox Luau VFX, system architecture, code debugging, or current technical events.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Query Input Bar -->
+            <div class="flex gap-2">
+              <input 
+                type="text" 
+                id="input-ai-prompt" 
+                placeholder="Ask Neural Core or search the web (e.g. 'Latest Luau VFX techniques 2026')..."
+                class="flex-1 px-4 py-2.5 rounded border border-matrix-border bg-matrix-input text-matrix-green placeholder:text-matrix-border text-xs font-mono focus:outline-none focus:border-matrix-border-bright"
+              />
+              <button 
+                id="btn-send-ai-prompt"
+                onclick="sendAiPrompt()"
+                class="glow-button px-5 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-1.5 whitespace-nowrap"
+              >
+                <span>Transmit</span>
+                <span id="ai-spinner" class="hidden">⚡</span>
+              </button>
+            </div>
+          </div>
+
         </div>
 
 
@@ -1094,11 +1199,233 @@
     }
 
     // -------------------------------------------------------------------------
+    // NEURAL AI & LIVE WEB SEARCH CONTROLLER
+    // -------------------------------------------------------------------------
+    state.webSearchActive = true;
+    state.chatMessages = [];
+
+    function toggleWebSearch() {
+      state.webSearchActive = !state.webSearchActive;
+      const dot = document.getElementById('search-status-dot');
+      const label = document.getElementById('search-toggle-label');
+      const btn = document.getElementById('btn-toggle-search');
+
+      if (state.webSearchActive) {
+        dot.className = 'h-2 w-2 rounded-full bg-matrix-green status-dot-active';
+        label.textContent = 'WEB SEARCH: ON';
+        btn.className = 'w-full py-1.5 px-2 rounded border border-matrix-border-bright bg-matrix-border/50 text-matrix-green text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition';
+        logTelemetry('[SEARCH_CONFIG]', 'Live Internet Grounding: ENABLED');
+      } else {
+        dot.className = 'h-2 w-2 rounded-full bg-matrix-muted opacity-40';
+        label.textContent = 'WEB SEARCH: OFF';
+        btn.className = 'w-full py-1.5 px-2 rounded border border-matrix-border bg-black text-matrix-muted text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition';
+        logTelemetry('[SEARCH_CONFIG]', 'Live Internet Grounding: DISABLED (Local context only)');
+      }
+    }
+
+    async function pullCurrentModel() {
+      const modelSelect = document.getElementById('select-ai-model');
+      const model = modelSelect.value;
+      const btn = document.getElementById('btn-pull-model');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span>⌛ Pulling...</span>';
+      logTelemetry('[AI_PULL]', `Initiating model pull for ${model} via Ollama...`);
+
+      try {
+        const res = await fetch(`${API_BASE}/ai/model/pull`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model })
+        });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+          logTelemetry('[AI_PULL_OK]', `Model ${model} is ready in local library.`);
+          document.getElementById('ai-engine-status').textContent = `${model.toUpperCase()} (LOCAL ACTIVE)`;
+        } else if (data.status === 'ollama_missing') {
+          logTelemetry('[AI_WARN]', 'Ollama daemon not running locally at http://localhost:11434.');
+          logTelemetry('[HINT]', 'Install Ollama from https://ollama.com or enter a free Groq API key.');
+          if (confirm('Local Ollama daemon was not detected. Would you like to open the official Ollama download page?')) {
+            window.open(data.download_url, '_blank');
+          }
+        } else {
+          logTelemetry('[AI_ERR]', data.message || 'Model pull failed.');
+        }
+      } catch (err) {
+        logTelemetry('[AI_NET_ERR]', `Pull failed: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>⚡ Pull Model</span>';
+      }
+    }
+
+    async function sendAiPrompt() {
+      const input = document.getElementById('input-ai-prompt');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+
+      const modelSelect = document.getElementById('select-ai-model');
+      const selectedModel = modelSelect.value;
+      const customKey = document.getElementById('input-ai-key').value.trim();
+      const chatThread = document.getElementById('ai-chat-thread');
+      const btn = document.getElementById('btn-send-ai-prompt');
+      const spinner = document.getElementById('ai-spinner');
+
+      // Append user bubble to thread
+      const userBubble = document.createElement('div');
+      userBubble.className = 'flex gap-2.5 items-start justify-end';
+      userBubble.innerHTML = `
+        <div class="p-3 rounded-lg border border-matrix-border-bright bg-matrix-card text-white space-y-1 max-w-[85%]">
+          <div class="text-[10px] text-matrix-muted uppercase">OPERATOR QUERY</div>
+          <div class="whitespace-pre-wrap">${escapeHtml(prompt)}</div>
+        </div>
+        <div class="h-6 w-6 rounded bg-black text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border">
+          USR
+        </div>
+      `;
+      chatThread.appendChild(userBubble);
+      input.value = '';
+      chatThread.scrollTop = chatThread.scrollHeight;
+
+      // Update state messages
+      state.chatMessages.push({ role: 'user', content: prompt });
+
+      // Telemetry
+      logTelemetry('[AI_PROMPT]', `Operator sent query: "${prompt.slice(0, 50)}${prompt.length > 50 ? '...' : ''}"`);
+      if (state.webSearchActive) {
+        logTelemetry('[WEB_SEARCH]', `Dispatching live DuckDuckGo matrix search for: "${prompt.slice(0, 45)}"`);
+      }
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+
+      // Placeholder thinking bubble
+      const thinkingBubble = document.createElement('div');
+      thinkingBubble.id = 'ai-thinking-node';
+      thinkingBubble.className = 'flex gap-2.5 items-start';
+      thinkingBubble.innerHTML = `
+        <div class="h-6 w-6 rounded bg-matrix-border text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border-bright">
+          AI
+        </div>
+        <div class="p-3 rounded-lg border border-matrix-border bg-black text-matrix-muted animate-pulse font-mono text-xs">
+          ${state.webSearchActive ? 'Grounding with live web search results & evaluating Llama model...' : 'Synthesizing neural model response...'}
+        </div>
+      `;
+      chatThread.appendChild(thinkingBubble);
+      chatThread.scrollTop = chatThread.scrollHeight;
+
+      try {
+        const response = await fetch(`${API_BASE}/ai/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: state.chatMessages,
+            model: selectedModel,
+            web_search: state.webSearchActive,
+            api_key: customKey || null
+          })
+        });
+
+        const data = await response.json();
+        chatThread.removeChild(thinkingBubble);
+
+        if (!response.ok) {
+          throw new Error(data.detail || `Server error ${response.status}`);
+        }
+
+        const replyText = data.message || '(Empty response)';
+        state.chatMessages.push({ role: 'assistant', content: replyText });
+
+        logTelemetry('[AI_RESPONSE]', `Synthesized via ${data.provider} (${data.model})`);
+        if (data.sources && data.sources.length > 0) {
+          logTelemetry('[CITATIONS]', `Referenced ${data.sources.length} live internet sources.`);
+        }
+
+        // Render AI bubble with citation pills
+        const aiBubble = document.createElement('div');
+        aiBubble.className = 'flex gap-2.5 items-start';
+
+        let citationsHtml = '';
+        if (data.sources && data.sources.length > 0) {
+          citationsHtml = `
+            <div class="mt-2.5 pt-2 border-t border-matrix-border/60">
+              <div class="text-[10px] text-matrix-muted uppercase mb-1 flex items-center gap-1">
+                <span>🔍 Live Web Sources:</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                ${data.sources.map((s, i) => `
+                  <a href="${escapeHtml(s.url)}" target="_blank" class="text-[10px] px-2 py-0.5 rounded border border-matrix-border bg-black text-matrix-green hover:border-matrix-border-bright hover:bg-matrix-border/40 transition truncate max-w-[240px]" title="${escapeHtml(s.title)}">
+                    [${i+1}] ${escapeHtml(s.title)} ↗
+                  </a>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        aiBubble.innerHTML = `
+          <div class="h-6 w-6 rounded bg-matrix-border text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border-bright">
+            AI
+          </div>
+          <div class="p-3.5 rounded-lg border border-matrix-border bg-matrix-card text-matrix-green space-y-2 max-w-[90%] leading-relaxed">
+            <div class="flex items-center justify-between text-[10px] text-matrix-muted border-b border-matrix-border/40 pb-1">
+              <span class="font-bold text-white uppercase">${escapeHtml(data.provider)}</span>
+              <span>MODEL: ${escapeHtml(data.model)}</span>
+            </div>
+            <div class="whitespace-pre-wrap text-xs">${formatMarkdownResponse(replyText)}</div>
+            ${citationsHtml}
+          </div>
+        `;
+        chatThread.appendChild(aiBubble);
+        chatThread.scrollTop = chatThread.scrollHeight;
+
+      } catch (err) {
+        if (document.getElementById('ai-thinking-node')) {
+          chatThread.removeChild(thinkingBubble);
+        }
+        logTelemetry('[AI_ERR]', `Chat execution failure: ${err.message}`);
+        const errBubble = document.createElement('div');
+        errBubble.className = 'p-3 rounded border border-matrix-danger/60 bg-red-950/40 text-red-400 font-mono text-xs';
+        errBubble.textContent = `Error: ${err.message}`;
+        chatThread.appendChild(errBubble);
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+      }
+    }
+
+    function formatMarkdownResponse(text) {
+      if (!text) return '';
+      // Escape HTML
+      let formatted = escapeHtml(text);
+      // Code blocks ```code```
+      formatted = formatted.replace(/```([a-zA-Z]*)\n([\s\S]*?)```/g, '<pre class="my-2 p-2.5 rounded bg-black border border-matrix-border text-matrix-green text-[11px] font-mono overflow-x-auto"><code>$2</code></pre>');
+      // Inline `code`
+      formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-black text-matrix-green border border-matrix-border px-1 py-0.5 rounded text-[11px]">$1</code>');
+      // Bold **text**
+      formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white">$1</strong>');
+      // Markdown links [title](url)
+      formatted = formatted.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" class="text-matrix-glow underline hover:text-white">$1 ↗</a>');
+      return formatted;
+    }
+
+    // -------------------------------------------------------------------------
     // KEYBOARD CONTROLLER & BOOT INITIALIZATION
     // -------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', () => {
       initClock();
       detectClientOS();
+
+      // Check AI Status
+      fetch(`${API_BASE}/ai/status`).then(r => r.json()).then(data => {
+        if (data.local_ollama && data.local_ollama.online) {
+          logTelemetry('[AI_DETECT]', `Local Ollama online. Models: ${data.local_ollama.installed_models.join(', ') || 'none'}`);
+          document.getElementById('ai-engine-status').textContent = 'OLLAMA DAEMON ACTIVE';
+        } else {
+          logTelemetry('[AI_DETECT]', 'Ollama local runtime offline. Cloud Llama & Web Grounding ready.');
+        }
+      }).catch(() => {});
 
       // Display API host indicator
       try {
@@ -1113,6 +1440,12 @@
       document.getElementById('input-otp-code').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleVerifyOtp();
       });
+      const aiPromptInput = document.getElementById('input-ai-prompt');
+      if (aiPromptInput) {
+        aiPromptInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') sendAiPrompt();
+        });
+      }
 
       // Telemetry Startup Banner
       logTelemetry('[BOOT]', 'Stroke Cyberpunk Operational Matrix initialized.');

@@ -19,6 +19,11 @@ dist-ssr
 __pycache__/
 *.pyc
 *.pyo
+venv/
+models/
+dist/
+build/
+*.spec
 
 # Wrangler / Cloudflare
 .wrangler/
