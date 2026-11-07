@@ -24,6 +24,9 @@ Architecture Specifications:
 
 import os
 import sys
+import io
+import zipfile
+import hashlib
 import json
 import secrets
 import random
@@ -31,7 +34,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Query, status, Request
+from fastapi import FastAPI, HTTPException, Query, status, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
@@ -677,6 +680,179 @@ async def get_user_status(email: str = Query(..., description="Target user email
         "github_token_masked": masked_token,
         "records": records_list
     }
+
+
+# ==============================================================================
+# ROUTE HANDLERS: INTERACTIVE DESKTOP CLIENT DOWNLOADS
+# ==============================================================================
+
+@app.get("/download/info", tags=["Desktop Client"])
+async def get_download_info():
+    """Returns downloadable client metadata for macOS and Windows platforms."""
+    return {
+        "system": "Stroke Desktop Client",
+        "version": "1.0.0-matrix",
+        "release_tag": "v1.0.0",
+        "platforms": {
+            "macos": {
+                "name": "macOS Universal",
+                "arch": "Apple Silicon (M1/M2/M3/M4) & Intel x86_64",
+                "format": "Self-Contained Executable Bundle (.zip / .dmg)",
+                "filename": "Stroke-v1.0.0-macOS.zip",
+                "endpoint": "/download/macos",
+                "size_display": "~1.5 MB (Portable) / ~45 MB (Compiled)",
+                "recommended": True
+            },
+            "windows": {
+                "name": "Windows 10/11",
+                "arch": "64-bit (x64 / AMD64)",
+                "format": "Self-Contained Executable Bundle (.zip / .exe)",
+                "filename": "Stroke-v1.0.0-Windows.zip",
+                "endpoint": "/download/windows",
+                "size_display": "~1.5 MB (Portable) / ~48 MB (Compiled)",
+                "recommended": False
+            }
+        },
+        "github_releases_url": "https://github.com/AyanshShrivastava/stroke/releases"
+    }
+
+
+@app.get("/download/{platform}", tags=["Desktop Client"])
+async def download_desktop_client(platform: str):
+    """
+    GET /download/{platform}
+    Serves a compiled standalone desktop binary or dynamically constructs a complete,
+    zero-dependency portable desktop launch package for macOS or Windows.
+    """
+    clean_platform = platform.lower().strip()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dist_dir = os.path.join(base_dir, "dist")
+
+    # 1. Check for pre-compiled PyInstaller distribution archives
+    if clean_platform in ("macos", "mac", "darwin"):
+        compiled_candidates = [
+            os.path.join(dist_dir, "Stroke-macOS-Universal.zip"),
+            os.path.join(dist_dir, "Stroke.dmg"),
+            os.path.join(dist_dir, "Stroke-macOS.zip")
+        ]
+        for candidate in compiled_candidates:
+            if os.path.exists(candidate):
+                print(f"[STROKE DOWNLOAD] Serving compiled macOS artifact: {candidate}", flush=True)
+                return FileResponse(
+                    candidate,
+                    media_type="application/octet-stream",
+                    filename="Stroke-v1.0.0-macOS.zip"
+                )
+
+    elif clean_platform in ("windows", "win", "win64", "exe"):
+        compiled_candidates = [
+            os.path.join(dist_dir, "Stroke-Windows-x64.zip"),
+            os.path.join(dist_dir, "Stroke-Setup.exe"),
+            os.path.join(dist_dir, "Stroke-Windows.zip")
+        ]
+        for candidate in compiled_candidates:
+            if os.path.exists(candidate):
+                print(f"[STROKE DOWNLOAD] Serving compiled Windows artifact: {candidate}", flush=True)
+                return FileResponse(
+                    candidate,
+                    media_type="application/octet-stream",
+                    filename="Stroke-v1.0.0-Windows.zip"
+                )
+
+    # 2. Dynamic Assembly: Construct a turnkey, runnable portable desktop package
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Core source assets
+        files_to_pack = [
+            ("main.py", "main.py"),
+            ("index.html", "index.html"),
+            ("requirements.txt", "requirements.txt"),
+            (".env.example", ".env.example"),
+            ("desktop.py", "desktop.py")
+        ]
+        for local_name, arcname in files_to_pack:
+            src_path = os.path.join(base_dir, local_name)
+            if os.path.exists(src_path):
+                zf.write(src_path, arcname=f"Stroke/{arcname}")
+
+        # Platform-specific double-clickable launch scripts
+        if clean_platform in ("macos", "mac", "darwin"):
+            mac_launcher = (
+                "#!/bin/bash\n"
+                "cd \"$(dirname \"$0\")\"\n"
+                "clear\n"
+                "echo \"==================================================\"\n"
+                "echo \" [STROKE // CYBERPUNK DESKTOP LAUNCHER (macOS)]\"\n"
+                "echo \"==================================================\"\n"
+                "if ! command -v python3 &> /dev/null; then\n"
+                "    echo \"[!] Python 3 not detected. Please install Python 3 to continue.\"\n"
+                "    exit 1\n"
+                "fi\n"
+                "echo \"[*] Verifying local dependencies...\"\n"
+                "python3 -m pip install -q -r requirements.txt pywebview 2>/dev/null || true\n"
+                "echo \"[*] Launching Stroke native canvas...\"\n"
+                "python3 desktop.py\n"
+            )
+            zf.writestr("Stroke/Stroke-Start.command", mac_launcher)
+            readme_text = (
+                "# Stroke Desktop Client for macOS\n\n"
+                "### Quick Launch Instructions:\n"
+                "1. Double-click `Stroke-Start.command`.\n"
+                "2. If prompted by macOS Gatekeeper: Right-click -> Open -> Open.\n"
+                "3. Stroke will boot on a background daemon and launch the native Cyberpunk window!\n"
+            )
+            zf.writestr("Stroke/README-MACOS.md", readme_text)
+            out_filename = "Stroke-v1.0.0-macOS.zip"
+
+        elif clean_platform in ("windows", "win", "win64", "exe"):
+            win_launcher = (
+                "@echo off\r\n"
+                "title Stroke // Cyberpunk Operations\r\n"
+                "cd /d \"%~dp0\"\r\n"
+                "cls\r\n"
+                "echo ==================================================\r\n"
+                "echo  [STROKE // CYBERPUNK DESKTOP LAUNCHER (Windows)]\r\n"
+                "echo ==================================================\r\n"
+                "where python >nul 2>nul\r\n"
+                "if %errorlevel% neq 0 (\r\n"
+                "    echo [!] Python is not installed or not in PATH. Please install Python from python.org.\r\n"
+                "    pause\r\n"
+                "    exit /b 1\r\n"
+                ")\r\n"
+                "echo [*] Verifying local dependencies...\r\n"
+                "python -m pip install -q -r requirements.txt pywebview >nul 2>&1\r\n"
+                "echo [*] Launching Stroke native canvas...\r\n"
+                "python desktop.py\r\n"
+                "pause\r\n"
+            )
+            zf.writestr("Stroke/Stroke-Start.bat", win_launcher)
+            readme_text = (
+                "# Stroke Desktop Client for Windows\n\n"
+                "### Quick Launch Instructions:\n"
+                "1. Double-click `Stroke-Start.bat`.\n"
+                "2. Stroke will initialize the background FastAPI daemon and launch the native Cyberpunk window!\n"
+            )
+            zf.writestr("Stroke/README-WINDOWS.md", readme_text)
+            out_filename = "Stroke-v1.0.0-Windows.zip"
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported platform '{clean_platform}'. Specify 'macos' or 'windows'."
+            )
+
+    zip_bytes = zip_buffer.getvalue()
+    print(f"[STROKE DOWNLOAD] Dispatched portable package for {clean_platform} ({len(zip_bytes)} bytes)", flush=True)
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{out_filename}\"",
+            "X-Stroke-Platform": clean_platform,
+            "X-Stroke-Version": "1.0.0"
+        }
+    )
 
 
 # ==============================================================================

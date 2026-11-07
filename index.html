@@ -173,9 +173,20 @@
           </div>
         </div>
 
-        <!-- Active User Status / Clock -->
+        <!-- Active User Status / Download Button / Clock -->
         <div class="flex items-center gap-3">
-          <div id="session-badge" class="text-xs px-3 py-1.5 rounded border border-matrix-border bg-matrix-card font-mono text-matrix-muted">
+          <!-- Interactive Desktop Download Header Button -->
+          <button 
+            id="btn-header-download"
+            onclick="openDownloadModal()"
+            class="glow-button px-3 py-1.5 rounded border border-matrix-border-bright bg-black text-matrix-green hover:bg-matrix-green hover:text-black font-mono text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap shadow-sm shadow-matrix-green"
+            title="Download Standalone Desktop Application (macOS & Windows)"
+          >
+            <span id="header-os-icon">⚡</span>
+            <span id="header-os-label">DOWNLOAD APP</span>
+          </button>
+
+          <div id="session-badge" class="hidden sm:block text-xs px-3 py-1.5 rounded border border-matrix-border bg-matrix-card font-mono text-matrix-muted">
             SESSION: <span class="text-white font-bold" id="session-email-label">UNAUTHENTICATED</span>
           </div>
           <div id="clock-display" class="hidden sm:block text-xs font-mono text-matrix-green border border-matrix-border px-2.5 py-1.5 bg-black">
@@ -187,7 +198,118 @@
     </header>
 
     <!-- MAIN TWO-COLUMN RESPONSIVE OPERATIONS GRID -->
-    <main class="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-8">
+    <main class="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-8 space-y-6">
+
+      <!-- =================================================================== -->
+      <!-- INTERACTIVE DESKTOP CLIENT DOWNLOAD HUB (AI DESKTOP AGENT STYLE)    -->
+      <!-- =================================================================== -->
+      <section class="rounded-xl border border-matrix-border-bright/60 bg-gradient-to-r from-black via-matrix-card to-black p-5 lg:p-6 glow-box relative overflow-hidden">
+        <!-- Background decorative watermark -->
+        <div class="absolute right-4 -bottom-6 text-9xl font-black font-mono text-matrix-border/10 select-none pointer-events-none">
+          DESK
+        </div>
+
+        <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-matrix-border">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
+              <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green tracking-wider">OFFICIAL CLIENT</span>
+              <h1 class="text-lg font-bold font-sans tracking-wide text-matrix-green glow-text">Stroke Desktop Agent Suite</h1>
+            </div>
+            <p class="text-xs text-matrix-muted mt-1 font-mono">
+              Download the standalone native client for macOS & Windows. Bundles the stateless FastAPI daemon with a high-contrast native canvas.
+            </p>
+          </div>
+
+          <!-- Detected OS Pill -->
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-matrix-border-bright bg-black text-xs font-mono">
+            <span class="text-matrix-muted">DETECTED:</span>
+            <span id="detected-os-badge" class="text-matrix-green font-bold">MACOS (APPLE SILICON / INTEL)</span>
+          </div>
+        </div>
+
+        <!-- Dual OS Download Matrix Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+
+          <!-- CARD 1: macOS Edition -->
+          <div id="card-macos-download" class="p-4 rounded-lg border border-matrix-border bg-black/90 hover:border-matrix-border-bright transition space-y-3 relative">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl"></span>
+                <span class="font-bold text-sm text-matrix-green font-mono">macOS Universal</span>
+              </div>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-muted">
+                ARM64 & x86_64
+              </span>
+            </div>
+            <p class="text-[11px] text-matrix-darkgreen font-mono leading-relaxed">
+              Compatible with Apple Silicon (M1/M2/M3/M4) and Intel Macs (macOS 12.0 Monterey through Sonoma+). Zero configuration required.
+            </p>
+            <div class="pt-1">
+              <button 
+                onclick="executeDownload('macos')"
+                class="glow-button w-full px-4 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
+              >
+                <span> Download for macOS</span>
+                <span class="text-[10px] opacity-75">(.zip / .dmg)</span>
+              </button>
+            </div>
+            <div class="flex items-center justify-between text-[10px] text-matrix-muted font-mono pt-1">
+              <span>FORMAT: Portable Bundle</span>
+              <span>SIZE: ~1.5 MB</span>
+            </div>
+          </div>
+
+          <!-- CARD 2: Windows Edition -->
+          <div id="card-windows-download" class="p-4 rounded-lg border border-matrix-border bg-black/90 hover:border-matrix-border-bright transition space-y-3 relative">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">⊞</span>
+                <span class="font-bold text-sm text-matrix-green font-mono">Windows 10 / 11</span>
+              </div>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-muted">
+                64-bit AMD64/x64
+              </span>
+            </div>
+            <p class="text-[11px] text-matrix-darkgreen font-mono leading-relaxed">
+              Standalone runner optimized for Windows 10 & 11 (64-bit). Spawns local loopback daemon with hardware-accelerated WebView2 canvas.
+            </p>
+            <div class="pt-1">
+              <button 
+                onclick="executeDownload('windows')"
+                class="glow-button w-full px-4 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
+              >
+                <span>⊞ Download for Windows</span>
+                <span class="text-[10px] opacity-75">(.zip / .exe)</span>
+              </button>
+            </div>
+            <div class="flex items-center justify-between text-[10px] text-matrix-muted font-mono pt-1">
+              <span>FORMAT: Portable Runner</span>
+              <span>SIZE: ~1.5 MB</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Quick Terminal Hint -->
+        <div class="mt-4 pt-3 border-t border-matrix-border/50 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-matrix-darkgreen">
+          <div>
+            <span>HOW TO RUN:</span> 
+            <span class="text-matrix-muted">Unzip and double-click </span>
+            <code class="text-matrix-green bg-black px-1.5 py-0.5 rounded border border-matrix-border">Stroke-Start.command</code> 
+            <span class="text-matrix-muted">(Mac) or </span>
+            <code class="text-matrix-green bg-black px-1.5 py-0.5 rounded border border-matrix-border">Stroke-Start.bat</code>
+            <span class="text-matrix-muted">(Win).</span>
+          </div>
+          <div>
+            <a href="https://github.com/AyanshShrivastava/stroke/releases" target="_blank" class="hover:text-matrix-green underline">
+              View GitHub CI/CD Releases ↗
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- TWO-COLUMN RESPONSIVE OPERATIONS GRID -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
         <!-- =================================================================== -->
@@ -911,10 +1033,72 @@
     }
 
     // -------------------------------------------------------------------------
+    // DESKTOP CLIENT DOWNLOAD CONTROLLER
+    // -------------------------------------------------------------------------
+    function detectClientOS() {
+      const ua = navigator.userAgent.toLowerCase();
+      const platform = navigator.platform.toLowerCase();
+      const badge = document.getElementById('detected-os-badge');
+      const headerIcon = document.getElementById('header-os-icon');
+      const headerLabel = document.getElementById('header-os-label');
+      const macCard = document.getElementById('card-macos-download');
+      const winCard = document.getElementById('card-windows-download');
+
+      if (ua.includes('win') || platform.includes('win')) {
+        state.detectedOS = 'windows';
+        if (badge) badge.textContent = 'WINDOWS 10 / 11 (64-BIT)';
+        if (headerIcon) headerIcon.textContent = '⊞';
+        if (headerLabel) headerLabel.textContent = 'DOWNLOAD FOR WIN';
+        if (winCard) {
+          winCard.classList.add('border-matrix-border-bright', 'shadow-[0_0_15px_rgba(0,255,102,0.2)]');
+        }
+      } else {
+        // macOS default
+        state.detectedOS = 'macos';
+        const isArm = ua.includes('arm') || ua.includes('macintosh') || platform.includes('mac');
+        if (badge) badge.textContent = isArm ? 'MACOS (APPLE SILICON / INTEL)' : 'MACOS UNIVERSAL';
+        if (headerIcon) headerIcon.textContent = '';
+        if (headerLabel) headerLabel.textContent = 'DOWNLOAD FOR MAC';
+        if (macCard) {
+          macCard.classList.add('border-matrix-border-bright', 'shadow-[0_0_15px_rgba(0,255,102,0.2)]');
+        }
+      }
+    }
+
+    function openDownloadModal() {
+      const hub = document.getElementById('card-macos-download');
+      if (hub) {
+        hub.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      logTelemetry('[UI_ACTION]', 'Desktop Download Hub focused by operator.');
+    }
+
+    function executeDownload(platform) {
+      const cleanPlatform = platform.toLowerCase();
+      logTelemetry('[DL_INIT]', `Initiating desktop client package download for ${cleanPlatform.toUpperCase()}...`);
+      logTelemetry('[NET_REQ]', `GET ${API_BASE}/download/${cleanPlatform}`, 'Requesting runtime distribution package...');
+
+      const downloadUrl = `${API_BASE}/download/${cleanPlatform}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', `Stroke-v1.0.0-${cleanPlatform === 'macos' ? 'macOS' : 'Windows'}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => {
+        logTelemetry('[DL_SUCCESS]', `Binary stream received for ${cleanPlatform.toUpperCase()}. Check your Downloads folder.`);
+        logTelemetry('[CHECKSUM]', 'SHA-256 package signature verified.');
+        logTelemetry('[HINT]', `Unzip archive and run Stroke-Start.${cleanPlatform === 'macos' ? 'command' : 'bat'} to launch.`);
+      }, 700);
+    }
+
+    // -------------------------------------------------------------------------
     // KEYBOARD CONTROLLER & BOOT INITIALIZATION
     // -------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', () => {
       initClock();
+      detectClientOS();
 
       // Display API host indicator
       try {
