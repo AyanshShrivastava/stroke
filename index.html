@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stroke // Cyberpunk Matrix Operations</title>
+  <!-- Tailwind CSS Engine -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: JetBrains Mono & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;0,800;1,400&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            matrix: {
+              black: '#050505',
+              card: '#0a0a0a',
+              input: '#000000',
+              border: '#00441b',
+              'border-bright': '#00ff66',
+              green: '#00ff66',
+              glow: '#33ff85',
+              darkgreen: '#008833',
+              muted: '#00cc52',
+              danger: '#ff3344',
+            }
+          },
+          fontFamily: {
+            mono: ['"JetBrains Mono"', 'monospace'],
+            sans: ['"Space Grotesk"', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Absolute deep dark standard canvas */
+    body {
+      background-color: #050505;
+      color: #00ff66;
+      font-family: 'JetBrains Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Subtle CRT Scanline overlay */
+    .crt-scanlines {
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                  linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+    }
+
+    /* Cyber Matrix Grid Pattern */
+    .matrix-grid {
+      background-image: linear-gradient(#00441b22 1px, transparent 1px),
+                        linear-gradient(90deg, #00441b22 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* Luminous Neon Glow Shadows */
+    .glow-header {
+      text-shadow: 0 0 10px #00ff66, 0 0 25px rgba(0, 255, 102, 0.6);
+    }
+    .glow-text {
+      text-shadow: 0 0 8px rgba(0, 255, 102, 0.7);
+    }
+    .glow-box {
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.15), inset 0 0 15px rgba(0, 255, 102, 0.04);
+    }
+    .glow-button {
+      box-shadow: 0 0 16px rgba(0, 255, 102, 0.35), inset 0 0 8px rgba(0, 255, 102, 0.2);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glow-button:hover:not(:disabled) {
+      box-shadow: 0 0 28px rgba(0, 255, 102, 0.65), inset 0 0 14px rgba(0, 255, 102, 0.4);
+      transform: translateY(-1px);
+    }
+    .glow-button:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    /* Custom Matrix Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #050505;
+      border-left: 1px solid #00441b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #00441b;
+      border-radius: 2px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #00ff66;
+      box-shadow: 0 0 10px #00ff66;
+    }
+
+    /* Blinking Terminal Cursor */
+    @keyframes cursor-pulse {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    .terminal-cursor {
+      display: inline-block;
+      width: 9px;
+      height: 1.1em;
+      background-color: #00ff66;
+      vertical-align: text-bottom;
+      animation: cursor-pulse 1s infinite;
+      box-shadow: 0 0 8px #00ff66;
+    }
+
+    /* Pulse dot */
+    @keyframes status-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .status-dot-active {
+      animation: status-pulse 1.8s infinite;
+    }
+  </style>
+</head>
+
+<body class="matrix-grid relative selection:bg-matrix-green selection:text-black">
+  <!-- Scanline Layer -->
+  <div class="crt-scanlines fixed inset-0 z-50 pointer-events-none"></div>
+
+  <!-- Main Container -->
+  <div class="relative z-10 flex flex-col min-h-screen">
+
+    <!-- TOP NAVIGATION BAR / SYSTEM STATUS BANNER -->
+    <header class="border-b border-matrix-border bg-black/90 backdrop-blur sticky top-0 z-40 px-4 py-3 lg:px-8">
+      <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+        
+        <!-- Logo & Architecture Branding -->
+        <div class="flex items-center gap-3">
+          <div class="h-9 w-9 rounded border border-matrix-border-bright bg-black flex items-center justify-center font-bold text-lg text-matrix-green glow-text shadow-sm shadow-matrix-green">
+            S
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-sans font-bold text-xl tracking-wider text-matrix-green glow-header">STROKE</span>
+              <span class="text-xs px-2 py-0.5 rounded border border-matrix-border bg-matrix-card font-mono text-matrix-muted">v1.0.0</span>
+            </div>
+            <p class="text-[10px] text-matrix-darkgreen tracking-widest uppercase">Stateless FastAPI // Firebase Firestore Layer</p>
+          </div>
+        </div>
+
+        <!-- Telemetry Indicators -->
+        <div class="hidden md:flex items-center gap-4 text-xs font-mono">
+          <div class="flex items-center gap-2 px-3 py-1 rounded border border-matrix-border bg-matrix-black">
+            <span class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
+            <span class="text-matrix-muted">CORE:</span>
+            <span class="text-matrix-green font-semibold">STATELESS REST</span>
+          </div>
+          <div class="flex items-center gap-2 px-3 py-1 rounded border border-matrix-border bg-matrix-black">
+            <span class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
+            <span class="text-matrix-muted">DB:</span>
+            <span class="text-matrix-green font-semibold">FIRESTORE ADMIN</span>
+          </div>
+          <div class="flex items-center gap-2 px-3 py-1 rounded border border-matrix-border bg-matrix-black">
+            <span class="text-matrix-muted">HOST:</span>
+            <span id="api-host-indicator" class="text-matrix-green font-mono">LOC:8000</span>
+          </div>
+        </div>
+
+        <!-- Active User Status / Clock -->
+        <div class="flex items-center gap-3">
+          <div id="session-badge" class="text-xs px-3 py-1.5 rounded border border-matrix-border bg-matrix-card font-mono text-matrix-muted">
+            SESSION: <span class="text-white font-bold" id="session-email-label">UNAUTHENTICATED</span>
+          </div>
+          <div id="clock-display" class="hidden sm:block text-xs font-mono text-matrix-green border border-matrix-border px-2.5 py-1.5 bg-black">
+            --:--:-- UTC
+          </div>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- MAIN TWO-COLUMN RESPONSIVE OPERATIONS GRID -->
+    <main class="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-8">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- =================================================================== -->
+        <!-- LEFT COLUMN: STROKE OPERATIONS CONTROL MATRIX (7 COLS)               -->
+        <!-- =================================================================== -->
+        <div class="lg:col-span-7 space-y-6">
+
+          <!-- SECTION 1: IDENTITY & OTP CIPHER WORKFLOW -->
+          <div class="rounded-xl border border-matrix-border bg-matrix-card p-6 glow-box relative overflow-hidden">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-matrix-border">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 01</span>
+                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">Secure Identity & OTP Protocol</h2>
+              </div>
+              <span id="otp-phase-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-muted">IDLE</span>
+            </div>
+
+            <!-- Email Input Group -->
+            <div class="space-y-4">
+              <div>
+                <label for="input-email" class="block text-xs uppercase tracking-wider text-matrix-muted mb-1.5">
+                  Operator Identity Address (Email)
+                </label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                  <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs text-matrix-darkgreen font-mono">
+                      usr://
+                    </span>
+                    <input 
+                      type="email" 
+                      id="input-email" 
+                      placeholder="operator@system.matrix"
+                      class="w-full pl-16 pr-4 py-2.5 rounded border border-matrix-border bg-matrix-input text-matrix-green placeholder:text-matrix-border text-sm font-mono focus:outline-none focus:border-matrix-border-bright focus:ring-1 focus:ring-matrix-border-bright transition"
+                    />
+                  </div>
+                  <button 
+                    id="btn-send-otp"
+                    onclick="handleSendOtp()"
+                    class="glow-button px-5 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2 whitespace-nowrap"
+                  >
+                    <span>Transmit OTP</span>
+                    <span id="send-otp-spinner" class="hidden">⚡</span>
+                  </button>
+                </div>
+                <p class="text-[11px] text-matrix-darkgreen mt-1.5">
+                  Generates cryptographic 6-digit session cipher. Transacted straight to <code class="text-matrix-muted">users/{email}</code>.
+                </p>
+              </div>
+
+              <!-- OTP Verification Box (Appears/Activates on OTP sent) -->
+              <div id="otp-verification-container" class="mt-5 pt-5 border-t border-matrix-border/70 space-y-3">
+                <div class="flex items-center justify-between">
+                  <label for="input-otp-code" class="text-xs uppercase tracking-wider text-matrix-muted">
+                    6-Digit Verification Cipher
+                  </label>
+                  <div id="otp-timer-badge" class="hidden text-[11px] font-mono text-matrix-green flex items-center gap-1.5">
+                    <span class="h-1.5 w-1.5 rounded-full bg-matrix-green status-dot-active"></span>
+                    <span>EXPIRATION: <strong id="otp-countdown">05:00</strong></span>
+                  </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                  <input 
+                    type="text" 
+                    id="input-otp-code" 
+                    maxlength="6" 
+                    placeholder="000000"
+                    class="w-full sm:w-48 tracking-[0.5em] text-center px-4 py-2.5 rounded border border-matrix-border bg-matrix-input text-matrix-green text-lg font-bold font-mono placeholder:text-matrix-border focus:outline-none focus:border-matrix-border-bright focus:ring-1 focus:ring-matrix-border-bright transition"
+                  />
+                  <button 
+                    id="btn-verify-otp"
+                    onclick="handleVerifyOtp()"
+                    class="glow-button flex-1 px-5 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
+                  >
+                    <span>Verify Cipher Key</span>
+                    <span id="verify-otp-spinner" class="hidden">⌛</span>
+                  </button>
+                </div>
+                <p class="text-[11px] text-matrix-darkgreen">
+                  Single-use enforcement: Server atomically flushes <code class="text-matrix-muted">otp_code</code> and <code class="text-matrix-muted">otp_expires_at</code> to <code class="text-matrix-muted">null</code> on success.
+                </p>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- SECTION 2: DIRECT GITHUB OAUTH REDIRECTION LOOP -->
+          <div class="rounded-xl border border-matrix-border bg-matrix-card p-6 glow-box relative">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-matrix-border">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 02</span>
+                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">GitHub OAuth Gateway (PAT Token)</h2>
+              </div>
+              <span id="github-sync-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen">UNBOUND</span>
+            </div>
+
+            <div class="space-y-4">
+              <div class="p-3.5 rounded border border-matrix-border bg-black text-xs font-mono space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-matrix-muted">DELEGATED SCOPES:</span>
+                  <span class="text-matrix-green font-bold">repo • read:user • user:email</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-matrix-muted">TOKEN DESTINATION:</span>
+                  <span class="text-matrix-green">users/{email}.github_token</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-matrix-muted">HANDSHAKE STRATEGY:</span>
+                  <span class="text-matrix-green">Redirect loop with cryptographic state hex</span>
+                </div>
+              </div>
+
+              <!-- Masked Token Preview -->
+              <div id="github-pat-card" class="hidden p-3 rounded border border-matrix-border-bright bg-matrix-black flex items-center justify-between text-xs font-mono">
+                <span class="text-matrix-muted">FIRESTORE PAT:</span>
+                <span id="github-pat-masked" class="text-matrix-green font-bold">ghp_••••••••••••</span>
+              </div>
+
+              <div class="flex flex-col sm:flex-row gap-3">
+                <button 
+                  id="btn-connect-github"
+                  onclick="handleConnectGithub()"
+                  class="glow-button w-full px-5 py-3 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-3"
+                >
+                  <svg class="h-4 w-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                  </svg>
+                  <span>Authorize GitHub OAuth Gateway</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- SECTION 3: 5X HIGH-DENSITY DATABASE INJECTION MATRIX -->
+          <div class="rounded-xl border border-matrix-border bg-matrix-card p-6 glow-box relative">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-matrix-border">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 03</span>
+                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">5X High-Density Data Matrix</h2>
+              </div>
+              <span id="matrix-fed-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen">UNFED</span>
+            </div>
+
+            <div class="space-y-4">
+              <p class="text-xs text-matrix-muted leading-relaxed">
+                Executes an atomic <code class="text-matrix-green">db.batch()</code> commit writing 5 structural sub-documents to <code class="text-matrix-green">users/{email}/records/</code> (STRK-BAT-001 through 005) and atomically flips <code class="text-matrix-green">database_fed = true</code>.
+              </p>
+
+              <!-- Trigger Button -->
+              <button 
+                id="btn-feed-database"
+                onclick="handleFeedDatabase5x()"
+                class="glow-button w-full px-5 py-3 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
+              >
+                <span>Execute 5X Batch Ingestion</span>
+                <span id="feed-spinner" class="hidden">⚡</span>
+              </button>
+
+              <!-- Progress Meter -->
+              <div id="injection-progress-container" class="hidden space-y-1.5 pt-2">
+                <div class="flex justify-between text-[11px] font-mono text-matrix-muted">
+                  <span>ATOMIC BATCH INGESTION:</span>
+                  <span id="injection-pct-label">0%</span>
+                </div>
+                <div class="w-full bg-black rounded-full h-2 border border-matrix-border overflow-hidden">
+                  <div id="injection-progress-bar" class="h-full bg-matrix-green w-0 transition-all duration-300 shadow-[0_0_10px_#00ff66]"></div>
+                </div>
+              </div>
+
+              <!-- INJECTED RECORDS READOUT MATRIX -->
+              <div id="injected-records-container" class="hidden space-y-2 pt-2">
+                <div class="flex items-center justify-between text-xs font-mono font-bold text-matrix-green pb-1 border-b border-matrix-border">
+                  <span>INJECTED SUB-DOCUMENTS</span>
+                  <span class="text-matrix-muted">PATH: users/{id}/records/</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-xs font-mono border-collapse">
+                    <thead>
+                      <tr class="border-b border-matrix-border/60 text-matrix-muted text-[11px]">
+                        <th class="py-2 px-2">RECORD ID</th>
+                        <th class="py-2 px-2">METRIC LOAD</th>
+                        <th class="py-2 px-2">INTEGRITY HASH</th>
+                        <th class="py-2 px-2 text-right">STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody id="records-table-body" class="divide-y divide-matrix-border/30">
+                      <!-- Dynamically rendered -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+
+        <!-- =================================================================== -->
+        <!-- RIGHT COLUMN: REACTIVE TERMINAL TELEMETRY MONITOR (5 COLS)           -->
+        <!-- =================================================================== -->
+        <div class="lg:col-span-5 sticky top-24">
+          <div class="rounded-xl border border-matrix-border bg-black glow-box overflow-hidden flex flex-col h-[740px] shadow-2xl">
+            
+            <!-- Terminal Title Bar -->
+            <div class="bg-matrix-card/90 px-4 py-2.5 border-b border-matrix-border flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-full bg-red-500/80 inline-block"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-yellow-500/80 inline-block"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-matrix-green inline-block shadow-sm shadow-matrix-green"></span>
+                <span class="ml-2 text-xs font-bold text-matrix-green tracking-wider uppercase font-mono">
+                  TTY-1 // TELEMETRY LOGS
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button 
+                  onclick="clearTerminal()"
+                  class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen hover:text-matrix-green hover:border-matrix-border-bright transition"
+                  title="Clear Terminal Display"
+                >
+                  CLEAR
+                </button>
+                <button 
+                  onclick="copyTerminalLogs()"
+                  class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen hover:text-matrix-green hover:border-matrix-border-bright transition"
+                  title="Copy Logs to Clipboard"
+                >
+                  EXPORT
+                </button>
+              </div>
+            </div>
+
+            <!-- Terminal Output Viewport -->
+            <div 
+              id="terminal-viewport" 
+              class="flex-1 p-4 font-mono text-[11px] leading-relaxed overflow-y-auto space-y-1.5 text-matrix-green/90 bg-[#020202]"
+            >
+              <!-- Telemetry messages dynamically inserted here -->
+            </div>
+
+            <!-- Terminal Prompt / Status Footer -->
+            <div class="border-t border-matrix-border bg-black/95 px-4 py-2 flex items-center justify-between text-[11px] font-mono">
+              <div class="flex items-center gap-2 text-matrix-darkgreen">
+                <span>stroke@node-matrix:~$</span>
+                <span class="terminal-cursor"></span>
+              </div>
+              <div class="text-[10px] text-matrix-darkgreen">
+                <span id="log-count">0</span> EVENTS
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-matrix-border mt-auto py-4 px-4 text-center text-xs text-matrix-darkgreen font-mono">
+      <span>STROKE // STATELESS NEURAL STACK</span> • <span>FIREBASE FIRESTORE DATA ENGINE</span> • <span>HIGH-CONTRAST MATRIX GREEN</span>
+    </footer>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- VANILLA JAVASCRIPT ASYNCHRONOUS NETWORK & TELEMETRY CONTROLLER       -->
+  <!-- ===================================================================== -->
+  <script>
+    // State Registry (Stateless backend synchronizer)
+    const state = {
+      email: '',
+      isAuthenticated: false,
+      databaseFed: false,
+      githubConnected: false,
+      otpTimer: null,
+      otpSecondsLeft: 0,
+      logCounter: 0,
+    };
+
+    // API Base URL - Automatically detect host origin or fallback to local port 8000
+    const API_BASE = (window.location.protocol.startsWith('http')) 
+      ? window.location.origin 
+      : 'http://localhost:8000';
+
+    // -------------------------------------------------------------------------
+    // TELEMETRY LOGGING ENGINE
+    // -------------------------------------------------------------------------
+    const terminalViewport = document.getElementById('terminal-viewport');
+    const logCountElem = document.getElementById('log-count');
+
+    function getTimestamp() {
+      const d = new Date();
+      const pad = (n, s=2) => String(n).padStart(s, '0');
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+    }
+
+    /**
+     * Appends a formatted hacker-style system telemetry log into the reactive terminal.
+     * @param {string} tag - Event classification ([INIT], [NET_REQ], [NET_RES], [FIRESTORE], [OAUTH], [ERROR])
+     * @param {string} message - Telemetry payload description
+     * @param {string} detail - Optional metadata string or code snippet
+     */
+    function logTelemetry(tag, message, detail = null) {
+      state.logCounter++;
+      logCountElem.textContent = state.logCounter;
+
+      const time = getTimestamp();
+      const line = document.createElement('div');
+      line.className = 'font-mono transition-opacity duration-150';
+
+      let tagColor = 'text-matrix-green';
+      if (tag.includes('ERR')) tagColor = 'text-matrix-danger font-bold';
+      else if (tag.includes('REQ')) tagColor = 'text-yellow-400';
+      else if (tag.includes('RES')) tagColor = 'text-cyan-400';
+      else if (tag.includes('OAUTH')) tagColor = 'text-purple-400';
+      else if (tag.includes('FIRESTORE')) tagColor = 'text-matrix-glow font-bold';
+
+      line.innerHTML = `
+        <span class="text-matrix-darkgreen">[${time}]</span>
+        <span class="${tagColor}">${tag}</span>
+        <span class="text-matrix-green">${escapeHtml(message)}</span>
+        ${detail ? `<div class="text-[10px] text-matrix-muted pl-4 border-l border-matrix-border my-0.5 opacity-90">${escapeHtml(detail)}</div>` : ''}
+      `;
+
+      terminalViewport.appendChild(line);
+      terminalViewport.scrollTop = terminalViewport.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function clearTerminal() {
+      terminalViewport.innerHTML = '';
+      state.logCounter = 0;
+      logCountElem.textContent = '0';
+      logTelemetry('[SYS_RESET]', 'Terminal buffer flushed by operator.');
+    }
+
+    function copyTerminalLogs() {
+      const text = terminalViewport.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        logTelemetry('[EXPORT]', 'Telemetry log buffer copied to system clipboard.');
+      }).catch(() => {
+        logTelemetry('[EXPORT_ERR]', 'Clipboard write permission rejected.');
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // LIVE CLOCK & HEARTBEAT
+    // -------------------------------------------------------------------------
+    function initClock() {
+      const clockElem = document.getElementById('clock-display');
+      setInterval(() => {
+        const now = new Date();
+        clockElem.textContent = now.toUTCString().slice(17, 25) + ' UTC';
+      }, 1000);
+    }
+
+    // -------------------------------------------------------------------------
+    // WORKFLOW 1: SEND OTP (POST /auth/send-otp)
+    // -------------------------------------------------------------------------
+    async function handleSendOtp() {
+      const emailInput = document.getElementById('input-email');
+      const email = emailInput.value.trim().toLowerCase();
+
+      if (!email || !email.includes('@') || !email.includes('.')) {
+        logTelemetry('[ERR_VAL]', 'Invalid email format entered.', 'Format must be operator@domain.ext');
+        emailInput.focus();
+        return;
+      }
+
+      state.email = email;
+      const btn = document.getElementById('btn-send-otp');
+      const spinner = document.getElementById('send-otp-spinner');
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+
+      logTelemetry('[NET_REQ]', `POST ${API_BASE}/auth/send-otp`, `Target identity: ${email}`);
+      logTelemetry('[CRYPTO]', 'Generating cryptographically secure 6-digit random token...');
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/send-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || `Server error code ${response.status}`);
+        }
+
+        logTelemetry('[NET_RES]', 'Status 200 OK — OTP generation handshake complete.');
+        logTelemetry('[FIRESTORE]', `Write transaction executed at users/${email}`, 'Fields: { otp_code, otp_expires_at: +5m }');
+        logTelemetry('[SMTP_SIM]', 'Simulated SMTP delivery dispatched to server stdout.');
+
+        // Update UI
+        document.getElementById('otp-phase-status').textContent = 'CODE DISPATCHED';
+        document.getElementById('otp-phase-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green';
+        document.getElementById('session-email-label').textContent = email;
+        
+        // Start 5-minute countdown timer
+        startOtpCountdown(data.expires_in_seconds || 300);
+
+        // Focus OTP input
+        const otpInput = document.getElementById('input-otp-code');
+        otpInput.focus();
+
+      } catch (err) {
+        logTelemetry('[ERR_HTTP]', `Failed to transmit OTP: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+      }
+    }
+
+    function startOtpCountdown(seconds) {
+      clearInterval(state.otpTimer);
+      state.otpSecondsLeft = seconds;
+      
+      const badge = document.getElementById('otp-timer-badge');
+      const label = document.getElementById('otp-countdown');
+      badge.classList.remove('hidden');
+
+      const updateTimer = () => {
+        const mins = Math.floor(state.otpSecondsLeft / 60);
+        const secs = state.otpSecondsLeft % 60;
+        label.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        if (state.otpSecondsLeft <= 0) {
+          clearInterval(state.otpTimer);
+          label.textContent = 'EXPIRED';
+          logTelemetry('[TIMEOUT]', 'OTP Token validity window elapsed (300s TTL).');
+          document.getElementById('otp-phase-status').textContent = 'TOKEN EXPIRED';
+        }
+        state.otpSecondsLeft--;
+      };
+
+      updateTimer();
+      state.otpTimer = setInterval(updateTimer, 1000);
+    }
+
+    // -------------------------------------------------------------------------
+    // WORKFLOW 2: VERIFY OTP (POST /auth/verify-otp)
+    // -------------------------------------------------------------------------
+    async function handleVerifyOtp() {
+      const email = state.email || document.getElementById('input-email').value.trim().toLowerCase();
+      const otpInput = document.getElementById('input-otp-code');
+      const otpCode = otpInput.value.trim();
+
+      if (!email) {
+        logTelemetry('[ERR_VAL]', 'Identity email is missing. Transmit OTP first.');
+        return;
+      }
+      if (!otpCode || otpCode.length !== 6 || !/^\d{6}$/.test(otpCode)) {
+        logTelemetry('[ERR_VAL]', 'OTP cipher must be strictly 6 numeric digits.');
+        otpInput.focus();
+        return;
+      }
+
+      const btn = document.getElementById('btn-verify-otp');
+      const spinner = document.getElementById('verify-otp-spinner');
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+
+      logTelemetry('[NET_REQ]', `POST ${API_BASE}/auth/verify-otp`, `Evaluating cipher [${otpCode}] for ${email}`);
+      logTelemetry('[FIRESTORE]', `Reading users/${email} in atomic transaction`);
+
+      try {
+        const response = await fetch(`${API_BASE}/auth/verify-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp_code: otpCode })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || `Authentication rejected: ${response.status}`);
+        }
+
+        clearInterval(state.otpTimer);
+        document.getElementById('otp-timer-badge').classList.add('hidden');
+
+        state.isAuthenticated = true;
+        state.databaseFed = data.database_fed || false;
+        state.githubConnected = data.github_connected || false;
+
+        logTelemetry('[NET_RES]', 'Status 200 OK — Authentication accepted.');
+        logTelemetry('[FIRESTORE]', 'Clean State Management verified: otp_code & otp_expires_at cleared to NULL.');
+        logTelemetry('[AUTH_OK]', `Operator identity established: ${email}`);
+
+        // Update UI
+        document.getElementById('otp-phase-status').textContent = 'AUTHENTICATED';
+        document.getElementById('otp-phase-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
+        document.getElementById('session-badge').className = 'text-xs px-3 py-1.5 rounded border border-matrix-border-bright bg-matrix-card font-mono text-matrix-green';
+        document.getElementById('session-email-label').textContent = email;
+
+        // Auto trigger: 5X high-density database injection matrix instantly following authentication
+        logTelemetry('[TRIGGER]', 'Invoking 5X High-Density Database Injection Matrix automatically...');
+        await handleFeedDatabase5x();
+
+        // Refresh live user telemetry
+        await syncUserStatus();
+
+      } catch (err) {
+        logTelemetry('[ERR_AUTH]', `Verification Failure: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // WORKFLOW 3: DIRECT GITHUB OAUTH REDIRECTION LOOP (GET /auth/github-connect)
+    // -------------------------------------------------------------------------
+    function handleConnectGithub() {
+      const email = state.email || document.getElementById('input-email').value.trim().toLowerCase();
+
+      if (!email) {
+        logTelemetry('[ERR_VAL]', 'Identity email required before initiating GitHub OAuth loop.');
+        document.getElementById('input-email').focus();
+        return;
+      }
+
+      logTelemetry('[OAUTH]', 'Initializing direct GitHub OAuth redirection loop...');
+      logTelemetry('[OAUTH_SCOPE]', 'Requesting explicit scopes: repo, read:user, user:email');
+
+      const connectUrl = `${API_BASE}/auth/github-connect?email=${encodeURIComponent(email)}`;
+      logTelemetry('[NET_REQ]', `GET ${connectUrl}`, 'Generating cryptographic compound state token...');
+
+      // Open OAuth Gateway in a styled popup bridge or redirect
+      const width = 600, height = 700;
+      const left = (window.innerWidth - width) / 2 + window.screenX;
+      const top = (window.innerHeight - height) / 2 + window.screenY;
+      
+      const popup = window.open(
+        connectUrl,
+        'StrokeGithubAuth',
+        `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no`
+      );
+
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        logTelemetry('[OAUTH_WARN]', 'Popup blocked. Redirecting current browser window...');
+        window.location.href = connectUrl;
+      } else {
+        logTelemetry('[OAUTH_WAIT]', 'Awaiting GitHub OAuth callback handshake in popup listener...');
+      }
+    }
+
+    // Popup PostMessage Listener
+    window.addEventListener('message', async (event) => {
+      if (event.data && event.data.type === 'STROKE_GITHUB_CONNECTED') {
+        logTelemetry('[OAUTH_SUCCESS]', 'GitHub Handshake caught via OAuth Bridge Listener.');
+        logTelemetry('[FIRESTORE]', `Structural PAT recorded into users/${event.data.email}.github_token`);
+        state.githubConnected = true;
+        await syncUserStatus();
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // WORKFLOW 4: 5X HIGH-DENSITY DATABASE INJECTION MATRIX (POST /database/feed-5x)
+    // -------------------------------------------------------------------------
+    async function handleFeedDatabase5x() {
+      const email = state.email || document.getElementById('input-email').value.trim().toLowerCase();
+
+      if (!email) {
+        logTelemetry('[ERR_VAL]', 'Identity email missing. Authenticate operator first.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-feed-database');
+      const spinner = document.getElementById('feed-spinner');
+      const progressContainer = document.getElementById('injection-progress-container');
+      const progressBar = document.getElementById('injection-progress-bar');
+      const progressLabel = document.getElementById('injection-pct-label');
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      progressContainer.classList.remove('hidden');
+
+      logTelemetry('[MATRIX_START]', 'Executing 5X High-Density Database Injection Matrix...');
+      logTelemetry('[NET_REQ]', `POST ${API_BASE}/database/feed-5x`, `Payload target: { email: "${email}" }`);
+
+      // Micro-animation for telemetry visual feedback
+      let pct = 0;
+      const animTimer = setInterval(() => {
+        pct = Math.min(92, pct + 18);
+        progressBar.style.width = `${pct}%`;
+        progressLabel.textContent = `${pct}%`;
+      }, 70);
+
+      try {
+        const response = await fetch(`${API_BASE}/database/feed-5x`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+
+        const data = await response.json();
+        clearInterval(animTimer);
+
+        if (!response.ok) {
+          throw new Error(data.detail || `Matrix injection error: ${response.status}`);
+        }
+
+        progressBar.style.width = '100%';
+        progressLabel.textContent = '100% COMPLETE';
+
+        logTelemetry('[NET_RES]', 'Status 200 OK — db.batch() committed atomically.');
+        logTelemetry('[FIRESTORE]', `5 Sub-documents injected into users/${email}/records/`, 'Sequence: STRK-BAT-001 -> STRK-BAT-005');
+        logTelemetry('[FIRESTORE]', `Parent flag updated atomically: users/${email}.database_fed = TRUE`);
+
+        state.databaseFed = true;
+        renderInjectedRecords(data.records || []);
+
+        document.getElementById('matrix-fed-status').textContent = 'SYNCHRONIZED';
+        document.getElementById('matrix-fed-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
+
+      } catch (err) {
+        clearInterval(animTimer);
+        logTelemetry('[ERR_MATRIX]', `Data injection aborted: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+      }
+    }
+
+    /**
+     * Renders the 5 structural sub-documents into the high-density cyberpunk table.
+     */
+    function renderInjectedRecords(records) {
+      const container = document.getElementById('injected-records-container');
+      const tbody = document.getElementById('records-table-body');
+      tbody.innerHTML = '';
+
+      if (!records || records.length === 0) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+
+      records.forEach((rec) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-matrix-black/80 transition-colors';
+
+        // Load Meter calculation (85.5% to 100%)
+        const loadVal = parseFloat(rec.metric_load) || 90.0;
+        const hashDisplay = rec.integrity_hash ? `0x${rec.integrity_hash}` : '0x00000000';
+
+        tr.innerHTML = `
+          <td class="py-2.5 px-2 font-bold text-matrix-green tracking-wider">${escapeHtml(rec.record_id)}</td>
+          <td class="py-2.5 px-2">
+            <div class="flex items-center gap-2">
+              <span class="text-white font-mono">${loadVal.toFixed(2)}%</span>
+              <div class="w-16 bg-black h-1.5 rounded-full border border-matrix-border overflow-hidden hidden sm:block">
+                <div class="bg-matrix-green h-full" style="width: ${loadVal}%"></div>
+              </div>
+            </div>
+          </td>
+          <td class="py-2.5 px-2 text-matrix-muted font-mono text-[10px] tracking-wider">${escapeHtml(hashDisplay)}</td>
+          <td class="py-2.5 px-2 text-right">
+            <span class="px-2 py-0.5 rounded text-[10px] border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold uppercase">
+              ${escapeHtml(rec.status)}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // TELEMETRY SYNCHRONIZATION (GET /user/status)
+    // -------------------------------------------------------------------------
+    async function syncUserStatus() {
+      if (!state.email) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/user/status?email=${encodeURIComponent(state.email)}`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (data.exists) {
+          // Sync GitHub connection badge
+          if (data.github_connected) {
+            state.githubConnected = true;
+            document.getElementById('github-sync-status').textContent = 'PAT ACTIVE';
+            document.getElementById('github-sync-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
+            
+            const patCard = document.getElementById('github-pat-card');
+            const patMasked = document.getElementById('github-pat-masked');
+            patCard.classList.remove('hidden');
+            patMasked.textContent = data.github_token_masked || 'ghp_••••••••••••';
+          }
+
+          // Sync database_fed flag
+          if (data.database_fed) {
+            state.databaseFed = true;
+            document.getElementById('matrix-fed-status').textContent = 'SYNCHRONIZED';
+            document.getElementById('matrix-fed-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
+          }
+
+          // Render records if available
+          if (data.records && data.records.length > 0) {
+            renderInjectedRecords(data.records);
+          }
+        }
+      } catch (err) {
+        console.error('Status sync error:', err);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // KEYBOARD CONTROLLER & BOOT INITIALIZATION
+    // -------------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', () => {
+      initClock();
+
+      // Display API host indicator
+      try {
+        const urlObj = new URL(API_BASE);
+        document.getElementById('api-host-indicator').textContent = urlObj.host;
+      } catch(e) {}
+
+      // Keyboard listeners: Enter keys
+      document.getElementById('input-email').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleSendOtp();
+      });
+      document.getElementById('input-otp-code').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleVerifyOtp();
+      });
+
+      // Telemetry Startup Banner
+      logTelemetry('[BOOT]', 'Stroke Cyberpunk Operational Matrix initialized.');
+      logTelemetry('[CONFIG]', 'Stateless FastAPI REST + Firebase Firestore Admin SDK.');
+      logTelemetry('[READY]', 'Telemetry bus listening for operator identity handshake.');
+
+      // Check URL Query Parameters (Handles return from full-page GitHub OAuth redirect)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlEmail = urlParams.get('email');
+      const ghConnected = urlParams.get('github_connected');
+
+      if (urlEmail) {
+        state.email = urlEmail;
+        document.getElementById('input-email').value = urlEmail;
+        document.getElementById('session-email-label').textContent = urlEmail;
+        logTelemetry('[RESTORE]', `Session identity recovered from URL parameters: ${urlEmail}`);
+
+        if (ghConnected === 'true') {
+          logTelemetry('[OAUTH_REDIRECT]', 'GitHub OAuth redirection loop completed successfully.');
+          syncUserStatus();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
