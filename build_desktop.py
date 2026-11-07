@@ -33,9 +33,14 @@ def run_build():
     # Data files to embed in standalone binary
     add_data = [
         f"index.html{sep}.",
+        f"download_model.py{sep}.",
         f"requirements.txt{sep}.",
         f".env.example{sep}."
     ]
+
+    # If offline neural models exist locally, bundle them directly for all-in-one distribution
+    if os.path.exists("models"):
+        add_data.append(f"models{sep}models")
 
     base_cmd = [
         sys.executable, "-m", "PyInstaller",

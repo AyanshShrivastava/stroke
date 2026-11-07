@@ -574,6 +574,41 @@
               />
             </div>
 
+            <!-- Embedded Offline Weights Downloader Card -->
+            <div id="offline-weights-card" class="p-3.5 rounded-lg border border-matrix-border bg-black text-xs font-mono space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span id="weights-status-dot" class="h-2 w-2 rounded-full bg-yellow-400 status-dot-active"></span>
+                  <span class="text-matrix-muted uppercase text-[10px]">STANDALONE OFFLINE AI WEIGHTS:</span>
+                  <span id="weights-filename-label" class="text-white font-bold text-xs">Llama-3.2-1B-Instruct (Q4_K_M ~770 MB)</span>
+                </div>
+                <span id="weights-badge" class="text-[10px] px-2 py-0.5 rounded border border-matrix-border text-yellow-400 font-bold">NOT DOWNLOADED</span>
+              </div>
+
+              <!-- Download Button & Progress -->
+              <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <button 
+                  id="btn-download-weights"
+                  onclick="triggerWeightsDownload()"
+                  class="glow-button px-4 py-2 rounded font-mono font-bold text-xs uppercase bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <span>📥 Download Offline AI (~770 MB)</span>
+                </button>
+                <div id="weights-progress-box" class="hidden flex-1 w-full space-y-1">
+                  <div class="flex justify-between text-[10px] text-matrix-muted font-mono">
+                    <span id="weights-progress-text">Downloading from HuggingFace CDN...</span>
+                    <span id="weights-pct-label" class="text-matrix-green font-bold">0%</span>
+                  </div>
+                  <div class="w-full bg-matrix-card rounded-full h-1.5 border border-matrix-border overflow-hidden">
+                    <div id="weights-progress-bar" class="h-full bg-matrix-green w-0 transition-all duration-300 shadow-[0_0_8px_#00ff66]"></div>
+                  </div>
+                </div>
+              </div>
+              <p class="text-[10px] text-matrix-darkgreen">
+                Zero Cloud Dependencies: Saves directly into <code class="text-matrix-muted">models/</code> for air-gapped CPU/Metal inference without Ollama or Python setup.
+              </p>
+            </div>
+
             <!-- Neural Conversation Stream -->
             <div id="ai-chat-thread" class="min-h-[220px] max-h-[380px] overflow-y-auto space-y-3 p-3.5 rounded-lg border border-matrix-border bg-black/90 font-mono text-xs">
               <!-- Initial Welcome Message -->
@@ -1260,6 +1295,110 @@
       }
     }
 
+    // -------------------------------------------------------------------------
+    // EMBEDDED OFFLINE WEIGHTS DOWNLOADER CONTROLLER (LLAMA 3.2 1B ~770 MB)
+    // -------------------------------------------------------------------------
+    let weightsPollTimer = null;
+
+    async function checkWeightsStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/ai/model/weights-status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        updateWeightsUi(data);
+      } catch (e) {}
+    }
+
+    function updateWeightsUi(data) {
+      const badge = document.getElementById('weights-badge');
+      const dot = document.getElementById('weights-status-dot');
+      const btn = document.getElementById('btn-download-weights');
+      const progressBox = document.getElementById('weights-progress-box');
+      const progressBar = document.getElementById('weights-progress-bar');
+      const pctLabel = document.getElementById('weights-pct-label');
+      const progressText = document.getElementById('weights-progress-text');
+
+      if (!badge || !dot || !btn) return;
+
+      if (data.status === 'downloaded' || data.is_ready) {
+        badge.textContent = 'OFFLINE AI READY (AIR-GAPPED)';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green font-bold';
+        dot.className = 'h-2 w-2 rounded-full bg-matrix-green status-dot-active';
+        btn.disabled = true;
+        btn.innerHTML = '<span>✓ Offline Model Ready</span>';
+        btn.className = 'px-4 py-2 rounded font-mono font-bold text-xs uppercase bg-black border border-matrix-border-bright text-matrix-green cursor-default flex items-center gap-1.5 opacity-90';
+        if (progressBox) progressBox.classList.add('hidden');
+        if (weightsPollTimer) {
+          clearInterval(weightsPollTimer);
+          weightsPollTimer = null;
+        }
+      } else if (data.status === 'downloading') {
+        badge.textContent = 'DOWNLOADING';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-matrix-border text-yellow-400 font-bold';
+        dot.className = 'h-2 w-2 rounded-full bg-yellow-400 status-dot-active animate-ping';
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Downloading...</span>';
+        if (progressBox) progressBox.classList.remove('hidden');
+
+        const pct = data.progress_percent || 0;
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        const dlMb = ((data.downloaded_bytes || 0) / (1024 * 1024)).toFixed(1);
+        const totMb = ((data.total_bytes || 770 * 1024 * 1024) / (1024 * 1024)).toFixed(1);
+        if (pctLabel) pctLabel.textContent = `${pct}% (${dlMb} / ${totMb} MB)`;
+        const spd = data.speed_mbps ? ` @ ${data.speed_mbps.toFixed(1)} MB/s` : '';
+        if (progressText) progressText.textContent = `Streaming Llama-3.2 GGUF from CDN${spd}...`;
+
+        if (!weightsPollTimer) {
+          weightsPollTimer = setInterval(checkWeightsStatus, 800);
+        }
+      } else if (data.status === 'failed') {
+        badge.textContent = 'DOWNLOAD FAILED';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-red-500 text-red-400 font-bold';
+        dot.className = 'h-2 w-2 rounded-full bg-red-500';
+        btn.disabled = false;
+        btn.innerHTML = '<span>⚠️ Retry Download</span>';
+        if (weightsPollTimer) {
+          clearInterval(weightsPollTimer);
+          weightsPollTimer = null;
+        }
+      } else {
+        badge.textContent = 'NOT DOWNLOADED';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-matrix-border text-yellow-400 font-bold';
+        dot.className = 'h-2 w-2 rounded-full bg-yellow-400';
+        btn.disabled = false;
+        btn.innerHTML = '<span>📥 Download Offline AI (~770 MB)</span>';
+        if (progressBox) progressBox.classList.add('hidden');
+      }
+    }
+
+    async function triggerWeightsDownload() {
+      const btn = document.getElementById('btn-download-weights');
+      const progressBox = document.getElementById('weights-progress-box');
+      if (btn) btn.disabled = true;
+      if (progressBox) progressBox.classList.remove('hidden');
+
+      logTelemetry('[WEIGHTS_INIT]', 'Initiating offline Llama 3.2 1B Instruct GGUF download (~770 MB)...');
+      logTelemetry('[NET_REQ]', 'POST /ai/model/download-weights', 'Streaming directly to local models/ storage...');
+
+      try {
+        const res = await fetch(`${API_BASE}/ai/model/download-weights`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        logTelemetry('[WEIGHTS_STREAM]', data.message || 'Background weight acquisition started.');
+
+        if (!weightsPollTimer) {
+          weightsPollTimer = setInterval(checkWeightsStatus, 800);
+        }
+        checkWeightsStatus();
+      } catch (err) {
+        logTelemetry('[WEIGHTS_ERR]', `Failed to trigger download: ${err.message}`);
+        if (btn) btn.disabled = false;
+      }
+    }
+
     async function sendAiPrompt() {
       const input = document.getElementById('input-ai-prompt');
       const prompt = input.value.trim();
@@ -1338,13 +1477,35 @@
         state.chatMessages.push({ role: 'assistant', content: replyText });
 
         logTelemetry('[AI_RESPONSE]', `Synthesized via ${data.provider} (${data.model})`);
+        if (data.tool_invoked) {
+          logTelemetry('[AUTONOMOUS_TOOL]', `AI invoked web_search(query="${data.tool_query || ''}")`);
+        } else {
+          logTelemetry('[DIRECT_REASONING]', 'AI evaluated query directly from model weights.');
+        }
         if (data.sources && data.sources.length > 0) {
           logTelemetry('[CITATIONS]', `Referenced ${data.sources.length} live internet sources.`);
         }
 
-        // Render AI bubble with citation pills
+        // Render AI bubble with autonomous tool banner and citation pills
         const aiBubble = document.createElement('div');
         aiBubble.className = 'flex gap-2.5 items-start';
+
+        let toolBannerHtml = '';
+        if (data.tool_invoked) {
+          toolBannerHtml = `
+            <div class="p-2 rounded bg-black/80 border border-yellow-500/50 text-yellow-400 text-[10px] font-mono flex items-center gap-2">
+              <span class="animate-pulse">⚡</span>
+              <span><strong>[AUTONOMOUS TOOL CALL]</strong>: Model evaluated prompt &amp; invoked <code>web_search(query="${escapeHtml(data.tool_query || prompt)}")</code></span>
+            </div>
+          `;
+        } else {
+          toolBannerHtml = `
+            <div class="p-1.5 rounded bg-black/60 border border-matrix-border text-matrix-muted text-[10px] font-mono flex items-center gap-2">
+              <span>🧠</span>
+              <span><strong>[DIRECT REASONING]</strong>: Evaluated directly from internal model parameters (No web search needed)</span>
+            </div>
+          `;
+        }
 
         let citationsHtml = '';
         if (data.sources && data.sources.length > 0) {
@@ -1368,11 +1529,12 @@
           <div class="h-6 w-6 rounded bg-matrix-border text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border-bright">
             AI
           </div>
-          <div class="p-3.5 rounded-lg border border-matrix-border bg-matrix-card text-matrix-green space-y-2 max-w-[90%] leading-relaxed">
+          <div class="p-3.5 rounded-lg border border-matrix-border bg-matrix-card text-matrix-green space-y-2.5 max-w-[90%] leading-relaxed">
             <div class="flex items-center justify-between text-[10px] text-matrix-muted border-b border-matrix-border/40 pb-1">
               <span class="font-bold text-white uppercase">${escapeHtml(data.provider)}</span>
               <span>MODEL: ${escapeHtml(data.model)}</span>
             </div>
+            ${toolBannerHtml}
             <div class="whitespace-pre-wrap text-xs">${formatMarkdownResponse(replyText)}</div>
             ${citationsHtml}
           </div>
@@ -1416,6 +1578,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       initClock();
       detectClientOS();
+      checkWeightsStatus();
 
       // Check AI Status
       fetch(`${API_BASE}/ai/status`).then(r => r.json()).then(data => {
