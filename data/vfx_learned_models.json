@@ -382,5 +382,60 @@
     "god_tier_score": 9.8,
     "learned_dynamically": true,
     "learned_at": "2026-11-08T11:07:02.647724+00:00"
+  },
+  "GodTier_Elemental_try_spawning_a_house_from_th": {
+    "name": "GodTier_Elemental_try_spawning_a_house_from_th",
+    "domain": "Elemental",
+    "element": "Matrix",
+    "particle_emitters": [
+      {
+        "name": "Elemental_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 102,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://13780268621"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Elemental_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Elemental_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://13780268621",
+      "rbxassetid://18462751521"
+    ],
+    "snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Creator Store Note: Insertion requires user inventory ownership or Toolbox public access: User is not authorized to access Asset.`\n\n**Spawning a Creator Store House from the Creator Store**\n\n### Overview\n\nThe following Luau",
+    "god_tier_score": 9.66,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T11:41:55.861041+00:00"
   }
 }

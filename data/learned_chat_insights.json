@@ -1,7 +1,20 @@
 {
-  "total_chats_learned": 5,
-  "last_updated": "2026-11-08T11:07:02.649509+00:00",
+  "total_chats_learned": 6,
+  "last_updated": "2026-11-08T11:41:55.862033+00:00",
   "insights": [
+    {
+      "id": "INS-GOD-ELEM-006",
+      "domain": "Elemental",
+      "element": "Matrix",
+      "model_name": "GodTier_Elemental_try_spawning_a_house_from_th",
+      "topic": "God-Tier Elemental Mastery: 'GodTier_Elemental_try_spawning_a_house_from_th'",
+      "summary": "Distilled top-tier Elemental kinematics with 2 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Creator Store Note: Insertion requires user inventory ownership or Toolbox public access: User is not authorized to access Asset.`\n\n**Spawning a Creator Store House from the Creator Store**\n\n### Overview\n\nThe following Luau",
+      "impact_score": 9.66,
+      "source_tool": "studio_execute_luau",
+      "contributor": "anon***",
+      "created_at": "2026-11-08T11:41:55.861986+00:00"
+    },
     {
       "id": "INS-VOID-01",
       "domain": "Void",

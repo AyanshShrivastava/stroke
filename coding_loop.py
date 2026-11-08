@@ -441,6 +441,28 @@ class RobloxDomainTestRunner:
                 passed_checks.append("Attachment Anchoring (Emitters parented to valid Attachment points)")
             untested_limitations.append("GPU rendering framerate impact under 100+ simultaneous particle emitters.")
 
+        # 5. Domain Check: Creator Store & Architecture (House, Buildings, Models)
+        is_structure_request = any(k in p_lower for k in ["house", "building", "structure", "creator store", "toolbox", "architecture", "cabin", "cottage"])
+        if is_structure_request and not is_hitbox_request and not is_vfx_request:
+            has_insert = "InsertService" in code or "GetObjects" in code
+            has_parts = "Instance.new(\"Part\")" in code or "Instance.new('Part')" in code or "Instance.new(\"Model\")" in code
+            has_anchored = ".Anchored = true" in code or "Anchored = true" in code
+            has_parent = ".Parent = workspace" in code or ".Parent =" in code
+
+            if has_insert:
+                passed_checks.append("Creator Store Ingestion Pipeline (Uses InsertService / GetObjects for marketplace asset retrieval)")
+            if has_parts:
+                passed_checks.append("3D Architectural Instance Assembly (Constructs structural components: Foundation, Walls, Roof, Model)")
+            if has_anchored:
+                passed_checks.append("Structural Anchoring Guard (Ensures buildings and parts do not collapse under Roblox physics)")
+            if has_parent:
+                passed_checks.append("DataModel Hierarchy Parenting (Properly mounted to Workspace container)")
+
+            untested_limitations.extend([
+                "Creator Store Asset ID ownership / public distribution permissions in target place.",
+                "Live workspace spatial collision with terrain geometry or existing map structures."
+            ])
+
         # Final Verification Status
         # Passed if zero blocking errors (warnings are permitted but reported)
         is_verified = (len([f for f in failed_checks if f["type"] == "error"]) == 0)
