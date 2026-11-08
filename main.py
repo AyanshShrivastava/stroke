@@ -64,10 +64,11 @@ from terminal_service import TerminalManager, get_terminal_tools_schema, get_ter
 SYSTEM_NAME = "Stroke"
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "Ov23liStrokeDefaultID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "mock_or_env_stroke_secret")
+APP_PORT = int(os.getenv("PORT", 8501))
 GITHUB_REDIRECT_URI = os.getenv(
-    "GITHUB_REDIRECT_URI", "http://localhost:8000/auth/github/callback"
+    "GITHUB_REDIRECT_URI", f"http://localhost:{APP_PORT}/auth/github/callback"
 )
-FRONTEND_APP_URL = os.getenv("FRONTEND_APP_URL", "http://localhost:8000")
+FRONTEND_APP_URL = os.getenv("FRONTEND_APP_URL", f"http://localhost:{APP_PORT}")
 
 # ==============================================================================
 # FIREBASE FIRESTORE INITIALIZATION (STATELESS DB CLIENT)
@@ -320,7 +321,7 @@ async def send_real_outbound_email(email: str, otp_code: str, password: Optional
                         "email": email,
                         "create_user": True,
                         "options": {
-                            "email_redirect_to": "http://localhost:8000"
+                            "email_redirect_to": FRONTEND_APP_URL
                         }
                     }
                 )
@@ -340,7 +341,7 @@ async def send_real_outbound_email(email: str, otp_code: str, password: Optional
                         "email": email,
                         "password": password or "StrokeAuth2026!",
                         "options": {
-                            "email_redirect_to": "http://localhost:8000"
+                            "email_redirect_to": FRONTEND_APP_URL
                         }
                     }
                 )
@@ -3878,4 +3879,4 @@ async def terminal_tools_schema_endpoint():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=APP_PORT, reload=True)
