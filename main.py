@@ -50,6 +50,8 @@ import vfx_service
 import mcp_bridge
 import coding_loop
 from coding_loop import StrokeCodingLoop, RobloxDomainTestRunner, ErrorAnalyser, CodingArchivist
+import terminal_service
+from terminal_service import TerminalManager, get_terminal_tools_schema
 
 # ==============================================================================
 # CONFIGURATION & ENVIRONMENT VARIABLES
@@ -241,6 +243,22 @@ class McpConnectRequest(BaseModel):
 
 class McpDisconnectRequest(BaseModel):
     server_id: str = Field(..., description="Server ID to disconnect")
+
+
+class CreateTerminalPayload(BaseModel):
+    workspace_path: Optional[str] = Field(None, description="Path to directory for the terminal session. Must be within workspace.")
+
+
+class RunCommandPayload(BaseModel):
+    session_id: str = Field(..., description="Unique terminal session ID")
+    command: str = Field(..., description="Binary or command name (e.g. python, pytest, luau-analyze)")
+    args: Optional[List[str]] = Field(default_factory=list, description="Structured arguments list")
+    timeout_sec: Optional[int] = Field(20, description="Process timeout in seconds")
+
+
+class TerminalApprovalPayload(BaseModel):
+    approval_id: str = Field(..., description="Approval token from a requires_approval decision")
+    approved: bool = Field(..., description="True to authorize execution, False to deny")
 
 
 # ==============================================================================
@@ -2298,6 +2316,32 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     grounded_context += "=== END SEARCH RESULTS ===\n"
                     execution_steps.append({"name": "Autonomous Web Search", "detail": f"Retrieved {len(sources_used)} live web sources via DuckDuckGo"})
 
+            elif any(k in last_user_message.lower() for k in ["run test", "run tests", "check syntax", "test runner", "run check", "run command", "terminal tool", "git status", "check code"]):
+                tool_invoked = True
+                tool_name_used = "run_command"
+                tool_query = last_user_message
+                term_session = TerminalManager.create_terminal()
+                session_id = term_session["session_id"]
+                cmd = "python"
+                args = ["--version"]
+                if "git status" in last_user_message.lower():
+                    cmd = "git"
+                    args = ["status"]
+                elif "pytest" in last_user_message.lower() or "tests" in last_user_message.lower():
+                    cmd = "pytest"
+                    args = ["--version"]
+                elif "luau" in last_user_message.lower():
+                    cmd = "luau-analyze"
+                    args = ["--version"]
+
+                term_result = TerminalManager.run_command(session_id, cmd, args, timeout_sec=10)
+                TerminalManager.stop_terminal(session_id)
+                sources_used = [{"title": "Stroke Private Terminal", "url": "#terminal", "snippet": f"{cmd} exit_code: {term_result.get('exit_code')}"}]
+                clean_stdout = term_result.get("stdout") or ""
+                clean_stderr = term_result.get("stderr") or ""
+                grounded_context += f"\n\n=== INTERNAL TERMINAL EXECUTION RESULT ===\nCommand: {cmd} {' '.join(args)}\nExit Code: {term_result.get('exit_code')}\nOutput: {clean_stdout}\nErrors: {clean_stderr}\n=== END TERMINAL RESULT ===\n"
+                execution_steps.append({"name": "Private Terminal Execution", "detail": f"Executed `{cmd} {' '.join(args)}` silently in workspace (Exit {term_result.get('exit_code')})"})
+
             if payload.think_mode:
                 execution_steps.append({"name": "Deep Neural Reasoning", "detail": "Evaluating algorithmic architecture and physics constraints"})
 
@@ -2656,6 +2700,96 @@ async def verify_code_endpoint(payload: VerifyCodePayload):
         "language": lang,
         "report": report
     }
+
+
+# ==============================================================================
+# PRIVATE INTERNAL BACKGROUND TERMINAL SERVICE ENDPOINTS (AI AGENT ACCESS ONLY)
+# ==============================================================================
+
+@app.post("/terminal/create", tags=["AI Terminal Service"])
+async def create_terminal_endpoint(payload: Optional[CreateTerminalPayload] = None):
+    """
+    POST /terminal/create
+    Creates a new silent, background terminal session for Stroke AI Agent.
+    """
+    ws = payload.workspace_path if payload else None
+    try:
+        return TerminalManager.create_terminal(ws)
+    except PermissionError as pe:
+        raise HTTPException(status_code=403, detail=str(pe))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/terminal/run", tags=["AI Terminal Service"])
+async def run_command_endpoint(payload: RunCommandPayload):
+    """
+    POST /terminal/run
+    Executes a structured development command in the specified session.
+    """
+    try:
+        return TerminalManager.run_command(
+            session_id=payload.session_id,
+            command=payload.command,
+            args=payload.args,
+            timeout_sec=payload.timeout_sec or 20
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/terminal/{session_id}/output", tags=["AI Terminal Service"])
+async def read_terminal_output_endpoint(session_id: str, tail: Optional[int] = Query(None, description="Tail lines count")):
+    """
+    GET /terminal/{session_id}/output
+    Retrieves captured output lines from the session's bounded ring buffer.
+    """
+    return TerminalManager.read_terminal_output(session_id, tail_lines=tail)
+
+
+@app.get("/terminal/{session_id}/status", tags=["AI Terminal Service"])
+async def get_terminal_status_endpoint(session_id: str):
+    """
+    GET /terminal/{session_id}/status
+    Retrieves execution state, working directory, and metadata for a session.
+    """
+    return TerminalManager.get_terminal_status(session_id)
+
+
+@app.get("/terminal/list", tags=["AI Terminal Service"])
+async def list_terminals_endpoint():
+    """
+    GET /terminal/list
+    Lists active background terminal sessions.
+    """
+    return {"terminals": TerminalManager.list_terminals()}
+
+
+@app.post("/terminal/{session_id}/stop", tags=["AI Terminal Service"])
+async def stop_terminal_endpoint(session_id: str):
+    """
+    POST /terminal/{session_id}/stop
+    Terminates any active child process and reaps the session.
+    """
+    return TerminalManager.stop_terminal(session_id)
+
+
+@app.post("/terminal/approval/respond", tags=["AI Terminal Service"])
+async def respond_approval_endpoint(payload: TerminalApprovalPayload):
+    """
+    POST /terminal/approval/respond
+    Grants or denies approval for an unlisted or potentially sensitive command.
+    """
+    return TerminalManager.respond_to_approval(payload.approval_id, payload.approved)
+
+
+@app.get("/terminal/tools/schema", tags=["AI Terminal Service"])
+async def terminal_tools_schema_endpoint():
+    """
+    GET /terminal/tools/schema
+    Returns JSON schemas for internal AI tool calling.
+    """
+    return {"tools": get_terminal_tools_schema()}
 
 
 # ==============================================================================

@@ -23,6 +23,12 @@ import json
 import time
 from typing import Dict, List, Any, Optional, Tuple
 
+try:
+    import terminal_service
+    from terminal_service import TerminalManager
+except Exception:
+    TerminalManager = None
+
 
 # ==============================================================================
 # 1. LUAU SYNTAX & AST VALIDATOR
@@ -463,6 +469,43 @@ class RobloxDomainTestRunner:
                 "Live workspace spatial collision with terrain geometry or existing map structures."
             ])
 
+        # Background Terminal Execution Check for Luau
+        if TerminalManager:
+            try:
+                term_session = TerminalManager.create_terminal()
+                session_id = term_session["session_id"]
+                ws_path = term_session["workspace_path"]
+                scratch_dir = os.path.join(ws_path, ".stroke_scratch")
+                os.makedirs(scratch_dir, exist_ok=True)
+                scratch_file = os.path.join(scratch_dir, f"test_{int(time.time()*1000)}.luau")
+                with open(scratch_file, "w", encoding="utf-8") as f:
+                    f.write(code)
+
+                # Attempt luau-analyze via background terminal
+                res = TerminalManager.run_command(session_id, "luau-analyze", [scratch_file], timeout_sec=10)
+                if res.get("exit_code") == 0:
+                    passed_checks.append("Luau Static Type & Semantic Analysis (luau-analyze verified cleanly via private background terminal)")
+                elif res.get("exit_code") == 127:
+                    # luau-analyze binary not installed on host, AST analysis was used
+                    untested_limitations.append("External luau-analyze compiler binary not in workspace path; AST and semantic rules validated via internal engine.")
+                else:
+                    err_msg = res.get("stderr") or res.get("stdout") or "Semantic warning in Luau script"
+                    failed_checks.append({
+                        "type": "warning",
+                        "line": 1,
+                        "message": f"Luau Analyzer Report: {err_msg.strip()[:180]}",
+                        "suggestion": "Review Luau type annotations and variable definitions."
+                    })
+
+                try:
+                    if os.path.exists(scratch_file):
+                        os.remove(scratch_file)
+                except Exception:
+                    pass
+                TerminalManager.stop_terminal(session_id)
+            except Exception as term_exc:
+                untested_limitations.append(f"Private terminal runner note: {term_exc}")
+
         # Final Verification Status
         # Passed if zero blocking errors (warnings are permitted but reported)
         is_verified = (len([f for f in failed_checks if f["type"] == "error"]) == 0)
@@ -501,6 +544,39 @@ class RobloxDomainTestRunner:
                 "message": f"Python SyntaxError: {e.msg} on line {e.lineno}",
                 "suggestion": f"Fix syntax near: {e.text.strip() if e.text else ''}"
             })
+
+        # Real background terminal compiler check for Python
+        if TerminalManager:
+            try:
+                term_session = TerminalManager.create_terminal()
+                session_id = term_session["session_id"]
+                ws_path = term_session["workspace_path"]
+                scratch_dir = os.path.join(ws_path, ".stroke_scratch")
+                os.makedirs(scratch_dir, exist_ok=True)
+                scratch_file = os.path.join(scratch_dir, f"test_{int(time.time()*1000)}.py")
+                with open(scratch_file, "w", encoding="utf-8") as f:
+                    f.write(code)
+
+                res = TerminalManager.run_command(session_id, "python", ["-m", "py_compile", scratch_file], timeout_sec=10)
+                if res.get("exit_code") == 0:
+                    passed_checks.append("Python Bytecode Compilation Check (python -m py_compile verified cleanly via private background terminal)")
+                else:
+                    err_output = res.get("stderr") or res.get("stdout") or "Bytecode compilation error"
+                    failed_checks.append({
+                        "type": "error",
+                        "line": 1,
+                        "message": f"Terminal Python Compiler Error:\n{err_output.strip()[:200]}",
+                        "suggestion": "Fix Python syntax / bytecode error identified by python compiler."
+                    })
+
+                try:
+                    if os.path.exists(scratch_file):
+                        os.remove(scratch_file)
+                except Exception:
+                    pass
+                TerminalManager.stop_terminal(session_id)
+            except Exception as term_exc:
+                untested_limitations.append(f"Private terminal compiler note: {term_exc}")
 
         untested_limitations.append("Runtime environment dependencies, operating system differences, and edge-case I/O exceptions.")
         is_verified = (len([f for f in failed_checks if f["type"] == "error"]) == 0)

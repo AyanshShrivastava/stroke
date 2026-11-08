@@ -39,3 +39,5 @@ build/
 *.njsproj
 *.sln
 *.sw?
+.stroke_scratch/
+src-tauri/target/
