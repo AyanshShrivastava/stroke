@@ -233,7 +233,7 @@
             <span id="popoverCacheStatusBadge" class="text-brand-accent font-bold">Local Cache</span>
           </div>
           <div class="text-[11px] text-white flex items-center justify-between">
-            <span>14,666 Instances</span>
+            <span>VFX Kinematics</span>
             <button id="rerunInjectionBtn" class="text-[10px] text-brand-accent hover:underline">Re-sync 5X</button>
           </div>
         </div>
@@ -437,24 +437,23 @@
         <div class="flex items-center justify-between text-[11px] text-brand-muted font-mono">
           <span>mcpServers JSON Config</span>
           <div class="flex items-center space-x-2">
-            <button id="resetMcpDefaultBtn" class="text-brand-accent hover:underline">Reset Default</button>
+            <button id="resetMcpDefaultBtn" class="text-brand-accent hover:underline">Clear</button>
             <span>•</span>
             <button id="copyMcpJsonBtn" class="text-brand-accent hover:underline">Copy</button>
           </div>
         </div>
-        <textarea id="mcpJsonConfigInput" rows="9" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-xl p-3 text-xs font-mono text-brand-accent focus:outline-none leading-relaxed resize-none"></textarea>
+        <textarea id="mcpJsonConfigInput" rows="8" placeholder='{&#10;  "mcpServers": {&#10;    "Roblox_Studio": {&#10;      "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP"&#10;    }&#10;  }&#10;}' class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-xl p-3 text-xs font-mono text-brand-accent focus:outline-none leading-relaxed resize-none"></textarea>
       </div>
 
       <!-- Connected Servers Status Summary -->
       <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-2.5">
         <div class="flex items-center justify-between">
           <div class="text-[11px] uppercase font-bold text-brand-muted tracking-wider">Configured Servers & Real-Time Status</div>
-          <span class="text-[10px] text-brand-muted font-mono">Real-time Port Probe</span>
+          <span class="text-[10px] text-brand-muted font-mono">Dynamic Status</span>
         </div>
         <div id="mcpServersList" class="flex flex-wrap gap-2 text-xs"></div>
-        <div class="text-[11px] text-brand-muted leading-relaxed border-t border-brand-border/40 pt-2 space-y-1 font-sans">
-          <div><strong class="text-white">Roblox Studio MCP:</strong> Real-time bridge listening on <code class="text-brand-accent font-mono text-[10px]">http://127.0.0.1:8989</code>. When a Studio plugin or daemon is active on port 8989, code executes directly in your session. When on standby, Stroke generates the complete copy-pasteable Luau script for direct execution in the Command Bar.</div>
-          <div><strong class="text-white">GitHub MCP:</strong> Dispatches commits and PRs using your authenticated GitHub account.</div>
+        <div class="text-[11px] text-brand-muted leading-relaxed border-t border-brand-border/40 pt-2 font-sans">
+          Configure any MCP server using standard JSON format with <code class="text-brand-accent font-mono text-[10px]">command</code>, <code class="text-brand-accent font-mono text-[10px]">args</code>, <code class="text-brand-accent font-mono text-[10px]">env</code>, or <code class="text-brand-accent font-mono text-[10px]">url</code>. Stroke dynamically exposes their tools to the AI.
         </div>
       </div>
 
@@ -573,7 +572,7 @@
             <span id="settingsCacheBadge" class="text-[10px] font-mono text-brand-accent">Local Cache: Active</span>
           </div>
           <p class="text-xs text-brand-muted leading-relaxed">
-            The 14,666-instance Elemental Worlds VFX database is saved in your local cache for instant loading.
+            The production VFX knowledge base is saved in your local cache for instant zero-latency loading.
           </p>
           <div class="pt-1 flex items-center space-x-2">
             <button id="settingsRerunInjectionBtn" class="px-3 py-1.5 rounded-lg bg-brand-card border border-brand-border hover:border-brand-accent text-xs text-white hover:text-brand-accent transition-colors">
@@ -670,7 +669,7 @@
         <div class="w-8 h-8 rounded-lg bg-brand-accent/20 border border-brand-accent flex items-center justify-center font-bold text-sm text-brand-accent animate-pulse">S</div>
         <div>
           <h3 class="font-sans font-bold text-white text-base">Initializing Mandatory VFX Memory</h3>
-          <p class="text-xs text-brand-muted">Ingesting 14,666-instance Elemental Worlds VFX Matrix into local cache</p>
+          <p class="text-xs text-brand-muted">Calibrating VFX Neural Matrix into local cache</p>
         </div>
       </div>
 
@@ -923,7 +922,7 @@
       settingsTempValText.textContent = state.temperature.toFixed(2);
       const cacheKey = 'stroke_mandatory_vfx_cache_' + (state.userEmail || 'developer@cyber.matrix');
       const hasCache = !!localStorage.getItem(cacheKey);
-      settingsCacheBadge.textContent = hasCache ? '14,666 Instances Cached' : 'Not Cached';
+      settingsCacheBadge.textContent = hasCache ? 'Active (Cached)' : 'Not Cached';
       settingsCacheBadge.className = hasCache ? 'text-[10px] font-mono text-brand-accent' : 'text-[10px] font-mono text-brand-muted';
     }
 
@@ -1077,25 +1076,33 @@
     function renderMcpServersSummary(serversObj, healthData = {}) {
       mcpServersList.innerHTML = '';
       const keys = Object.keys(serversObj);
+      const badge = document.getElementById('mcpConnectedCountBadge');
+      if (badge) {
+        badge.textContent = keys.length > 0 ? `${keys.length} Active` : '0 Active';
+        badge.className = keys.length > 0 
+          ? 'text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono'
+          : 'text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border font-mono';
+      }
       if (keys.length === 0) {
-        mcpServersList.innerHTML = '<span class="text-brand-muted text-xs">No servers configured.</span>';
+        mcpServersList.innerHTML = '<span class="text-brand-muted text-xs">No servers configured. Paste JSON configuration above.</span>';
         return;
       }
       keys.forEach(k => {
         const s = serversObj[k];
         const h = healthData[k] || {};
-        const isOnline = h.status === 'online' || h.connected === true;
-        const statusLabel = isOnline ? 'Online' : 'Standby';
+        const isOnline = h.status === 'online' || h.status === 'ready' || h.connected === true;
+        const statusLabel = isOnline ? (h.status === 'ready' ? 'Ready' : 'Online') : 'Standby';
         const dotColor = isOnline ? 'bg-brand-accent' : 'bg-amber-400';
         const badgeClass = isOnline ? 'bg-brand-accent/20 text-brand-accent border-brand-accent/40' : 'bg-amber-400/20 text-amber-300 border-amber-400/30';
+        const targetDesc = s.command || s.url || 'configured';
 
         const span = document.createElement('span');
-        span.className = 'px-2.5 py-1.5 rounded-lg bg-brand-card border border-brand-border text-white text-[11px] font-mono flex items-center space-x-2';
+        span.className = 'px-2.5 py-1.5 rounded-lg bg-brand-card border border-brand-border text-white text-[11px] font-mono flex items-center space-x-2 max-w-full truncate';
         span.innerHTML = `
-          <span class="w-2 h-2 rounded-full ${dotColor}"></span>
-          <span class="font-semibold">${escapeHtml(k)}</span>
-          <span class="text-[9px] px-1.5 py-0.5 rounded border ${badgeClass} font-sans uppercase font-bold">${statusLabel}</span>
-          <span class="text-brand-muted text-[10px]">(${escapeHtml(s.url || 'local')})</span>
+          <span class="w-2 h-2 rounded-full ${dotColor} flex-shrink-0"></span>
+          <span class="font-semibold text-white">${escapeHtml(k)}</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded border ${badgeClass} font-sans uppercase font-bold flex-shrink-0">${statusLabel}</span>
+          <span class="text-brand-muted text-[10px] truncate max-w-[220px]" title="${escapeHtml(targetDesc)}">(${escapeHtml(targetDesc)})</span>
         `;
         mcpServersList.appendChild(span);
       });
@@ -1142,19 +1149,10 @@
     });
 
     resetMcpDefaultBtn.addEventListener('click', () => {
-      const defaultConfig = {
-        mcpServers: {
-          roblox_studio: {
-            url: "http://127.0.0.1:8989",
-            description: "Roblox Studio live execution and DataModel bridge"
-          },
-          github: {
-            url: "https://api.github.com",
-            description: "GitHub repository and pull request bridge"
-          }
-        }
+      const emptyConfig = {
+        mcpServers: {}
       };
-      mcpJsonConfigInput.value = JSON.stringify(defaultConfig, null, 2);
+      mcpJsonConfigInput.value = JSON.stringify(emptyConfig, null, 2);
     });
 
     copyMcpJsonBtn.addEventListener('click', () => {
@@ -1200,7 +1198,7 @@
 
     sendPromptBtn.addEventListener('click', submitUserPrompt);
 
-    // 9. Submit Prompt
+    // 9. Submit Prompt Handlers
     async function submitUserPrompt() {
       const text = promptInput.value.trim();
       const currentAttachments = [...state.pendingAttachments];
@@ -1210,17 +1208,27 @@
       emptyStateHero.classList.add('hidden');
       messagesList.classList.remove('hidden');
 
-      appendMessage('user', text || '(Attached files provided)', { attachments: currentAttachments });
-      state.chatMessages.push({ role: 'user', content: text || 'Analyze the attached files.' });
-
       promptInput.value = '';
       promptInput.style.height = 'auto';
       state.pendingAttachments = [];
       renderAttachmentPreviews();
       sendPromptBtn.disabled = true;
 
+      await sendChatMessage(text || '(Attached files provided)', currentAttachments);
+    }
+
+    async function sendChatMessage(promptText, attachments = []) {
+      emptyStateHero.classList.add('hidden');
+      messagesList.classList.remove('hidden');
+
+      const turnIndex = state.chatMessages.length;
+      const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+
+      appendMessage('user', promptText, { attachments: attachments, msgId: msgId, turnIndex: turnIndex });
+      state.chatMessages.push({ role: 'user', content: promptText });
+
       const typingId = 'typing-' + Date.now();
-      appendTypingIndicator(typingId, text);
+      appendTypingIndicator(typingId, promptText);
 
       try {
         const payload = {
@@ -1231,7 +1239,7 @@
           is_temporary: state.isTemporaryMode,
           session_id: state.activeSessionId,
           think_mode: state.thinkMode,
-          attachments: currentAttachments,
+          attachments: attachments,
           web_search: true
         };
 
@@ -1266,6 +1274,86 @@
       }
     }
 
+    // Prompt Editing Handlers
+    window.startEditPrompt = function(msgId) {
+      const msgDiv = document.getElementById(msgId);
+      if (!msgDiv) return;
+      const textSpan = document.getElementById(`${msgId}-text`);
+      const bubble = document.getElementById(`${msgId}-bubble`);
+      const actions = document.getElementById(`${msgId}-actions`);
+      if (!bubble || !textSpan) return;
+
+      const currentText = textSpan.innerText.trim();
+      if (actions) actions.classList.add('hidden');
+
+      bubble.dataset.originalHtml = bubble.innerHTML;
+      bubble.className = 'w-full min-w-[280px] sm:min-w-[420px] bg-[#0c1810] border border-brand-accent/50 rounded-2xl p-3 space-y-2.5 text-left';
+      bubble.innerHTML = `
+        <textarea id="${msgId}-edit-input" rows="3" class="w-full bg-black/60 border border-brand-border/80 focus:border-brand-accent rounded-xl p-2.5 text-sm text-white font-sans resize-none focus:outline-none leading-relaxed">${escapeHtml(currentText)}</textarea>
+        <div class="flex items-center justify-end space-x-2 text-xs">
+          <button onclick="cancelEditPrompt('${msgId}')" class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">Cancel</button>
+          <button onclick="saveAndSubmitEditedPrompt('${msgId}')" class="px-3.5 py-1 rounded-lg bg-brand-accent text-black font-semibold hover:bg-emerald-400 transition-colors">Save & Submit</button>
+        </div>
+      `;
+
+      const editInput = document.getElementById(`${msgId}-edit-input`);
+      if (editInput) {
+        editInput.focus();
+        editInput.setSelectionRange(editInput.value.length, editInput.value.length);
+        editInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            saveAndSubmitEditedPrompt(msgId);
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEditPrompt(msgId);
+          }
+        });
+      }
+    };
+
+    window.cancelEditPrompt = function(msgId) {
+      const msgDiv = document.getElementById(msgId);
+      if (!msgDiv) return;
+      const bubble = document.getElementById(`${msgId}-bubble`);
+      const actions = document.getElementById(`${msgId}-actions`);
+      if (!bubble) return;
+
+      if (bubble.dataset.originalHtml) {
+        bubble.innerHTML = bubble.dataset.originalHtml;
+      }
+      bubble.className = 'inline-block bg-[#122417] border border-[#23422c] text-white px-3.5 py-2 rounded-2xl rounded-tr-sm text-sm leading-relaxed font-sans select-text whitespace-pre-wrap break-words text-left';
+      if (actions) actions.classList.remove('hidden');
+    };
+
+    window.saveAndSubmitEditedPrompt = function(msgId) {
+      const msgDiv = document.getElementById(msgId);
+      if (!msgDiv) return;
+      const editInput = document.getElementById(`${msgId}-edit-input`);
+      if (!editInput) return;
+      const newText = editInput.value.trim();
+      if (!newText) return;
+
+      let turnIndex = parseInt(msgDiv.dataset.turnIndex, 10);
+      if (isNaN(turnIndex)) {
+        const allUserMsgs = Array.from(messagesList.querySelectorAll('[data-role="user"]'));
+        const idx = allUserMsgs.indexOf(msgDiv);
+        turnIndex = idx >= 0 ? idx * 2 : 0;
+      }
+
+      state.chatMessages = state.chatMessages.slice(0, turnIndex);
+
+      let next = msgDiv.nextElementSibling;
+      while (next) {
+        const toRemove = next;
+        next = next.nextElementSibling;
+        toRemove.remove();
+      }
+      msgDiv.remove();
+
+      sendChatMessage(newText, []);
+    };
+
     // Global Copy Helper with Visual Feedback
     window.copyMessageText = function(btn, text) {
       if (!text) return;
@@ -1292,7 +1380,13 @@
     function appendMessage(role, content, meta = {}) {
       const isUser = role === 'user';
       const msgDiv = document.createElement('div');
-      msgDiv.className = `w-full flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`;
+      const msgId = meta.msgId || ('msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5));
+      msgDiv.id = msgId;
+      msgDiv.dataset.role = role;
+      if (meta.turnIndex !== undefined) {
+        msgDiv.dataset.turnIndex = meta.turnIndex;
+      }
+      msgDiv.className = `w-full flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in my-1.5`;
 
       if (isUser) {
         let attHtml = '';
@@ -1308,14 +1402,20 @@
           attHtml += '</div>';
         }
 
+        const trimmedContent = (content || '').trim();
+
         msgDiv.innerHTML = `
-          <div class="flex flex-col items-end max-w-[85%] group">
-            <div class="bg-[#122417] border border-[#23422c] text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed font-sans select-text whitespace-pre-wrap break-words">
+          <div class="flex flex-col items-end max-w-[80%] sm:max-w-[70%] group">
+            <div id="${msgId}-bubble" class="inline-block bg-[#122417] border border-[#23422c] text-white px-3.5 py-2 rounded-2xl rounded-tr-sm text-sm leading-relaxed font-sans select-text whitespace-pre-wrap break-words text-left">
               ${attHtml}
-              ${escapeHtml(content)}
+              <span id="${msgId}-text">${escapeHtml(trimmedContent)}</span>
             </div>
-            <div class="mt-1 flex items-center space-x-2 text-[10px] text-brand-muted opacity-80 group-hover:opacity-100 transition-opacity">
-              <button onclick="copyMessageText(this, this.getAttribute('data-copy'))" data-copy="${escapeHtml(content)}" class="hover:text-brand-accent flex items-center space-x-1 px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors" title="Copy prompt text">
+            <div id="${msgId}-actions" class="mt-1 flex items-center space-x-2 text-[10px] text-brand-muted opacity-80 group-hover:opacity-100 transition-opacity">
+              <button onclick="startEditPrompt('${msgId}')" class="hover:text-brand-accent flex items-center space-x-1 px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors" title="Edit prompt and restart conversation">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                <span>Edit</span>
+              </button>
+              <button onclick="copyMessageText(this, this.getAttribute('data-copy'))" data-copy="${escapeHtml(trimmedContent)}" class="hover:text-brand-accent flex items-center space-x-1 px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors" title="Copy prompt text">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                 <span>Copy</span>
               </button>
@@ -1415,36 +1515,36 @@
 
       if (pLower.includes('vfx') || pLower.includes('particle') || pLower.includes('domain') || pLower.includes('sukuna') || pLower.includes('purple') || pLower.includes('cleave') || pLower.includes('fireball') || pLower.includes('aura') || pLower.includes('beam')) {
         contextualSteps = [
-          "Evaluating Roblox VFX kinematics & particle constraints",
-          "Scanning Elemental Worlds VFX catalog (14,666 entries)...",
-          "Checking ParticleEmitter, Beam & Attachment hierarchies",
-          "Synthesizing production Luau scripts..."
+          "Analyzing VFX kinematics and visual constraints...",
+          "Evaluating ParticleEmitter, Beam & Attachment hierarchies...",
+          "Synthesizing production Luau script...",
+          "Verifying runtime performance and cleanup..."
         ];
       } else if (pLower.includes('studio') || pLower.includes('run') || pLower.includes('execute')) {
         contextualSteps = [
-          "Evaluating Luau script execution request",
-          "Probing Roblox Studio MCP bridge (port 8989)...",
+          "Evaluating Luau script execution request...",
+          "Connecting to active Studio MCP proxy...",
           "Preparing ReplicatedStorage.VFX payload...",
           "Synthesizing production Luau script..."
         ];
       } else if (pLower.includes('search') || pLower.includes('latest') || pLower.includes('news') || pLower.includes('update') || pLower.includes('version')) {
         contextualSteps = [
-          "Evaluating documentation & knowledge requirements",
-          "Grounding internet context via autonomous web search...",
+          "Evaluating documentation & knowledge requirements...",
+          "Grounding context via autonomous web search...",
           "Synthesizing verified real-time sources...",
           "Compiling technical answer..."
         ];
       } else if (pLower.includes('commit') || pLower.includes('github') || pLower.includes('pull request')) {
         contextualSteps = [
-          "Analyzing repository target & git parameters",
+          "Analyzing repository target & git parameters...",
           "Connecting to GitHub MCP server...",
           "Validating branch & commit tree...",
           "Finalizing git operation..."
         ];
       } else {
         contextualSteps = [
-          "Analyzing prompt requirements and engineering specifications",
-          "Consulting local Llama neural core...",
+          "Analyzing prompt requirements and engineering specifications...",
+          "Consulting local neural core...",
           "Synthesizing technical solution...",
           "Formatting clean production code..."
         ];
@@ -1797,14 +1897,14 @@
       stageText.textContent = 'Starting 5X Ingestion Loop...';
       counterText.textContent = '0 / 5 Cycles Completed';
       statusText.textContent = 'Local Cache: Ingesting...';
-      logsBox.innerHTML = '<div class="text-brand-accent font-semibold">[INIT] Starting 5-cycle Elemental Worlds VFX injection matrix...</div>';
+      logsBox.innerHTML = '<div class="text-brand-accent font-semibold">[INIT] Starting 5-cycle VFX neural injection matrix...</div>';
 
       let prevSynthesis = null;
 
       for (let cycle = 1; cycle <= 5; cycle++) {
         stageText.textContent = `Executing Cycle ${cycle}/5...`;
         const logItem = document.createElement('div');
-        logItem.textContent = `[CYCLE ${cycle}/5] Ingesting matrix slice from vfx_data.json & vfx_dump.txt...`;
+        logItem.textContent = `[CYCLE ${cycle}/5] Calibrating kinematic particle vectors and Luau hierarchy...`;
         logsBox.appendChild(logItem);
         logsBox.scrollTop = logsBox.scrollHeight;
 
@@ -1855,7 +1955,7 @@
       stageText.textContent = 'Setup Complete! Mandatory Memory Locked into Local Cache.';
       const finalLog = document.createElement('div');
       finalLog.className = 'text-brand-accent font-bold pt-1';
-      finalLog.textContent = '[SUCCESS] 14,666 instances and 95 models locked in local cache. Instant access enabled.';
+      finalLog.textContent = '[SUCCESS] VFX Neural Matrix locked in local cache. Instant access enabled.';
       logsBox.appendChild(finalLog);
 
       setTimeout(() => {

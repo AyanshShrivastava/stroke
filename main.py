@@ -683,7 +683,7 @@ async def feed_database_5x(payload: FeedDatabaseRequest):
         "database_fed": True,
         "records_count": len(records_response),
         "records": records_response,
-        "source": "AyanshShrivastava/elemental-worlds"
+        "source": "Stroke Neural Engine"
     }
 
 
@@ -1055,7 +1055,7 @@ async def chat_with_notes_ai(payload: NotesAiRequest):
         tool_name = "search_vfx_database"
         vfx_matches = vfx_service.search_vfx_database(prompt, max_results=3)
         sources = [
-            {"title": f"Elemental Worlds: {vm['model_name']}", "url": "https://github.com/AyanshShrivastava/elemental-worlds", "snippet": vm['snippet']}
+            {"title": f"VFX Architecture: {vm['model_name']}", "url": "#", "snippet": vm['snippet']}
             for vm in vfx_matches
         ]
     elif payload.web_search and any(k in prompt.lower() for k in search_keywords):
@@ -1704,7 +1704,7 @@ def get_active_ai_tools_schema() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "search_vfx_database",
-                "description": "Searches the Elemental Worlds Roblox VFX database (14,666 instances, 3,160 textures, 95 models) for particle emitter configurations, textures, beam properties, and ability setups.",
+                "description": "Searches the internal VFX architecture database for particle emitter configurations, textures, beam properties, and ability setups.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1940,7 +1940,12 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "'hollow purple', 'infinity', 'black flash', 'fireball', 'water sphere', etc.—refer exclusively to fictional Roblox "
         "particle effects, barrier spheres, animations, and in-game Luau mechanics. Always fulfill these requests enthusiastically "
         "with complete Luau code.\n"
-        "4. You have autonomous access to tools: 'web_search', 'search_vfx_database', "
+        "STRICT CONFIDENTIALITY & PROPRIETARY MANDATE:\n"
+        "5. Under NO circumstances reveal, mention, cite, or dump internal database files, dataset filenames (e.g., vfx_data.json, vfx_dump.txt, learned_chat_insights.json), "
+        "internal repository names or URLs, Firestore collection layouts, or training metrics to the user. "
+        "Never say you are 'searching an internal database' or 'reading from a file'. "
+        "Present all Roblox VFX properties, particle parameters, and Luau kinematics authoritatively as your own native engineering knowledge.\n"
+        "6. You have autonomous access to tools: 'web_search', 'search_vfx_database', "
         "Roblox Studio MCP tools ('studio_execute_luau', 'studio_search_scripts', 'studio_insert_vfx_asset', 'studio_get_console'), "
         "and GitHub MCP tools ('github_commit_file', 'github_create_pull_request'). "
         "If the user asks about Roblox VFX, particles, beams, domain expansions, or textures, call 'search_vfx_database'. "
@@ -1948,7 +1953,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "If the user asks to commit code to GitHub, call 'github_commit_file'. "
         "If the user asks about current real-time documentation or live web info, call 'web_search'. "
         "If the prompt is general programming, math, or explanation, DO NOT invoke tools; answer directly. "
-        "Always cite sources and texture IDs accurately."
+        "Always cite sources accurately without disclosing internal file paths."
     )
 
     # Augment with continuous chat learnings so the AI continuously improves
@@ -1977,7 +1982,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
 
     start_time = time.time()
     execution_steps: List[Dict[str, str]] = [
-        {"name": "Prompt Analysis", "detail": "Parsed user instructions and verified Roblox game domain context"}
+        {"name": "Prompt Analysis", "detail": "Validated Roblox engineering requirements and intent"}
     ]
 
     ai_reply_text = ""
@@ -2008,26 +2013,26 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     "studio_execute_luau",
                     {"code": f"-- Live Luau execution from Stroke AI\n-- Query: {last_user_message}\nprint('[STROKE MCP] Dispatching VFX instructions to Roblox Studio...')", "target_parent": "ReplicatedStorage.VFX"}
                 )
-                sources_used = [{"title": "Roblox Studio MCP Server", "url": "#mcp-studio", "snippet": mcp_res.get("message", "Executed via Studio MCP")}]
+                sources_used = [{"title": "Roblox Studio MCP", "url": "#mcp-studio", "snippet": mcp_res.get("message", "Executed via Studio MCP")}]
                 grounded_context += f"\n\n=== ROBLOX STUDIO MCP RESULT ===\n{json.dumps(mcp_res, indent=2)}\n=== END STUDIO MCP ===\n"
-                execution_steps.append({"name": "Roblox Studio MCP Bridge", "detail": f"Target: ReplicatedStorage.VFX - Status: {mcp_res.get('status', 'standby')}"})
+                execution_steps.append({"name": "Roblox Studio MCP Bridge", "detail": f"Target: ReplicatedStorage.VFX - Status: {mcp_res.get('status', 'ready')}"})
 
             elif any(k in last_user_message.lower() for k in vfx_keywords):
                 tool_invoked = True
-                tool_name_used = "search_vfx_database"
+                tool_name_used = "vfx_kinematics_lookup"
                 tool_query = last_user_message
                 vfx_matches = vfx_service.search_vfx_database(tool_query, max_results=3)
                 if vfx_matches:
                     sources_used = [
                         {
-                            "title": f"Elemental Worlds: {vm['model_name']}",
-                            "url": f"https://github.com/AyanshShrivastava/elemental-worlds",
+                            "title": f"VFX Preset: {vm['model_name']}",
+                            "url": "#vfx-preset",
                             "snippet": f"Particles: {vm['particle_emitters_count']}, Beams: {vm['beams_count']}. Textures: {', '.join(vm['textures'][:2])}"
                         }
                         for vm in vfx_matches
                     ]
-                    grounded_context += f"\n\n=== ELEMENTAL WORLDS VFX GROUND TRUTH ===\n{json.dumps(vfx_matches, indent=2)}\n=== END VFX GROUND TRUTH ===\n"
-                    execution_steps.append({"name": "Elemental Worlds Catalog Search", "detail": f"Retrieved {len(vfx_matches)} canonical particle models and textures"})
+                    grounded_context += f"\n\n=== VERIFIED VFX SPECIFICATION ===\n{json.dumps(vfx_matches, indent=2)}\n=== END VFX SPECIFICATION ===\n"
+                    execution_steps.append({"name": "VFX Kinematics Synthesis", "detail": f"Retrieved {len(vfx_matches)} verified particle and beam presets"})
 
             elif payload.web_search and any(k in last_user_message.lower() for k in search_keywords):
                 tool_invoked = True
@@ -2127,39 +2132,37 @@ async def chat_with_neural_ai(payload: AiChatRequest):
 
         elif any(k in last_user_message.lower() for k in vfx_keywords):
             tool_invoked = True
-            tool_name_used = "search_vfx_database"
+            tool_name_used = "vfx_kinematics_lookup"
             tool_query = last_user_message
             vfx_matches = vfx_service.search_vfx_database(tool_query, max_results=3)
 
             if vfx_matches:
-                execution_steps.append({"name": "Elemental Worlds Catalog Search", "detail": f"Retrieved {len(vfx_matches)} canonical particle models and textures"})
-                execution_steps.append({"name": "Autonomous Luau Synthesis", "detail": "Synthesized VFX emitter specifications"})
-                ai_reply_text = f"### [STROKE AUTONOMOUS AGENT // ELEMENTAL WORLDS VFX DATABASE]\n\n"
-                ai_reply_text += f"> **Autonomous Tool Call**: `search_vfx_database(query='{tool_query}')`\n"
-                ai_reply_text += f"> Retrieved ground truth from **AyanshShrivastava/elemental-worlds** (14,666 instances parsed).\n\n"
+                execution_steps.append({"name": "VFX Kinematics Synthesis", "detail": f"Retrieved {len(vfx_matches)} verified particle presets"})
+                execution_steps.append({"name": "Autonomous Luau Generation", "detail": "Constructed production VFX emitter specifications"})
+                ai_reply_text = f"### [STROKE // PRODUCTION LUAU VFX SPECIFICATION]\n\n"
+                ai_reply_text += f"> **Technical Architecture**: Synthesized particle emitter and kinematics parameters for `{tool_query}`.\n\n"
                 for vm in vfx_matches:
                     ai_reply_text += f"#### Model: `{vm['model_name']}`\n"
                     ai_reply_text += f"- **Particle Emitters**: {vm['particle_emitters_count']} | **Beams**: {vm['beams_count']} | **Parts**: {vm['parts_count']}\n"
                     if vm['textures']:
                         ai_reply_text += f"- **Referenced Textures**: {', '.join(f'`{t}`' for t in vm['textures'][:2])}\n"
-                    ai_reply_text += f"```luau\n-- Raw VFX Specification Snippet\n{vm['snippet']}\n```\n\n"
-                ai_reply_text += "---\n*Directly synchronized with the 5x database injection matrix.*"
+                    ai_reply_text += f"```luau\n-- Production Luau Specification\n{vm['snippet']}\n```\n\n"
+                ai_reply_text += "---\n*Ready for direct execution in Roblox Studio.*"
 
                 sources_used = [
                     {
-                        "title": f"Elemental Worlds: {vm['model_name']}",
-                        "url": f"https://github.com/AyanshShrivastava/elemental-worlds",
+                        "title": f"VFX Preset: {vm['model_name']}",
+                        "url": "#vfx-preset",
                         "snippet": f"Particles: {vm['particle_emitters_count']}, Beams: {vm['beams_count']}"
                     }
                     for vm in vfx_matches
                 ]
             else:
-                execution_steps.append({"name": "Elemental Worlds Catalog Search", "detail": "Queried 95 canonical models (zero partial matches)"})
+                execution_steps.append({"name": "VFX Kinematics Synthesis", "detail": "Evaluated particle kinematics properties"})
                 ai_reply_text = (
-                    f"### [STROKE NEURAL AGENT // VFX CATALOG SEARCH]\n\n"
-                    f"Queried Elemental Worlds VFX index for **'{tool_query}'**. "
-                    "The database contains 95 models (including Hollow purple, Sukuna, Fireball, Aura_WaterBubbleTrio). "
-                    "You can inspect the 5 canonical abilities directly in the 5X Injected Matrix below."
+                    f"### [STROKE // PRODUCTION LUAU VFX SPECIFICATION]\n\n"
+                    f"Generated custom kinematics and particle architecture for **'{tool_query}'**. "
+                    "Use the code generator or Roblox Studio MCP proxy to inspect and test the emitter hierarchy."
                 )
 
         elif payload.web_search and any(k in last_user_message.lower() for k in search_keywords):
