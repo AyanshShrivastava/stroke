@@ -19,6 +19,16 @@ MODELS = {
         "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
         "size_mb": 770.3
     },
+    "mini-agent-v2-1.5b": {
+        "filename": "mini-agent-v2-1.5b-q4_k_m.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "size_mb": 986.0
+    },
+    "qwen2.5-coder-1.5b": {
+        "filename": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "size_mb": 986.0
+    },
     "llama3.2-3b": {
         "filename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
         "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",

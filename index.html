@@ -1354,7 +1354,8 @@
           tool_name: data.tool_name,
           sources: data.sources,
           duration_seconds: data.duration_seconds,
-          execution_steps: data.execution_steps
+          execution_steps: data.execution_steps,
+          coding_loop: data.coding_loop
         });
 
       } catch (err) {
@@ -1465,6 +1466,49 @@
       });
     };
 
+    // Global Code Verification Runner
+    window.verifyCodeSnippet = async function(btn, code, lang) {
+      if (!code) return;
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = `
+        <svg class="w-3 h-3 text-brand-accent animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        <span>Verifying...</span>
+      `;
+      try {
+        const lastMsg = state.chatMessages.length ? state.chatMessages[state.chatMessages.length - 1].content : '';
+        const res = await fetch('/ai/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: code, language: lang || 'luau', prompt: lastMsg })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          const r = data.report;
+          const passed = (r.passed_checks || []).length;
+          const fails = (r.failed_checks || []).length;
+          if (r.is_verified) {
+            btn.innerHTML = `
+              <svg class="w-3 h-3 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span class="text-brand-accent font-semibold">${passed} Passed</span>
+            `;
+            showToast(`Stroke Test Runner: ${passed} checks passed cleanly. Zero blocking errors.`);
+          } else {
+            btn.innerHTML = `
+              <svg class="w-3 h-3 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              <span class="text-amber-400 font-semibold">${fails} Warnings</span>
+            `;
+            showToast(`Stroke Test Runner: ${fails} diagnostic issues detected.`);
+          }
+        } else {
+          btn.innerHTML = originalHtml;
+        }
+        setTimeout(() => { btn.innerHTML = originalHtml; }, 4000);
+      } catch (err) {
+        btn.innerHTML = originalHtml;
+        showToast('Could not execute code verification.');
+      }
+    };
+
     // 10. Message Renderer with Selectable Text & 1-Click Copy Buttons
     function appendMessage(role, content, meta = {}) {
       const isUser = role === 'user';
@@ -1565,6 +1609,44 @@
           `;
         }
 
+        let codingLoopBadgeHtml = '';
+        if (meta.coding_loop) {
+          const cl = meta.coding_loop;
+          const isVer = cl.is_verified;
+          const iters = cl.iteration_count || 1;
+          const passedCount = (cl.passed_checks || []).length;
+          const warnCount = (cl.failed_checks || []).length;
+          const untestedCount = (cl.untested_limitations || []).length;
+
+          codingLoopBadgeHtml = `
+            <div class="mb-3 rounded-xl border ${isVer ? 'border-brand-accent/50 bg-[#0d1f13]' : 'border-amber-500/40 bg-[#1f170d]'} p-3 shadow-md font-mono text-xs">
+              <div class="flex items-center justify-between pb-2 border-b ${isVer ? 'border-brand-accent/20' : 'border-amber-500/20'}">
+                <div class="flex items-center space-x-2">
+                  <span class="w-2 h-2 rounded-full ${isVer ? 'bg-brand-accent shadow-[0_0_8px_#00ff66]' : 'bg-amber-400'}"></span>
+                  <span class="text-white font-bold tracking-wider text-[11px] uppercase">Stroke Coding Loop // Write → Test → Diagnose → Fix</span>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isVer ? 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}">
+                  ${isVer ? `VERIFIED (${iters} PASS${iters > 1 ? 'ES' : ''})` : 'COMPLETED WITH WARNINGS'}
+                </span>
+              </div>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-center text-[10px]">
+                <div class="p-1.5 rounded-lg bg-black/40 border border-white/5">
+                  <div class="text-brand-accent font-bold text-xs">${passedCount}</div>
+                  <div class="text-brand-muted">Checks Passed</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-black/40 border border-white/5">
+                  <div class="${warnCount > 0 ? 'text-amber-400' : 'text-brand-muted'} font-bold text-xs">${warnCount}</div>
+                  <div class="text-brand-muted">Active Warnings</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-black/40 border border-white/5">
+                  <div class="text-cyan-400 font-bold text-xs">${untestedCount}</div>
+                  <div class="text-brand-muted">Untested Limits</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
         const formattedBody = formatMarkdownText(content);
 
         msgDiv.innerHTML = `
@@ -1573,6 +1655,7 @@
               S
             </div>
             <div class="min-w-0 flex-1">
+              ${codingLoopBadgeHtml}
               ${activityTraceHtml}
               ${toolChipHtml}
               <div class="prose prose-invert max-w-none text-sm text-[#e0e0e0] leading-relaxed font-sans select-text break-words">
@@ -1615,6 +1698,8 @@
         } else {
           activeAction = "Analyzing " + attachments.length + " attached files...";
         }
+      } else if (pLower.includes('hitbox') || pLower.includes('combat') || pLower.includes('damage') || pLower.includes('code') || pLower.includes('script') || pLower.includes('luau') || pLower.includes('loop')) {
+        activeAction = "Engaging Stroke Coding Loop: Write → Test → Diagnose → Fix cycle...";
       } else if (pLower.includes('spawn') || pLower.includes('workspace') || pLower.includes('studio') || pLower.includes('part') || pLower.includes('block') || pLower.includes('sphere')) {
         activeAction = "Connecting to Roblox Studio MCP and preparing Luau execution...";
       } else if (pLower.includes('search') || pLower.includes('latest') || pLower.includes('news') || pLower.includes('documentation') || pLower.includes('version')) {
@@ -2168,10 +2253,16 @@
           <div class="my-3 rounded-xl border border-brand-border bg-brand-surface overflow-hidden shadow-md">
             <div class="flex items-center justify-between px-3.5 py-1.5 bg-brand-card border-b border-brand-border text-[11px] text-brand-muted font-mono select-none">
               <span class="text-brand-accent uppercase font-semibold tracking-wider text-[10px]">${langDisplay}</span>
-              <button onclick="copyMessageText(this, this.getAttribute('data-code'))" data-code="${escapedCode}" class="hover:text-brand-accent flex items-center space-x-1 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px]">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                <span>Copy code</span>
-              </button>
+              <div class="flex items-center space-x-1.5">
+                <button onclick="verifyCodeSnippet(this, this.getAttribute('data-code'), '${langDisplay}')" data-code="${escapedCode}" class="hover:text-brand-accent flex items-center space-x-1 px-2 py-0.5 rounded bg-brand-accent/10 border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/20 transition-colors text-[10px]" title="Execute Stroke Test Runner on this code">
+                  <svg class="w-3 h-3 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>Verify Checks</span>
+                </button>
+                <button onclick="copyMessageText(this, this.getAttribute('data-code'))" data-code="${escapedCode}" class="hover:text-brand-accent flex items-center space-x-1 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px]">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  <span>Copy code</span>
+                </button>
+              </div>
             </div>
             <pre class="p-3.5 text-xs font-mono text-[#00ff66] overflow-x-auto leading-relaxed select-text"><code>${escapedCode}</code></pre>
           </div>
@@ -2198,6 +2289,11 @@
       // Helper for inline markdown inside paragraphs, list items, headings
       function parseInline(str) {
         let s = escapeHtml(str);
+        // Test Result Badges
+        s = s.replace(/\[PASS\]/g, '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 inline-block mr-1">PASS</span>');
+        s = s.replace(/\[ERROR\]/g, '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/30 inline-block mr-1">ERROR</span>');
+        s = s.replace(/\[WARNING\]/g, '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 inline-block mr-1">WARNING</span>');
+        s = s.replace(/\[UNTESTED\]/g, '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 inline-block mr-1">UNTESTED</span>');
         // Bold: **text**
         s = s.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
         // Italic: *text* (avoiding double asterisks)
