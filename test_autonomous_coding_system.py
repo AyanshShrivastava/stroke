@@ -373,6 +373,79 @@ class TestAutonomousCodingSystem(unittest.TestCase):
         self.assertIn("Syntax Compilation: PASS", md)
         print("  [PASS] TEST J: Subprocesses strictly execute with shell=False; no terminal window appears.")
 
+    # ==========================================================================
+    # TEST K: When code works, Stroke immediately gives the answer (no extra loops)
+    # ==========================================================================
+    def test_k_immediate_answer_when_working(self):
+        print("\n--- RUNNING TEST K: Immediate Answer On Working Code ---")
+        working_code = (
+            "def multiply(a: int, b: int) -> int:\n"
+            "    return a * b\n"
+        )
+        initial_reply = f"```python\n{working_code}```"
+
+        repair_called = []
+        def unused_repair_llm(messages):
+            repair_called.append(True)
+            return initial_reply
+
+        final_reply, final_report, steps = StrokeCodingLoop.run_coding_loop(
+            prompt="Write a multiply function",
+            initial_reply=initial_reply,
+            llm_generate_fn=unused_repair_llm,
+            max_iterations=None
+        )
+
+        # Verified immediately on pass 1
+        self.assertEqual(final_report["iteration_count"], 1, "Working code must conclude on Pass 1 immediately")
+        self.assertEqual(len(repair_called), 0, "Repair LLM must NOT be invoked when code already works")
+        self.assertTrue(final_report["is_verified"], "Working code must be marked verified")
+        self.assertIn("def multiply(a: int, b: int)", final_reply)
+        print("  [PASS] TEST K: Working code gave answer immediately on Pass 1 with 0 unnecessary repair cycles.")
+
+    # ==========================================================================
+    # TEST L: Unlimited iterations until solved (exceeds previous 3-iteration cap)
+    # ==========================================================================
+    def test_l_unlimited_iterations_until_solved(self):
+        print("\n--- RUNNING TEST L: Unlimited Iterations Until Solved ---")
+        broken_code = (
+            "def broken_chain():\n"
+            "    await step_1()\n"
+        )
+        initial_reply = f"```python\n{broken_code}```"
+
+        attempts = {"count": 0}
+        def progressive_repair_llm(messages):
+            attempts["count"] += 1
+            # Deliberately takes 4 attempts to fix errors completely
+            if attempts["count"] == 1:
+                # Still broken: missing async
+                return "```python\ndef broken_chain():\n    await step_1()\n```"
+            elif attempts["count"] == 2:
+                # Still broken: invalid syntax
+                return "```python\ndef broken_chain()\n    await step_1()\n```"
+            elif attempts["count"] == 3:
+                # Still broken: unclosed block
+                return "```python\nasync def broken_chain():\n    await step_1(\n```"
+            else:
+                # Clean fix on attempt 4 (exceeding previous 3-iteration cap!)
+                return "```python\nasync def broken_chain():\n    await step_1()\n    return True\n```"
+
+        final_reply, final_report, steps = StrokeCodingLoop.run_coding_loop(
+            prompt="Write an async function broken_chain",
+            initial_reply=initial_reply,
+            llm_generate_fn=progressive_repair_llm,
+            max_iterations=None  # Unlimited until problem is solved
+        )
+
+        self.assertGreater(final_report["iteration_count"], 3, "Loop must continue past 3 iterations until solved")
+        self.assertEqual(final_report["iteration_count"], 5)
+        self.assertTrue(final_report["is_verified"], "Code must be marked verified after 4 corrections")
+        self.assertEqual(final_report["syntax_status"], "PASS")
+        self.assertIn("async def broken_chain", final_reply)
+        print(f"  [PASS] TEST L: Coding loop ran {final_report['iteration_count']} iterations past 3-iteration cap until problem was fully solved.")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

@@ -3283,7 +3283,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 initial_reply=ai_reply_text,
                 llm_generate_fn=llm_repair_callback,
                 user_email=payload.email,
-                max_iterations=3
+                max_iterations=None
             )
             execution_steps.extend(loop_steps)
         except Exception as loop_exc:

@@ -1099,10 +1099,13 @@ class StrokeCodingLoop:
         initial_reply: str,
         llm_generate_fn,
         user_email: Optional[str] = None,
-        max_iterations: int = 3
+        max_iterations: Optional[int] = None
     ) -> Tuple[str, Dict[str, Any], List[Dict[str, str]]]:
         """
         Executes the Write -> Test -> Diagnose -> Fix -> Retest coding loop across ALL code blocks.
+        Runs autonomously until the problem is solved (unlimited until clean verification).
+        When code is verified and works, Stroke immediately delivers the final answer without
+        unnecessary improvement cycles.
         """
         loop_steps = []
         blocks = cls.extract_all_code_blocks(initial_reply, default_lang="luau")
@@ -1129,8 +1132,11 @@ class StrokeCodingLoop:
         current_reply = initial_reply
         iteration = 1
         final_report = {}
+        safety_ceiling = max_iterations if (max_iterations is not None and max_iterations > 0) else 50
+        previous_code = None
+        stagnant_count = 0
 
-        while iteration <= max_iterations:
+        while iteration <= safety_ceiling:
             current_blocks = cls.extract_all_code_blocks(current_reply, default_lang=primary_lang)
             if not current_blocks:
                 break
@@ -1220,23 +1226,43 @@ class StrokeCodingLoop:
 
             blocking_errors = [c for c in report.get("failed_checks", []) if c.get("type") == "error"]
 
+            # CRITICAL: When code works cleanly, give the answer immediately!
+            # Stroke does not keep looping to "improve" code that is already working.
             if not blocking_errors and report.get("is_verified", False):
+                loop_steps.append({
+                    "name": f"Verification Passed (Pass {iteration})",
+                    "detail": "Code verified cleanly. Delivering verified solution immediately without unnecessary revisions."
+                })
                 break
 
-            if iteration < max_iterations:
+            # Stagnant loop guard: check if model produces identical code 5 times in a row
+            first_code = current_blocks[0]["code"]
+            if previous_code is not None and first_code == previous_code:
+                stagnant_count += 1
+                if stagnant_count >= 5:
+                    loop_steps.append({
+                        "name": "Self-Correction Loop Concluded",
+                        "detail": f"Model produced identical code across {stagnant_count} consecutive attempts. Returning diagnostic report."
+                    })
+                    break
+            else:
+                stagnant_count = 0
+            previous_code = first_code
+
+            # If errors remain, continue correcting until solved
+            if iteration < safety_ceiling:
                 # Step 4: Diagnose
                 loop_steps.append({
                     "name": "Analysing error...",
-                    "detail": f"Identified {len(blocking_errors)} blocking issue(s). Compiling diagnostic prompt"
+                    "detail": f"Identified {len(blocking_errors)} blocking issue(s) on Pass {iteration}. Compiling targeted diagnostics"
                 })
 
-                first_code = current_blocks[0]["code"]
                 correction_prompt = ErrorAnalyser.build_correction_prompt(first_code, report["failed_checks"], language=primary_lang)
 
                 # Step 5: Correct
                 loop_steps.append({
                     "name": "Correcting implementation...",
-                    "detail": "Applying minimal fix to resolve compiler/runtime diagnostics"
+                    "detail": f"Model resolving compiler/runtime diagnostics (Attempt {iteration})"
                 })
 
                 fix_messages = [
@@ -1249,6 +1275,8 @@ class StrokeCodingLoop:
                     fixed_reply = llm_generate_fn(fix_messages)
                     if fixed_reply and len(fixed_reply.strip()) > 30:
                         current_reply = fixed_reply
+                    else:
+                        break
                 except Exception as exc:
                     print(f"[STROKE CODING LOOP NOTICE] Correction generation failed: {exc}", flush=True)
                     break
@@ -1261,7 +1289,8 @@ class StrokeCodingLoop:
             "detail": "Formatting verified code and comprehensive evidence report"
         })
 
-        report_md = cls.format_verification_report_markdown(final_report, iterations=min(iteration, max_iterations))
+        effective_iterations = final_report.get("iteration_count", min(iteration, safety_ceiling))
+        report_md = cls.format_verification_report_markdown(final_report, iterations=effective_iterations)
         final_reply = current_reply + report_md
 
         if final_report.get("is_verified", False):
