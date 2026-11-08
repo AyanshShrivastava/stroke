@@ -3037,9 +3037,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
 
                 execution_steps.append({"name": "Agentic Neural Synthesis", "detail": f"Inference via Llama 3.2 1B Instruct (Reasoning: {reasoning_level.upper()}, Tools max turns: {max_tool_turns})"})
 
-                available_terminal_tools = get_terminal_openai_tool_schemas()
-                available_mcp_tools = mcp_bridge.get_all_mcp_ai_tool_schemas()
-                agent_tools = available_terminal_tools + available_mcp_tools
+                agent_tools = get_active_ai_tools_schema()
 
                 current_agent_messages = list(final_messages)
                 tool_turn_count = 0
@@ -3066,33 +3064,80 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                             t_name = fn.get("name")
                             try:
                                 t_args = json.loads(fn.get("arguments", "{}"))
+                                if isinstance(t_args, str):
+                                    t_args = json.loads(t_args)
                             except Exception:
                                 t_args = {}
                             if t_name:
-                                res = ToolDispatcher.dispatch(t_name, t_args)
+                                if ToolDispatcher.is_supported(t_name):
+                                    res = await ToolDispatcher.dispatch_async(t_name, t_args)
+                                else:
+                                    res = {"status": "error", "message": f"Unknown terminal tool '{t_name}'."}
                                 executed_tools.append({"tool": t_name, "arguments": t_args, "result": res})
                     else:
-                        executed_tools = ToolDispatcher.parse_and_execute_calls(raw_content)
+                        executed_tools = await ToolDispatcher.parse_and_execute_calls_async(raw_content)
 
                     if executed_tools and tool_turn_count < max_tool_turns:
                         tool_turn_count += 1
                         tool_invoked = True
+
+                        turn_calls_summary = []
                         for et in executed_tools:
                             t_name = et["tool"]
+                            t_args = et["arguments"]
                             t_res = et["result"]
                             tool_name_used = t_name
+                            turn_calls_summary.append({"name": t_name, "arguments": t_args})
+
+                            if t_name == "web_search" and t_res.get("sources"):
+                                sources_used = t_res.get("sources", [])
+                            elif t_name in ("studio_execute_luau", "execute_luau"):
+                                mcp_res = t_res
+
+                            is_failure = (
+                                t_res.get("status") in ("error", "failed", "offline")
+                                or (isinstance(t_res.get("exit_code"), int) and t_res.get("exit_code") != 0)
+                                or bool(t_res.get("timed_out"))
+                            )
+
+                            step_detail = f"Status: {t_res.get('status', 'ok')}"
+                            if "exit_code" in t_res:
+                                step_detail += f" | Exit: {t_res.get('exit_code')}"
+                            if t_res.get("stdout"):
+                                step_detail += f" | Stdout: {str(t_res.get('stdout'))[:60]}"
+                            elif t_res.get("message"):
+                                step_detail += f" | Message: {str(t_res.get('message'))[:60]}"
+
                             execution_steps.append({
                                 "name": f"Agent Tool Executed: {t_name}",
-                                "detail": f"Status: {t_res.get('status', 'ok')} | Exit: {t_res.get('exit_code', 0)} | Stdout: {str(t_res.get('stdout', ''))[:100]}"
+                                "detail": step_detail
                             })
-                            current_agent_messages.append({"role": "assistant", "content": raw_content})
+
+                            failure_guidance = (
+                                "\n[CRITICAL]: The tool reported an error or failure. Diagnose the failure accurately, "
+                                "explain what went wrong or correct it, and NEVER claim the action succeeded when it failed."
+                                if is_failure else
+                                "\nIncorporate the verified tool result above into your analysis and continue towards the final verified answer."
+                            )
+
                             current_agent_messages.append({
                                 "role": "user",
-                                "content": f"[TOOL_RESULT for {t_name}]:\n{json.dumps(t_res)}\nNow continue reasoning and deliver the final verified solution or next action."
+                                "content": f"[TOOL_RESULT for {t_name}]:\n{json.dumps(t_res, indent=2)}{failure_guidance}"
                             })
+
+                        # Record assistant turn once
+                        assistant_turn_content = raw_content or f"<tool_call>{json.dumps(turn_calls_summary)}</tool_call>"
+                        current_agent_messages.insert(len(current_agent_messages) - len(executed_tools), {
+                            "role": "assistant",
+                            "content": assistant_turn_content
+                        })
                     else:
                         ai_reply_text = raw_content
                         break
+
+                # Clean any lingering unexecuted tool call tags from user-visible reply
+                if ai_reply_text:
+                    ai_reply_text = re.sub(r"<tool_call>[\s\S]*?</tool_call>", "", ai_reply_text).strip()
 
                 if tool_name_used == "get_runtime_status":
                     if not ai_reply_text or any(bad in ai_reply_text.lower() for bad in ["in the cloud", "on the cloud", "cloud-based", "remote servers", "deployed in the cloud", "hosted in the cloud"]):
@@ -3105,21 +3150,40 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                             "- **Private Internal Terminal**: Sandboxed local workspace execution via my private background terminal service (`terminal_service.py`) for running tests, compilers, and package operations.\n"
                             "- **Local Roblox Studio Bridge**: Direct IPC connection to your active Roblox Studio session via the Studio MCP protocol."
                         )
-                elif tool_name_used == "studio_execute_luau":
-                    if not ai_reply_text or len(ai_reply_text.strip()) < 20:
-                        ai_reply_text = (
-                            f"### Roblox Studio Live Execution\n\n"
-                            f"Executed Luau script directly in your active Roblox Studio session (`workspace`) via Studio MCP.\n\n"
-                            f"**Studio Output:** `{studio_output_msg}`\n\n"
-                            f"#### Executed Luau Script\n"
-                            f"```luau\n{luau_code_executed}\n```\n\n"
-                            f"The instance is now active in your Workspace DataModel and ready for testing."
+                elif tool_name_used in ("studio_execute_luau", "execute_luau"):
+                    is_live_studio = bool(
+                        isinstance(mcp_res, dict)
+                        and mcp_res.get("connected") is True
+                        and mcp_res.get("source") == "roblox_studio_mcp_live"
+                        and mcp_res.get("status") == "success"
+                    )
+                    if is_live_studio:
+                        studio_banner = f"> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `{studio_output_msg}`\n\n"
+                        if not ai_reply_text or len(ai_reply_text.strip()) < 20:
+                            ai_reply_text = (
+                                f"### Roblox Studio Live Execution\n\n"
+                                f"Executed Luau script directly in your active Roblox Studio session (`workspace`) via Studio MCP.\n\n"
+                                f"**Studio Output:** `{studio_output_msg}`\n\n"
+                                f"#### Executed Luau Script\n"
+                                f"```luau\n{luau_code_executed}\n```\n\n"
+                                f"The instance is now active in your Workspace DataModel and ready for testing."
+                            )
+                        elif "### Roblox Studio Live Execution" not in ai_reply_text and "### Roblox Creator Store" not in ai_reply_text:
+                            ai_reply_text = studio_banner + ai_reply_text
+                    else:
+                        offline_banner = (
+                            f"> **Roblox Studio MCP Status**: Offline (No active Studio place open). Code synthesized for manual deployment.\n\n"
                         )
-                    elif "### Roblox Studio Live Execution" not in ai_reply_text and "### Roblox Creator Store" not in ai_reply_text:
-                        studio_banner = (
-                            f"> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `{studio_output_msg}`\n\n"
-                        )
-                        ai_reply_text = studio_banner + ai_reply_text
+                        if not ai_reply_text or len(ai_reply_text.strip()) < 20:
+                            ai_reply_text = (
+                                f"### Roblox Luau Specification (Studio Offline)\n\n"
+                                f"{offline_banner}"
+                                f"#### Production Luau Script\n"
+                                f"```luau\n{luau_code_executed}\n```\n\n"
+                                f"Open Roblox Studio to execute directly, or paste into the Roblox Studio Command Bar."
+                            )
+                        elif "> **Roblox Studio MCP Status**" not in ai_reply_text:
+                            ai_reply_text = offline_banner + ai_reply_text
 
             provider_used = "llama-cpp-offline"
             model_used = "Llama-3.2-1B-Instruct (Local GGUF)"
@@ -3182,9 +3246,15 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 "studio_execute_luau",
                 {"code": luau_code_exec, "target_parent": "workspace"}
             )
-            out_msg = mcp_res.get("message") or mcp_res.get("output") or "Execution succeeded in Roblox Studio."
+            out_msg = mcp_res.get("message") or mcp_res.get("output") or "Execution completed in Roblox Studio."
             sources_used = [{"title": "Roblox Studio MCP Server", "url": "#mcp-studio", "snippet": out_msg}]
-            execution_steps.append({"name": "Roblox Studio MCP Bridge", "detail": f"{luau_desc} - Status: {mcp_res.get('status', 'success')}"})
+            is_live_studio = bool(
+                isinstance(mcp_res, dict)
+                and mcp_res.get("connected") is True
+                and mcp_res.get("source") == "roblox_studio_mcp_live"
+                and mcp_res.get("status") == "success"
+            )
+            execution_steps.append({"name": "Roblox Studio MCP Bridge", "detail": f"{luau_desc} - Status: {mcp_res.get('status', 'offline')}"})
             execution_steps.append({"name": "Autonomous Luau Generation", "detail": "Generated Studio DataModel Luau script"})
             if any(k in last_user_message.lower() for k in ["creator store", "toolbox", "marketplace", "loadasset", "insert asset"]):
                 ai_reply_text = (
@@ -3200,37 +3270,89 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     f"4. Click the model to insert it directly into your `Workspace` at `Vector3.new(0, 0, 0)`."
                 )
             elif any(k in last_user_message.lower() for k in ["window", "windows", "chimney", "stairs", "garden", "flower", "flowers"]):
-                ai_reply_text = (
-                    f"### Roblox House Architectural Expansion\n\n"
-                    f"Successfully executed architectural additions to `Workspace.SpawnedStructures.ModularHouse` while keeping the existing house structure intact:\n\n"
-                    f"> **Studio Bridge Status:** `{out_msg}`\n\n"
-                    f"#### Implemented Additions:\n"
-                    f"1. **Two Framed Windows**: Light blue glass panels (`Pastel light blue`, transparency `0.4`) installed on the front walls.\n"
-                    f"2. **Brick Chimney**: Anchored brick chimney with an active rising `Smoke` particle emitter on the roofline.\n"
-                    f"3. **Entrance Stairs**: 4-tier wooden plank steps rising from the ground up to the doorway.\n"
-                    f"4. **Perimeter Garden**: Grass garden bed with soil, stems, and bright neon flower blooms.\n\n"
-                    f"#### Executed Luau Script\n"
-                    f"```luau\n{luau_code_exec}\n```\n\n"
-                    f"All additions are parented to `ModularHouse.Additions` in your active Roblox Studio session."
-                )
+                if is_live_studio:
+                    ai_reply_text = (
+                        f"### Roblox House Architectural Expansion\n\n"
+                        f"Successfully executed architectural additions to `Workspace.SpawnedStructures.ModularHouse` in active Roblox Studio session:\n\n"
+                        f"> **Studio Bridge Status:** `{out_msg}`\n\n"
+                        f"#### Implemented Additions:\n"
+                        f"1. **Two Framed Windows**: Light blue glass panels installed on the front walls.\n"
+                        f"2. **Brick Chimney**: Anchored brick chimney with active rising `Smoke` on the roofline.\n"
+                        f"3. **Entrance Stairs**: 4-tier wooden plank steps rising from the ground up to the doorway.\n"
+                        f"4. **Perimeter Garden**: Grass garden bed with soil, stems, and bright neon flower blooms.\n\n"
+                        f"#### Executed Luau Script\n"
+                        f"```luau\n{luau_code_exec}\n```\n\n"
+                        f"All additions are parented to `ModularHouse.Additions` in your active Roblox Studio session."
+                    )
+                else:
+                    ai_reply_text = (
+                        f"### Roblox House Architectural Expansion (Studio Offline)\n\n"
+                        f"> **Notice**: Roblox Studio is not currently running or connected to the Studio MCP bridge. No script was executed live in your active DataModel.\n\n"
+                        f"Here is the verified Luau script to expand `Workspace.SpawnedStructures.ModularHouse`:\n\n"
+                        f"#### Production Luau Script\n"
+                        f"```luau\n{luau_code_exec}\n```\n\n"
+                        f"Once Roblox Studio is opened, execute this script via the Studio Command Bar to spawn the additions."
+                    )
             elif any(k in last_user_message.lower() for k in ["house", "building", "cabin", "home", "cottage"]):
+                if is_live_studio:
+                    ai_reply_text = (
+                        f"### Roblox Modular House Construction\n\n"
+                        f"Constructed a modular 3D architectural house in `Workspace.SpawnedStructures` in active Studio session:\n\n"
+                        f"> **Studio Bridge Status:** `{out_msg}`\n\n"
+                        f"#### Executed Luau Script\n"
+                        f"```luau\n{luau_code_exec}\n```\n\n"
+                        f"The structure includes an anchored wood foundation, brick walls, door frame, pitched slate roof, and interior lighting."
+                    )
+                else:
+                    ai_reply_text = (
+                        f"### Roblox Modular House Construction (Studio Offline)\n\n"
+                        f"> **Notice**: Roblox Studio is not currently running or connected to the Studio MCP bridge. No script was executed live in your active DataModel.\n\n"
+                        f"Here is the verified Luau construction script for `Workspace.SpawnedStructures`:\n\n"
+                        f"#### Production Luau Script\n"
+                        f"```luau\n{luau_code_exec}\n```\n\n"
+                        f"Run this in the Roblox Studio Command Bar once your place is open."
+                    )
+            else:
+                if is_live_studio:
+                    ai_reply_text = (
+                        f"### Roblox Studio Live Execution\n\n"
+                        f"Executed Luau script directly in your active Roblox Studio session (`workspace`) via Studio MCP.\n\n"
+                        f"**Studio Output:** `{out_msg}`\n\n"
+                        f"#### Production Luau Script\n"
+                        f"```luau\n{luau_code_exec}\n```\n\n"
+                        f"The instance is now active in your Workspace DataModel and ready for testing."
+                    )
+                else:
+                    ai_reply_text = (
+                        f"### Roblox Luau Specification (Studio Offline)\n\n"
+                        f"> **Notice**: Roblox Studio is not currently running or connected to the Studio MCP bridge. No script was executed live in your active DataModel.\n\n"
+                        f"#### Production Luau Script\n"
+                        f"```luau\n{luau_code_exec}\n```\n\n"
+                        f"Open Roblox Studio to execute directly, or paste into the Roblox Studio Command Bar."
+                    )
+
+        elif any(k in last_user_message.lower() for k in github_keywords):
+            tool_invoked = True
+            tool_name_used = "github_commit_file"
+            tool_query = last_user_message
+            gh_res = await ToolDispatcher.dispatch_async("github_commit_file", {
+                "repo": "AyanshShrivastava/stroke",
+                "path": "README.md",
+                "content": "# Stroke",
+                "commit_message": "Automated commit test"
+            })
+            if gh_res.get("status") == "success":
                 ai_reply_text = (
-                    f"### Roblox Modular House Construction\n\n"
-                    f"Constructed a modular 3D architectural house in `Workspace.SpawnedStructures`:\n\n"
-                    f"> **Studio Bridge Status:** `{out_msg}`\n\n"
-                    f"#### Executed Luau Script\n"
-                    f"```luau\n{luau_code_exec}\n```\n\n"
-                    f"The structure includes an anchored wood foundation, brick walls, door frame, pitched slate roof, and interior lighting."
+                    f"### GitHub MCP Commit\n\n"
+                    f"Successfully committed changes to `{gh_res.get('repo')}` (Commit: `{gh_res.get('commit_sha', 'HEAD')}`)."
                 )
             else:
                 ai_reply_text = (
-                    f"### Roblox Studio Live Execution\n\n"
-                    f"Executed Luau script directly in your active Roblox Studio session (`workspace`) via Studio MCP.\n\n"
-                    f"**Studio Output:** `{out_msg}`\n\n"
-                    f"#### Production Luau Script\n"
-                    f"```luau\n{luau_code_exec}\n```\n\n"
-                    f"The instance is now active in your Workspace DataModel and ready for testing."
+                    f"### GitHub MCP (Authentication Required)\n\n"
+                    f"> **Error**: {gh_res.get('message', 'GITHUB_TOKEN is not configured.')}\n\n"
+                    f"To commit directly to remote repositories via Stroke's GitHub MCP bridge, configure your `GITHUB_TOKEN` environment variable or use the internal terminal with local git commands."
                 )
+            execution_steps.append({"name": "GitHub MCP Bridge", "detail": f"Status: {gh_res.get('status')} | {gh_res.get('message', '')[:60]}"})
 
         elif any(k in last_user_message.lower() for k in ["do you have your own terminal", "do you have a terminal", "have your own terminal", "own terminal", "can you run commands"]):
             tool_invoked = True

@@ -513,6 +513,18 @@ def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
                 }
             })
 
+    has_github = any("github" in s.lower() for s in _MCP_REGISTRY.keys())
+    if not has_github:
+        for t in get_github_tools():
+            ai_tools.append({
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["parameters"]
+                }
+            })
+
     for s in _MCP_REGISTRY.values():
         for t in s.get("tools", []):
             ai_tools.append({
@@ -540,12 +552,12 @@ async def execute_studio_mcp_command(
             cmd_expanded = discovered
         else:
             return {
-                "status": "ready",
+                "status": "offline",
                 "connected": False,
                 "source": "roblox_studio_mcp_bridge",
-                "message": f"Prepared complete production Luau code for {target_parent} (StudioMCP binary not found).",
+                "message": f"Roblox Studio MCP binary not found. Luau code synthesized for {target_parent} but not executed in Studio.",
                 "target": target_parent,
-                "lines_executed": len(code.splitlines()),
+                "lines_executed": 0,
                 "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
             }
 
@@ -588,6 +600,22 @@ async def execute_studio_mcp_command(
             except Exception:
                 pass
 
+        if not studio_id:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+            return {
+                "status": "offline",
+                "connected": False,
+                "source": "roblox_studio_mcp_bridge",
+                "message": "Roblox Studio session is offline: MCP binary is present, but no active Roblox Studio place is open. Open a place in Roblox Studio to execute code live.",
+                "target": target_parent,
+                "lines_executed": 0,
+                "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
+            }
+
         if tool_name in ("studio_execute_luau", "execute_luau"):
             exec_call = json.dumps({
                 "jsonrpc": "2.0",
@@ -623,6 +651,7 @@ async def execute_studio_mcp_command(
 
             try:
                 proc.kill()
+                await proc.wait()
             except Exception:
                 pass
 
@@ -639,19 +668,19 @@ async def execute_studio_mcp_command(
                     "place_name": place_name,
                     "studio_id": studio_id,
                     "target": target_parent,
-                    "lines_executed": len(code.splitlines()),
+                    "lines_executed": len(code.splitlines()) if not is_err else 0,
                     "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
                 }
     except Exception as exc:
         print(f"[STROKE STUDIO MCP EXECUTION ERROR] {exc}", flush=True)
 
     return {
-        "status": "ready",
-        "connected": True,
+        "status": "offline",
+        "connected": False,
         "source": "roblox_studio_mcp_bridge",
-        "message": f"Prepared complete production Luau code for {target_parent}.",
+        "message": f"Roblox Studio session not connected. Luau code synthesized for {target_parent} but not executed in Studio.",
         "target": target_parent,
-        "lines_executed": len(code.splitlines()),
+        "lines_executed": 0,
         "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
     }
 
@@ -687,18 +716,19 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
                             "connected": True,
                             "source": "roblox_studio_mcp_live",
                             "output": res.json().get("result", "Execution succeeded in active Roblox Studio session."),
-                            "target": target
+                            "target": target,
+                            "lines_executed": len(code.splitlines())
                         }
             except Exception:
                 pass
 
         return {
-            "status": "ready",
-            "connected": True,
+            "status": "offline",
+            "connected": False,
             "source": "roblox_studio_mcp_bridge",
-            "message": f"Prepared complete production Luau code for {target}.",
+            "message": f"Roblox Studio session not connected. Luau code synthesized for {target} but not executed in Studio.",
             "target": target,
-            "lines_executed": len(code.splitlines()),
+            "lines_executed": 0,
             "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
         }
 
@@ -742,10 +772,10 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
     # GITHUB MCP TOOLS
     # --------------------------------------------------------------------------
     elif tool_name == "github_commit_file":
-        repo = args.get("repo", "AyanshShrivastava/stroke")
-        path = args.get("path", "")
-        content = args.get("content", "")
-        msg = args.get("commit_message", "update via Stroke AI")
+        repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+        path = args.get("path") or args.get("file_path") or args.get("filepath") or ""
+        content = args.get("content") or args.get("code") or ""
+        msg = args.get("commit_message") or args.get("message") or args.get("msg") or "update via Stroke AI"
 
         token = user_github_token or os.getenv("GITHUB_TOKEN")
         if token:
@@ -766,16 +796,39 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
 
                     put_res = await client.put(f"{GITHUB_API_BASE}/repos/{repo}/contents/{path}", headers=headers, json=body)
                     if put_res.status_code in (200, 201):
-                        return {"status": "success", "source": "github_mcp", "repo": repo, "path": path, "commit_sha": put_res.json().get("commit", {}).get("sha")}
+                        return {
+                            "status": "success",
+                            "source": "github_mcp",
+                            "repo": repo,
+                            "path": path,
+                            "commit_sha": put_res.json().get("commit", {}).get("sha"),
+                            "message": f"Successfully committed '{path}' to GitHub."
+                        }
+                    else:
+                        err_detail = put_res.text[:200]
+                        return {
+                            "status": "error",
+                            "source": "github_mcp",
+                            "repo": repo,
+                            "path": path,
+                            "message": f"GitHub API rejected commit (HTTP {put_res.status_code}): {err_detail}"
+                        }
             except Exception as e:
                 print(f"[STROKE MCP GITHUB ERROR] {e}", flush=True)
+                return {
+                    "status": "error",
+                    "source": "github_mcp",
+                    "repo": repo,
+                    "path": path,
+                    "message": f"GitHub commit failed: {str(e)}"
+                }
 
         return {
-            "status": "success",
-            "source": "github_mcp_bridge",
+            "status": "error",
+            "source": "github_mcp",
             "repo": repo,
             "path": path,
-            "message": f"File '{path}' queued for commit: '{msg}'."
+            "message": "GitHub commit failed: GITHUB_TOKEN is not configured. Please configure your GITHUB_TOKEN environment variable to commit to remote repositories."
         }
 
     elif tool_name == "github_create_pull_request":
@@ -783,14 +836,52 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
         title = args.get("title", "")
         head = args.get("head", "")
         base = args.get("base", "main")
+        body = args.get("body", "")
+
+        token = user_github_token or os.getenv("GITHUB_TOKEN")
+        if token:
+            try:
+                headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    pr_body = {"title": title, "head": head, "base": base, "body": body}
+                    pr_res = await client.post(f"{GITHUB_API_BASE}/repos/{repo}/pulls", headers=headers, json=pr_body)
+                    if pr_res.status_code in (200, 201):
+                        pr_data = pr_res.json()
+                        return {
+                            "status": "success",
+                            "source": "github_mcp",
+                            "repo": repo,
+                            "title": title,
+                            "head": head,
+                            "base": base,
+                            "pr_url": pr_data.get("html_url", f"https://github.com/{repo}/pull/{pr_data.get('number')}"),
+                            "pr_number": pr_data.get("number")
+                        }
+                    else:
+                        err_detail = pr_res.text[:200]
+                        return {
+                            "status": "error",
+                            "source": "github_mcp",
+                            "repo": repo,
+                            "message": f"GitHub API failed to create pull request (HTTP {pr_res.status_code}): {err_detail}"
+                        }
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "source": "github_mcp",
+                    "repo": repo,
+                    "message": f"GitHub PR creation failed: {str(e)}"
+                }
+
         return {
-            "status": "success",
+            "status": "error",
             "source": "github_mcp",
             "repo": repo,
             "title": title,
             "head": head,
             "base": base,
-            "pr_url": f"https://github.com/{repo}/pull/new/{head}"
+            "pr_url": f"https://github.com/{repo}/pull/new/{head}",
+            "message": "GitHub PR creation failed: GITHUB_TOKEN is not configured. Provide token to create PR via API."
         }
 
     # --------------------------------------------------------------------------

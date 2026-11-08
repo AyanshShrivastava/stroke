@@ -259,6 +259,17 @@ class TerminalSession:
         # Clamp timeout
         timeout = max(1, min(timeout_sec, MAX_TIMEOUT_SEC))
 
+        # Handle compound command strings when args are omitted (e.g. "python -m py_compile main.py")
+        if (not args or len(args) == 0) and command and (" " in command.strip() or "\t" in command):
+            import shlex
+            try:
+                tokens = shlex.split(command.strip())
+                if tokens:
+                    command = tokens[0]
+                    args = tokens[1:]
+            except Exception:
+                pass
+
         # Handle built-in 'cd' directly to maintain session directory state
         if command == "cd":
             target = args[0] if args else self.workspace_path
@@ -901,28 +912,92 @@ class TerminalManager:
 # 5. AI TOOL DISPATCHER & PARSER FOR LOCAL LLM REASONING
 # ==============================================================================
 
+
+def _perform_duckduckgo_search(query: str, max_results: int = 4) -> List[Dict[str, str]]:
+    """Performs synchronous DuckDuckGo web search without external dependencies."""
+    clean_query = query.strip()
+    if not clean_query:
+        return []
+    import urllib.request
+    import urllib.parse
+    url = "https://html.duckduckgo.com/html/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    }
+    data = urllib.parse.urlencode({"q": clean_query}).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=headers)
+    results = []
+    try:
+        with urllib.request.urlopen(req, timeout=10.0) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+            matches = re.findall(
+                r'<a rel="nofollow" class="result__a" href="([^"]+)">(.*?)</a>.*?<a class="result__snippet"[^>]*>(.*?)</a>',
+                html,
+                re.DOTALL
+            )
+            for href, title, snippet in matches[:max_results]:
+                if "uddg=" in href:
+                    parsed = urllib.parse.parse_qs(urllib.parse.urlparse(href).query)
+                    href = parsed.get("uddg", [href])[0]
+                clean_title = re.sub(r'<[^>]+>', '', title).strip()
+                clean_snippet = re.sub(r'<[^>]+>', '', snippet).strip()
+                clean_title = urllib.parse.unquote(clean_title)
+                clean_snippet = urllib.parse.unquote(clean_snippet)
+                if clean_snippet:
+                    results.append({"title": clean_title, "url": href, "snippet": clean_snippet})
+    except Exception:
+        pass
+    return results
+
+
+def _run_coroutine_sync(coro):
+    """Executes an async coroutine synchronously, safely handling running event loops."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(asyncio.run, coro).result(timeout=30)
+    return asyncio.run(coro)
+
+
 class ToolDispatcher:
     """
-    Validates, routes, and executes internal AI tool invocations.
-    Works seamlessly with native OpenAI function schemas, raw JSON strings,
-    JSON markdown blocks, XML <tool_call> tags, and structured pythonic calls emitted by local LLMs.
+    Unified AI Tool Dispatcher & Parser.
+    Understands tool requests, validates arguments, routes to native background engines
+    (terminal, web search, VFX database, Roblox Studio MCP, GitHub MCP),
+    processes tool results, and handles failures honestly.
     """
-    SUPPORTED_TOOLS = {
-        "terminal_create_session",
-        "terminal_run",
-        "terminal_read_output",
-        "terminal_get_status",
-        "terminal_stop",
-        "terminal_restart",
-        "terminal_list_sessions",
-        "create_terminal",
-        "run_command",
-        "read_terminal_output",
-        "get_terminal_status",
-        "stop_terminal",
-        "restart_terminal",
-        "list_terminals",
+    TERMINAL_TOOLS = {
+        "terminal_create_session", "create_terminal",
+        "terminal_run", "run_command",
+        "terminal_read_output", "read_terminal_output",
+        "terminal_get_status", "get_terminal_status",
+        "terminal_stop", "stop_terminal",
+        "terminal_restart", "restart_terminal",
+        "terminal_list_sessions", "list_terminals",
     }
+    WEB_SEARCH_TOOLS = {"web_search"}
+    VFX_TOOLS = {"search_vfx_database", "vfx_kinematics_lookup"}
+    STUDIO_TOOLS = {
+        "studio_execute_luau", "execute_luau",
+        "studio_search_scripts", "studio_insert_vfx_asset", "studio_get_console"
+    }
+    GITHUB_TOOLS = {
+        "github_commit_file", "github_create_pull_request"
+    }
+
+    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS
+
+    @classmethod
+    def is_supported(cls, tool_name: str) -> bool:
+        """Checks if a tool name is supported by the unified tool registry."""
+        name = tool_name.strip()
+        return name in cls.SUPPORTED_TOOLS or name.startswith("mcp_")
 
     @classmethod
     def _extract_json_objects(cls, text: str) -> List[Dict[str, Any]]:
@@ -966,8 +1041,8 @@ class ToolDispatcher:
         return objs
 
     @classmethod
-    def dispatch(cls, tool_name: str, arguments: Optional[Any] = None) -> Dict[str, Any]:
-        """Routes a tool call to the native background implementation."""
+    async def dispatch_async(cls, tool_name: str, arguments: Optional[Any] = None) -> Dict[str, Any]:
+        """Asynchronously routes tool call across terminal, web search, VFX, and MCP bridges."""
         args: Dict[str, Any] = {}
         if isinstance(arguments, dict):
             args = arguments
@@ -982,13 +1057,14 @@ class ToolDispatcher:
         name = tool_name.strip()
 
         try:
+            # 1. Terminal Tools
             if name in ("terminal_create_session", "create_terminal"):
-                ws = args.get("workspace_path")
+                ws = args.get("workspace_path") or args.get("workspace") or args.get("cwd") or args.get("path")
                 return TerminalManager.terminal_create_session(workspace_path=ws)
 
             elif name in ("terminal_run", "run_command"):
-                session_id = args.get("session_id", "")
-                cmd = args.get("executable") or args.get("command") or "python"
+                session_id = args.get("session_id") or args.get("id") or ""
+                cmd = args.get("executable") or args.get("command") or args.get("cmd") or "python"
                 cmd_args = args.get("arguments") or args.get("args") or []
                 timeout_sec = args.get("timeout_sec", DEFAULT_TIMEOUT_SEC)
                 is_bg = args.get("is_background", False)
@@ -1001,33 +1077,132 @@ class ToolDispatcher:
                 )
 
             elif name in ("terminal_read_output", "read_terminal_output"):
-                session_id = args.get("session_id", "")
-                tail = args.get("tail_lines")
+                session_id = args.get("session_id") or args.get("id") or ""
+                tail = args.get("tail_lines") or args.get("tail") or args.get("lines") or args.get("limit")
+                if isinstance(tail, str) and tail.isdigit():
+                    tail = int(tail)
                 return TerminalManager.terminal_read_output(session_id=session_id, tail_lines=tail)
 
             elif name in ("terminal_get_status", "get_terminal_status"):
-                session_id = args.get("session_id", "")
+                session_id = args.get("session_id") or args.get("id") or ""
                 return TerminalManager.terminal_get_status(session_id=session_id)
 
             elif name in ("terminal_stop", "stop_terminal"):
-                session_id = args.get("session_id", "")
+                session_id = args.get("session_id") or args.get("id") or ""
                 return TerminalManager.terminal_stop(session_id=session_id)
 
             elif name in ("terminal_restart", "restart_terminal"):
-                session_id = args.get("session_id", "")
+                session_id = args.get("session_id") or args.get("id") or ""
                 return TerminalManager.terminal_restart(session_id=session_id)
 
             elif name in ("terminal_list_sessions", "list_terminals"):
                 return {"terminals": TerminalManager.terminal_list_sessions()}
+
+            # 2. Live Web Search Tool
+            elif name in cls.WEB_SEARCH_TOOLS:
+                q = args.get("query") or args.get("q") or args.get("search") or args.get("search_query") or ""
+                if not q.strip():
+                    return {"status": "error", "message": "Missing required argument 'query' for web_search."}
+                sources = _perform_duckduckgo_search(q)
+                return {
+                    "status": "success",
+                    "tool": "web_search",
+                    "query": q,
+                    "sources_count": len(sources),
+                    "sources": sources
+                }
+
+            # 3. VFX Knowledge Base Tool
+            elif name in cls.VFX_TOOLS:
+                q = args.get("query") or args.get("q") or args.get("keyword") or args.get("search_term") or args.get("name") or ""
+                if not q.strip():
+                    return {"status": "error", "message": "Missing required argument 'query' for search_vfx_database."}
+                try:
+                    import vfx_service
+                    matches = vfx_service.search_vfx_database(q, max_results=args.get("max_results", 5))
+                    return {
+                        "status": "success",
+                        "tool": "search_vfx_database",
+                        "query": q,
+                        "matches_count": len(matches),
+                        "matches": matches
+                    }
+                except Exception as ve:
+                    return {"status": "error", "message": f"VFX database search failed: {str(ve)}"}
+
+            # 4. MCP Tools (Roblox Studio, GitHub, Custom)
+            elif name in cls.STUDIO_TOOLS or name in cls.GITHUB_TOOLS or name.startswith("mcp_"):
+                # Argument validation for studio_execute_luau
+                if name in ("studio_execute_luau", "execute_luau") and not (args.get("code") or args.get("script") or args.get("luau") or args.get("content")):
+                    return {"status": "error", "message": "Missing required argument 'code' for studio_execute_luau."}
+                try:
+                    import mcp_bridge
+                    return await mcp_bridge.execute_mcp_tool(name, args)
+                except Exception as me:
+                    return {"status": "error", "message": f"MCP tool execution failed: {str(me)}"}
 
             return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
         except Exception as exc:
             return {"status": "error", "message": f"Tool execution failed: {str(exc)}"}
 
     @classmethod
+    def dispatch(cls, tool_name: str, arguments: Optional[Any] = None) -> Dict[str, Any]:
+        """Synchronously routes a tool call, running async bridges via event loop if necessary."""
+        args: Dict[str, Any] = {}
+        if isinstance(arguments, dict):
+            args = arguments
+        elif isinstance(arguments, str):
+            try:
+                parsed = json.loads(arguments)
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
+                if isinstance(parsed, dict):
+                    args = parsed
+            except Exception:
+                args = {}
+
+        name = tool_name.strip()
+
+        # Terminal and local tools can be dispatched synchronously directly
+        if name in cls.TERMINAL_TOOLS:
+            return _run_coroutine_sync(cls.dispatch_async(name, args))
+        elif name in cls.WEB_SEARCH_TOOLS:
+            q = args.get("query") or args.get("q") or args.get("search") or args.get("search_query") or ""
+            if not q.strip():
+                return {"status": "error", "message": "Missing required argument 'query' for web_search."}
+            sources = _perform_duckduckgo_search(q)
+            return {
+                "status": "success",
+                "tool": "web_search",
+                "query": q,
+                "sources_count": len(sources),
+                "sources": sources
+            }
+        elif name in cls.VFX_TOOLS:
+            q = args.get("query") or args.get("q") or args.get("keyword") or args.get("search_term") or args.get("name") or ""
+            if not q.strip():
+                return {"status": "error", "message": "Missing required argument 'query' for search_vfx_database."}
+            try:
+                import vfx_service
+                matches = vfx_service.search_vfx_database(q, max_results=args.get("max_results", 5))
+                return {
+                    "status": "success",
+                    "tool": "search_vfx_database",
+                    "query": q,
+                    "matches_count": len(matches),
+                    "matches": matches
+                }
+            except Exception as ve:
+                return {"status": "error", "message": f"VFX database search failed: {str(ve)}"}
+        elif name in cls.STUDIO_TOOLS or name in cls.GITHUB_TOOLS or name.startswith("mcp_"):
+            return _run_coroutine_sync(cls.dispatch_async(name, args))
+
+        return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
+
+    @classmethod
     def parse_and_execute_calls(cls, text: str) -> List[Dict[str, Any]]:
         """
-        Inspects raw LLM output for tool calling formats and executes them silently.
+        Inspects raw LLM output for tool calling formats and executes them synchronously.
         Supports raw JSON, JSON markdown blocks, XML <tool_call> tags, and embedded raw JSON objects.
         """
         results = []
@@ -1043,7 +1218,7 @@ class ToolDispatcher:
                 for item in items:
                     if isinstance(item, dict):
                         tool_name = item.get("tool") or item.get("name") or item.get("function")
-                        if tool_name in cls.SUPPORTED_TOOLS:
+                        if tool_name and cls.is_supported(tool_name):
                             args = item.get("parameters") or item.get("arguments") or item.get("args") or {}
                             res = cls.dispatch(tool_name, args)
                             results.append({"tool": tool_name, "arguments": args, "result": res})
@@ -1058,23 +1233,29 @@ class ToolDispatcher:
             try:
                 data = json.loads(match.group(1))
                 tool_name = data.get("tool") or data.get("name") or data.get("function")
-                if tool_name in cls.SUPPORTED_TOOLS:
+                if tool_name and cls.is_supported(tool_name):
                     args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
                     res = cls.dispatch(tool_name, args)
                     results.append({"tool": tool_name, "arguments": args, "result": res})
             except Exception:
                 pass
 
-        # 3. Parse <tool_call> tags
-        tag_pattern = r"<tool_call>\s*(\{[\s\S]*?\})\s*</tool_call>"
+        # 3. Parse <tool_call> tags (both single object and array of tool calls)
+        tag_pattern = r"<tool_call>\s*([\s\S]*?)\s*</tool_call>"
         for match in re.finditer(tag_pattern, text):
             try:
-                data = json.loads(match.group(1))
-                tool_name = data.get("name") or data.get("tool")
-                if tool_name in cls.SUPPORTED_TOOLS:
-                    args = data.get("arguments") or data.get("parameters") or {}
-                    res = cls.dispatch(tool_name, args)
-                    results.append({"tool": tool_name, "arguments": args, "result": res})
+                data = json.loads(match.group(1).strip())
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if isinstance(item, dict):
+                        tool_name = item.get("name") or item.get("tool") or item.get("function")
+                        if tool_name:
+                            args = item.get("arguments") or item.get("parameters") or item.get("args") or {}
+                            if cls.is_supported(tool_name):
+                                res = cls.dispatch(tool_name, args)
+                            else:
+                                res = {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
+                            results.append({"tool": tool_name, "arguments": args, "result": res})
             except Exception:
                 pass
 
@@ -1083,9 +1264,80 @@ class ToolDispatcher:
             candidates = cls._extract_json_objects(text)
             for item in candidates:
                 tool_name = item.get("tool") or item.get("name") or item.get("function")
-                if tool_name in cls.SUPPORTED_TOOLS:
+                if tool_name and cls.is_supported(tool_name):
                     args = item.get("parameters") or item.get("arguments") or item.get("args") or {}
                     res = cls.dispatch(tool_name, args)
+                    results.append({"tool": tool_name, "arguments": args, "result": res})
+
+        return results
+
+    @classmethod
+    async def parse_and_execute_calls_async(cls, text: str) -> List[Dict[str, Any]]:
+        """
+        Asynchronously inspects raw LLM output for tool calling formats and executes them.
+        """
+        results = []
+        if not text:
+            return results
+
+        # 1. Direct raw JSON parse
+        cleaned_text = text.strip()
+        if (cleaned_text.startswith("{") and cleaned_text.endswith("}")) or (cleaned_text.startswith("[") and cleaned_text.endswith("]")):
+            try:
+                data = json.loads(cleaned_text)
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if isinstance(item, dict):
+                        tool_name = item.get("tool") or item.get("name") or item.get("function")
+                        if tool_name and cls.is_supported(tool_name):
+                            args = item.get("parameters") or item.get("arguments") or item.get("args") or {}
+                            res = await cls.dispatch_async(tool_name, args)
+                            results.append({"tool": tool_name, "arguments": args, "result": res})
+                if results:
+                    return results
+            except Exception:
+                pass
+
+        # 2. Parse JSON blocks with "tool" or "name"
+        json_pattern = r"```(?:json)?\s*(\{[\s\S]*?\})\s*```"
+        for match in re.finditer(json_pattern, text):
+            try:
+                data = json.loads(match.group(1))
+                tool_name = data.get("tool") or data.get("name") or data.get("function")
+                if tool_name and cls.is_supported(tool_name):
+                    args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
+                    res = await cls.dispatch_async(tool_name, args)
+                    results.append({"tool": tool_name, "arguments": args, "result": res})
+            except Exception:
+                pass
+
+        # 3. Parse <tool_call> tags (both single object and array of tool calls)
+        tag_pattern = r"<tool_call>\s*([\s\S]*?)\s*</tool_call>"
+        for match in re.finditer(tag_pattern, text):
+            try:
+                data = json.loads(match.group(1).strip())
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if isinstance(item, dict):
+                        tool_name = item.get("name") or item.get("tool") or item.get("function")
+                        if tool_name:
+                            args = item.get("arguments") or item.get("parameters") or item.get("args") or {}
+                            if cls.is_supported(tool_name):
+                                res = await cls.dispatch_async(tool_name, args)
+                            else:
+                                res = {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
+                            results.append({"tool": tool_name, "arguments": args, "result": res})
+            except Exception:
+                pass
+
+        # 4. Fallback: Brace-depth scanning for embedded JSON objects containing supported tool names
+        if not results:
+            candidates = cls._extract_json_objects(text)
+            for item in candidates:
+                tool_name = item.get("tool") or item.get("name") or item.get("function")
+                if tool_name and cls.is_supported(tool_name):
+                    args = item.get("parameters") or item.get("arguments") or item.get("args") or {}
+                    res = await cls.dispatch_async(tool_name, args)
                     results.append({"tool": tool_name, "arguments": args, "result": res})
 
         return results
