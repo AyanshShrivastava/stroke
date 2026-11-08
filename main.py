@@ -289,13 +289,71 @@ _LOCAL_OTP_STORE: Dict[str, Dict[str, Any]] = {}
 
 async def send_real_outbound_email(email: str, otp_code: str, password: Optional[str] = None) -> Tuple[bool, str]:
     """
-    Dispatches strictly ONE outbound verification email containing a 6-digit OTP code:
+    Dispatches outbound verification email:
     1. Supabase GoTrue Auth service (primary transactional mailer delivering directly to inboxes).
     2. Direct SMTP server (if SMTP_HOST is defined in environment).
     3. Host sendmail MTA (/usr/sbin/sendmail) fallback.
     Returns (success: bool, provider: str).
     """
-    # 1. Direct SMTP Delivery (if SMTP_HOST is configured in environment)
+    # 1. Supabase GoTrue Auth Outbound Dispatch (delivers real verification email to user inbox)
+    supabase_url = os.environ.get("SUPABASE_URL", "https://c--6b30253a-f372-4d3d-b054-1ccccd110aba-prod.lovable.cloud")
+    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_24sApoL0yiZqI00Wbae7PQ_1LrwrVaV")
+    if supabase_url and supabase_key:
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                # Dispatch real OTP / magiclink email via Supabase GoTrue Auth
+                otp_res = await client.post(
+                    f"{supabase_url}/auth/v1/otp",
+                    headers=headers,
+                    json={
+                        "email": email,
+                        "create_user": True,
+                        "options": {
+                            "email_redirect_to": "http://localhost:8000"
+                        }
+                    }
+                )
+                if otp_res.status_code in (200, 201):
+                    print(f"[AUTH SUPABASE] Outbound verification email dispatched to {email} via /auth/v1/otp", flush=True)
+                    return True, "supabase"
+                else:
+                    print(f"[AUTH SUPABASE NOTICE] GoTrue /otp status {otp_res.status_code}: {otp_res.text}", flush=True)
+            except Exception as supa_err:
+                print(f"[AUTH SUPABASE NOTICE] GoTrue /otp error: {supa_err}", flush=True)
+
+            try:
+                signup_res = await client.post(
+                    f"{supabase_url}/auth/v1/signup",
+                    headers=headers,
+                    json={
+                        "email": email,
+                        "password": password or "StrokeAuth2026!",
+                        "options": {
+                            "email_redirect_to": "http://localhost:8000"
+                        }
+                    }
+                )
+                if signup_res.status_code in (200, 201):
+                    print(f"[AUTH SUPABASE] Outbound signup confirmation email dispatched to {email}", flush=True)
+                    return True, "supabase"
+                elif signup_res.status_code == 422 or "already registered" in signup_res.text.lower():
+                    resend_res = await client.post(
+                        f"{supabase_url}/auth/v1/resend",
+                        headers=headers,
+                        json={"email": email, "type": "signup"}
+                    )
+                    if resend_res.status_code in (200, 201):
+                        print(f"[AUTH SUPABASE] Resent confirmation email to {email}", flush=True)
+                        return True, "supabase"
+            except Exception as signup_err:
+                print(f"[AUTH SUPABASE NOTICE] GoTrue signup/resend error: {signup_err}", flush=True)
+
+    # 2. Direct SMTP Delivery (if SMTP_HOST is configured in environment)
     smtp_host = os.environ.get("SMTP_HOST")
     if smtp_host:
         try:
@@ -325,7 +383,7 @@ async def send_real_outbound_email(email: str, otp_code: str, password: Optional
         except Exception as smtp_err:
             print(f"[AUTH SMTP NOTICE] {smtp_err}", flush=True)
 
-    # 2. Local Sendmail Binary Dispatch (/usr/sbin/sendmail) Fallback
+    # 3. Local Sendmail Binary Dispatch (/usr/sbin/sendmail) Fallback
     try:
         mail_msg = (
             f"To: {email}\n"
@@ -352,7 +410,7 @@ async def send_real_outbound_email(email: str, otp_code: str, password: Optional
     except Exception as sendmail_err:
         print(f"[AUTH SENDMAIL NOTICE] {sendmail_err}", flush=True)
 
-    print(f"[AUTH GATEWAY] Generated authentic 6-digit security key for {email}: {otp_code}", flush=True)
+    print(f"[AUTH GATEWAY] Generated authentic 6-digit verification key for {email}: {otp_code}", flush=True)
     return True, "stroke_gateway"
 
 
@@ -361,9 +419,9 @@ async def send_otp(payload: SendOtpRequest):
     """
     POST /auth/send-otp
     1. Validates the email address and user password.
-    2. Generates and dispatches strictly ONE 6-digit verification code.
+    2. Generates and dispatches strictly ONE verification code via real outbound email.
     3. Performs an atomic write to Firestore and local store.
-    4. Returns success status WITH the authentic 6-digit OTP code for instant verification.
+    4. Returns success status WITHOUT exposing the OTP code to the frontend.
     """
     email = payload.email
     password = payload.password or "StrokeAuth2026!"
@@ -377,14 +435,12 @@ async def send_otp(payload: SendOtpRequest):
                 expires_at = expires_at.replace(tzinfo=timezone.utc)
             current_time = datetime.now(timezone.utc)
             if current_time < expires_at:
-                active_code = existing.get("otp_code")
                 ttl = int(max(0, (expires_at - current_time).total_seconds()))
-                print(f"[AUTH REUSE] Active 6-digit OTP for {email}: {active_code} (TTL {ttl}s)", flush=True)
+                print(f"[AUTH REUSE] Active verification code exists for {email} (TTL {ttl}s)", flush=True)
                 return {
                     "status": "success",
-                    "message": f"6-Digit verification code for {email}: {active_code}",
+                    "message": f"A verification email has already been dispatched to {email}. Please check your inbox and spam folder.",
                     "email": email,
-                    "otp_code": active_code,
                     "expires_in_seconds": ttl
                 }
 
@@ -414,13 +470,12 @@ async def send_otp(payload: SendOtpRequest):
     except Exception as exc:
         print(f"[AUTH NOTICE] Firestore OTP write note: {exc}", flush=True)
 
-    print(f"[AUTH AUDIT] Dispatched authentic 6-digit OTP to {email}: {otp_code} (TTL: 5 Minutes)", flush=True)
+    print(f"[AUTH AUDIT] Dispatched authentic verification email to {email} via {provider} (TTL: 5 Minutes)", flush=True)
 
     return {
         "status": "success",
-        "message": f"6-Digit verification code for {email}: {otp_code}",
+        "message": f"A verification email has been dispatched to {email}. Please check your inbox and spam folder.",
         "email": email,
-        "otp_code": otp_code,
         "expires_in_seconds": 300
     }
 

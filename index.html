@@ -709,20 +709,14 @@
 
       <!-- Step 2: Enter 6-digit OTP from Email -->
       <div id="otpStep2" class="hidden space-y-3.5">
-        <div class="p-3 rounded-lg bg-brand-surface border border-brand-accent/40 text-xs text-brand-text font-mono space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-brand-accent font-semibold flex items-center space-x-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-              <span>6-Digit Verification Code</span>
-            </span>
-            <span id="otpAutoFillBadge" class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">AUTO-FILLED</span>
-          </div>
-          <div class="flex items-center justify-between bg-black/50 px-3 py-2 rounded-lg border border-brand-border">
-            <span class="text-xs text-brand-muted">Your Security Key:</span>
-            <span id="otpCodeDisplay" class="text-base font-bold text-brand-accent tracking-[0.2em] font-mono">------</span>
+        <div class="p-3.5 rounded-lg bg-brand-surface border border-brand-border text-xs text-brand-text font-mono space-y-2">
+          <div class="flex items-center space-x-2 text-brand-accent font-semibold">
+            <svg class="w-4 h-4 text-brand-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <span>Verification Email Dispatched</span>
           </div>
           <p class="text-[11px] text-brand-muted leading-relaxed">
-            Verification key generated for <span id="otpTargetEmailDisplay" class="text-white font-bold"></span>. Enter below or click Verify &amp; Sign In.
+            A verification message has been sent to <span id="otpTargetEmailDisplay" class="text-white font-bold"></span>.
+            Check your inbox (and spam folder) and enter your 6-digit code below, or click the login link in your email.
           </p>
         </div>
 
@@ -906,15 +900,67 @@
       }
     }
 
+    async function checkMagicLinkCallback() {
+      const hash = window.location.hash;
+      if (!hash || !hash.includes('access_token=')) return;
+
+      const params = new URLSearchParams(hash.replace(/^#/, ''));
+      const accessToken = params.get('access_token');
+      if (!accessToken) return;
+
+      showToast('Authenticating via email link...');
+      try {
+        const supabaseUrl = 'https://c--6b30253a-f372-4d3d-b054-1ccccd110aba-prod.lovable.cloud';
+        const supabaseKey = 'sb_publishable_24sApoL0yiZqI00Wbae7PQ_1LrwrVaV';
+        const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          const email = (userData.email || '').trim().toLowerCase();
+          if (email) {
+            await fetch('/auth/switch-account', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+            }).catch(() => {});
+
+            state.userEmail = email;
+            localStorage.setItem('stroke_user_email', email);
+            updateUserIdentityUI();
+            syncViewAuthState();
+            const modal = document.getElementById('authModal');
+            if (modal) modal.classList.add('hidden');
+
+            await checkOrRunMandatoryMemorySetup();
+            await fetchMemoryStats();
+            await loadUserChats();
+            showToast('Signed in successfully as ' + email);
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+        } else {
+          showToast('Email verification link has expired or is invalid.');
+        }
+      } catch (err) {
+        console.error('Magic link auth error:', err);
+      }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
       syncViewAuthState();
       updateUserIdentityUI();
+      checkMagicLinkCallback();
       if (state.userEmail) {
         loadUserChats();
       }
       setupSpeechEngines();
       loadMcpConfigJson();
     });
+
+    window.addEventListener('hashchange', checkMagicLinkCallback);
 
     // 1. Identity
     function updateUserIdentityUI() {
@@ -2386,24 +2432,20 @@
           document.getElementById('otpStep2').classList.remove('hidden');
 
           const otpInput = document.getElementById('authOtpInput');
-          const otpDisplay = document.getElementById('otpCodeDisplay');
-          if (data.otp_code) {
-            if (otpDisplay) otpDisplay.textContent = data.otp_code;
-            if (otpInput) {
-              otpInput.value = data.otp_code;
-              otpInput.focus();
-            }
+          if (otpInput) {
+            otpInput.value = '';
+            otpInput.focus();
           }
-          showToast(data.message || ('6-digit code: ' + (data.otp_code || 'ready') + '.'));
+          showToast(data.message || ('Verification email sent to ' + email + '. Check your inbox.'));
         } else {
           const err = await res.json().catch(() => ({}));
-          showToast(err.detail || 'Failed to dispatch verification code.');
+          showToast(err.detail || 'Failed to dispatch verification email.');
         }
       } catch(e) {
         showToast('Network error during verification dispatch.');
       } finally {
         if (btn) btn.disabled = false;
-        if (btnText) btnText.textContent = 'Send 6-Digit OTP Code →';
+        if (btnText) btnText.textContent = 'Send Verification Code →';
       }
     }
 
