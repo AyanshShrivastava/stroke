@@ -56,7 +56,7 @@ def save_learned_vfx_models(models: Dict[str, Any]) -> bool:
     try:
         os.makedirs(os.path.dirname(LEARNED_MODELS_PATH), exist_ok=True)
         with open(LEARNED_MODELS_PATH, "w", encoding="utf-8") as f:
-            json.dump(models, f, indent=2)
+            json.dump(models, f, indent=2, default=str)
         return True
     except Exception as exc:
         print(f"[STROKE VFX ERROR] Error saving {LEARNED_MODELS_PATH}: {exc}", flush=True)
@@ -242,7 +242,7 @@ def save_learned_insights() -> bool:
                 "total_chats_learned": _LEARNED_POOL["total_chats_learned"],
                 "last_updated": datetime.now(timezone.utc).isoformat(),
                 "insights": _LEARNED_POOL["insights"]
-            }, f, indent=2)
+            }, f, indent=2, default=str)
         return True
     except Exception as exc:
         print(f"[STROKE LEARNING ERROR] Could not save insights: {exc}", flush=True)

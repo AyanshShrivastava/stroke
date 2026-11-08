@@ -1,3 +1,16 @@
 {
-  "test@example.com": []
+  "user@domain.com": [
+    {
+      "session_id": "sess-dt-test",
+      "title": "Datetime Test",
+      "timestamp": "2026-11-08 16:51:48.299597+00:00",
+      "created_at": "2026-11-08 22:21:48.299613",
+      "messages": [
+        {
+          "role": "user",
+          "content": "hello"
+        }
+      ]
+    }
+  ]
 }

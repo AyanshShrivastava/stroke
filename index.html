@@ -869,7 +869,14 @@
   <!-- ========================================================================= -->
   <script>
     const state = {
-      userEmail: localStorage.getItem('stroke_user_email') || null,
+      userEmail: (() => {
+        const stored = (localStorage.getItem('stroke_user_email') || '').trim();
+        if (!stored || stored === 'null' || stored === 'undefined' || !stored.includes('@')) {
+          localStorage.removeItem('stroke_user_email');
+          return null;
+        }
+        return stored.toLowerCase();
+      })(),
       isTemporaryMode: false,
       reasoningLevel: localStorage.getItem('stroke_reasoning_level') || 'medium',
       thinkMode: (localStorage.getItem('stroke_reasoning_level') === 'high' || localStorage.getItem('stroke_reasoning_level') === 'maximum'),
@@ -956,12 +963,25 @@
     function syncViewAuthState() {
       const greetingView = document.getElementById('greetingView');
       const appWorkspace = document.getElementById('appWorkspace');
-      if (!state.userEmail) {
-        if (greetingView) greetingView.classList.remove('hidden');
-        if (appWorkspace) appWorkspace.classList.add('hidden');
+      const isAuth = !!(state.userEmail && state.userEmail.includes('@'));
+      if (!isAuth) {
+        if (greetingView) {
+          greetingView.classList.remove('hidden');
+          greetingView.style.display = 'flex';
+        }
+        if (appWorkspace) {
+          appWorkspace.classList.add('hidden');
+          appWorkspace.style.display = 'none';
+        }
       } else {
-        if (greetingView) greetingView.classList.add('hidden');
-        if (appWorkspace) appWorkspace.classList.remove('hidden');
+        if (greetingView) {
+          greetingView.classList.add('hidden');
+          greetingView.style.display = 'none';
+        }
+        if (appWorkspace) {
+          appWorkspace.classList.remove('hidden');
+          appWorkspace.style.display = 'flex';
+        }
       }
     }
 
@@ -990,7 +1010,7 @@
             await fetch('/auth/switch-account', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email })
+              body: JSON.stringify({ email, access_token: accessToken })
             }).catch(() => {});
 
             state.userEmail = email;
@@ -2348,48 +2368,60 @@
       let title = 'New Conversation';
       const firstUserMsg = state.chatMessages.find(m => m.role === 'user');
       if (firstUserMsg && firstUserMsg.content) {
-        const cleanContent = firstUserMsg.content.trim();
+        const cleanContent = String(firstUserMsg.content).trim();
         title = cleanContent.slice(0, 36) + (cleanContent.length > 36 ? '...' : '');
       }
 
-      const payload = {
-        email: state.userEmail,
-        session_id: state.activeSessionId,
-        title: title,
-        messages: state.chatMessages,
-        is_temporary: false
-      };
+      const sanitizedMessages = state.chatMessages.map(m => ({
+        role: m.role || 'user',
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')
+      }));
 
-      try {
-        await fetch('/chats/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } catch(e) {
-        console.warn('Backend /chats/save note:', e);
-      }
-
-      // Also persist to localStorage for instant local backup
+      // 1. Immediately persist to localStorage for instant resilience
       try {
         const localKey = 'stroke_chats_' + state.userEmail;
-        const stored = JSON.parse(localStorage.getItem(localKey) || '[]');
-        const existingIdx = stored.findIndex(s => s.session_id === state.activeSessionId);
+        let stored = [];
+        try {
+          stored = JSON.parse(localStorage.getItem(localKey) || '[]');
+          if (!Array.isArray(stored)) stored = [];
+        } catch(e) {
+          stored = [];
+        }
         const sessionRecord = {
           session_id: state.activeSessionId,
           title: title,
-          messages: state.chatMessages,
+          messages: sanitizedMessages,
           updated_at: new Date().toISOString()
         };
+        const existingIdx = stored.findIndex(s => s.session_id === state.activeSessionId);
         if (existingIdx >= 0) {
           stored[existingIdx] = sessionRecord;
         } else {
           stored.unshift(sessionRecord);
         }
         localStorage.setItem(localKey, JSON.stringify(stored));
-      } catch(e){}
+      } catch(e){
+        console.warn('[STORAGE] Local storage note:', e);
+      }
 
-      // Refresh sidebar recent chats list
+      // 2. Persist to backend
+      try {
+        await fetch('/chats/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: state.userEmail,
+            session_id: state.activeSessionId,
+            title: title,
+            messages: sanitizedMessages,
+            is_temporary: false
+          })
+        });
+      } catch(e) {
+        console.warn('[BACKEND SAVE] Note:', e);
+      }
+
+      // 3. Refresh sidebar recent chats list
       await loadUserChats();
     }
 
@@ -2401,25 +2433,37 @@
         return;
       }
       try {
-        let loadedChats = [];
+        let localChats = [];
+        try {
+          localChats = JSON.parse(localStorage.getItem('stroke_chats_' + state.userEmail) || '[]');
+          if (!Array.isArray(localChats)) localChats = [];
+        } catch(e){
+          localChats = [];
+        }
+
+        let backendChats = [];
         try {
           const res = await fetch(`/chats?email=${encodeURIComponent(state.userEmail)}`);
           if (res.ok) {
             const data = await res.json();
-            loadedChats = data.chats || [];
+            backendChats = data.chats || [];
           }
         } catch(e){}
 
-        // Fallback to local storage if backend returned empty list or had error
-        if (loadedChats.length === 0) {
-          try {
-            const localKey = 'stroke_chats_' + state.userEmail;
-            loadedChats = JSON.parse(localStorage.getItem(localKey) || '[]');
-          } catch(e){}
-        }
+        // Merge backend & local chats by session_id, keeping freshest state
+        const mergedMap = new Map();
+        localChats.forEach(c => {
+          if (c && c.session_id) mergedMap.set(c.session_id, c);
+        });
+        backendChats.forEach(c => {
+          if (c && c.session_id && !mergedMap.has(c.session_id)) {
+            mergedMap.set(c.session_id, c);
+          }
+        });
+
+        state.allChats = Array.from(mergedMap.values());
 
         if (list) list.innerHTML = '';
-        state.allChats = loadedChats;
         if (state.allChats.length === 0) {
           if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">No chats yet.</div>';
           return;
@@ -2549,7 +2593,7 @@
       });
     }
 
-    async function handleSendOtp() {
+    async function handleSendOtp(forceResend = false) {
       const email = document.getElementById('authEmailInput').value.trim().toLowerCase();
       const password = (document.getElementById('authPasswordInput')?.value || '').trim();
 
@@ -2573,7 +2617,7 @@
         const res = await fetch('/auth/send-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
+          body: JSON.stringify({ email, password, force_resend: forceResend })
         });
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -2601,14 +2645,14 @@
       }
     }
 
-    document.getElementById('sendOtpBtn').addEventListener('click', handleSendOtp);
+    document.getElementById('sendOtpBtn').addEventListener('click', () => handleSendOtp(false));
 
     const resendOtpBtn = document.getElementById('resendOtpBtn');
     if (resendOtpBtn) {
       resendOtpBtn.addEventListener('click', async () => {
         resendOtpBtn.disabled = true;
         resendOtpBtn.textContent = 'Resending...';
-        await handleSendOtp();
+        await handleSendOtp(true);
         let cd = 30;
         const iv = setInterval(() => {
           cd--;

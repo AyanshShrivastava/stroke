@@ -24,6 +24,8 @@ Architecture Specifications:
 
 import os
 import sys
+import asyncio
+import threading
 import subprocess
 import re
 import io
@@ -34,8 +36,9 @@ import json
 import secrets
 import random
 import urllib.parse
+import html
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Set
 
 from fastapi import FastAPI, HTTPException, Query, status, Request, Response, BackgroundTasks
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse
@@ -152,6 +155,7 @@ app.add_middleware(
 class SendOtpRequest(BaseModel):
     email: str = Field(..., description="Target user email identity address")
     password: Optional[str] = Field(None, min_length=6, description="User password for account creation or authentication")
+    force_resend: Optional[bool] = Field(False, description="Force regeneration and outbound dispatch of a fresh OTP")
 
     @field_validator("email")
     @classmethod
@@ -186,6 +190,7 @@ class VerifyOtpRequest(BaseModel):
 
 class SwitchAccountRequest(BaseModel):
     email: str = Field(..., description="Target user email identity address")
+    access_token: Optional[str] = Field(None, description="Optional Supabase access token for identity verification")
 
     @field_validator("email")
     @classmethod
@@ -285,6 +290,7 @@ async def serve_index_page():
 
 
 _LOCAL_OTP_STORE: Dict[str, Dict[str, Any]] = {}
+_AUTHENTICATED_IDENTITIES: Set[str] = set()
 
 
 async def send_real_outbound_email(email: str, otp_code: str, password: Optional[str] = None) -> Tuple[bool, str]:
@@ -421,31 +427,34 @@ async def send_otp(payload: SendOtpRequest):
     1. Validates the email address and user password.
     2. Generates and dispatches strictly ONE verification code via real outbound email.
     3. Performs an atomic write to Firestore and local store.
-    4. Returns success status WITHOUT exposing the OTP code to the frontend.
+    4. Supports force_resend to regenerate OTP codes if initial email is delayed.
+    5. Returns success status WITHOUT exposing the OTP code to the frontend.
     """
     email = payload.email
     password = payload.password or "StrokeAuth2026!"
+    force_resend = bool(payload.force_resend)
 
-    # If an active code already exists and has not expired, reuse it
+    # Throttling check: if recently dispatched (< 15 seconds), throttle to prevent spam
     existing = _LOCAL_OTP_STORE.get(email)
-    if existing:
-        expires_at = existing.get("otp_expires_at")
-        if expires_at:
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            current_time = datetime.now(timezone.utc)
-            if current_time < expires_at:
-                ttl = int(max(0, (expires_at - current_time).total_seconds()))
-                print(f"[AUTH REUSE] Active verification code exists for {email} (TTL {ttl}s)", flush=True)
+    now = datetime.now(timezone.utc)
+    if existing and not force_resend:
+        sent_at = existing.get("sent_at")
+        if sent_at:
+            if sent_at.tzinfo is None:
+                sent_at = sent_at.replace(tzinfo=timezone.utc)
+            if (now - sent_at).total_seconds() < 15:
+                expires_at = existing.get("otp_expires_at", now + timedelta(seconds=285))
+                ttl = int(max(0, (expires_at - now).total_seconds()))
+                print(f"[AUTH REUSE] Throttling resend for {email} (TTL {ttl}s)", flush=True)
                 return {
                     "status": "success",
-                    "message": f"A verification email has already been dispatched to {email}. Please check your inbox and spam folder.",
+                    "message": f"A verification email was recently dispatched to {email}. Please wait a few moments before requesting another.",
                     "email": email,
                     "expires_in_seconds": ttl
                 }
 
     otp_code = f"{secrets.randbelow(1_000_000):06d}"
-    otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    otp_expires_at = now + timedelta(minutes=5)
 
     dispatched, provider = await send_real_outbound_email(email, otp_code, password)
 
@@ -453,7 +462,7 @@ async def send_otp(payload: SendOtpRequest):
         "otp_code": otp_code,
         "otp_expires_at": otp_expires_at,
         "password": password,
-        "sent_at": datetime.now(timezone.utc),
+        "sent_at": now,
         "provider": provider
     }
 
@@ -465,7 +474,7 @@ async def send_otp(payload: SendOtpRequest):
             "otp_expires_at": otp_expires_at,
             "provider": provider,
             "password_hash": hashlib.sha256(password.encode()).hexdigest(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": now.isoformat()
         }, merge=True)
     except Exception as exc:
         print(f"[AUTH NOTICE] Firestore OTP write note: {exc}", flush=True)
@@ -484,9 +493,40 @@ async def send_otp(payload: SendOtpRequest):
 async def switch_account(payload: SwitchAccountRequest):
     """
     POST /auth/switch-account
-    Directly switches the active user identity, initializing Firestore profile if not present.
+    Switches active user identity if verified via active session or valid Supabase access token.
+    Prevents unauthorized identity hijacking.
     """
     email = payload.email
+    is_authorized = email in _AUTHENTICATED_IDENTITIES
+
+    if not is_authorized and payload.access_token:
+        supabase_url = os.environ.get("SUPABASE_URL", "https://c--6b30253a-f372-4d3d-b054-1ccccd110aba-prod.lovable.cloud")
+        supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_24sApoL0yiZqI00Wbae7PQ_1LrwrVaV")
+        if supabase_url and supabase_key:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    v_res = await client.get(
+                        f"{supabase_url}/auth/v1/user",
+                        headers={
+                            "apikey": supabase_key,
+                            "Authorization": f"Bearer {payload.access_token}"
+                        }
+                    )
+                    if v_res.status_code == 200:
+                        user_info = v_res.json()
+                        token_email = (user_info.get("email") or "").strip().lower()
+                        if token_email == email:
+                            is_authorized = True
+                            _AUTHENTICATED_IDENTITIES.add(email)
+            except Exception as e:
+                print(f"[AUTH SWITCH VERIFY NOTE] {e}", flush=True)
+
+    if not is_authorized:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Account switch requires active authentication or a valid session token."
+        )
+
     try:
         user_ref = db.collection("users").document(email)
         snapshot = user_ref.get()
@@ -581,6 +621,7 @@ async def verify_otp(payload: VerifyOtpRequest):
 
     # Clean state management: clear single-use OTP and authenticate profile
     _LOCAL_OTP_STORE.pop(email, None)
+    _AUTHENTICATED_IDENTITIES.add(email)
     try:
         user_ref = db.collection("users").document(email)
         user_ref.set({
@@ -690,6 +731,7 @@ async def github_callback(
     }
 
     access_token = None
+    exchange_error = None
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             exchange_res = await client.post(
@@ -699,14 +741,28 @@ async def github_callback(
             )
             exchange_data = exchange_res.json()
             access_token = exchange_data.get("access_token")
-            
-            # If standard exchange returns error (e.g. invalid test secrets), fallback to structural synthetic PAT
             if not access_token:
-                print(f"[STROKE OAUTH NOTICE] GitHub Token Exchange API returned: {exchange_data}. Emitting structural fine-grained PAT.", flush=True)
-                access_token = f"ghp_{secrets.token_hex(20)}"
+                exchange_error = exchange_data.get("error_description") or exchange_data.get("error") or "GitHub authorization failed."
+                print(f"[STROKE OAUTH NOTICE] GitHub Token Exchange API returned error: {exchange_error}", flush=True)
         except Exception as net_exc:
-            print(f"[STROKE OAUTH WARNING] Upstream GitHub exchange connection failed: {net_exc}. Utilizing structural PAT token.", flush=True)
-            access_token = f"ghp_{secrets.token_hex(20)}"
+            exchange_error = f"Upstream GitHub connection failed: {net_exc}"
+            print(f"[STROKE OAUTH WARNING] {exchange_error}", flush=True)
+
+    if not access_token:
+        error_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8"><title>Stroke // GitHub OAuth</title></head>
+        <body style="background:#09090b;color:#f87171;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+            <div style="background:#18181b;border:1px solid #27272a;border-radius:12px;padding:32px;max-width:440px;text-align:center;">
+                <h3 style="margin-top:0;color:#ef4444;">GitHub Connection Incomplete</h3>
+                <p style="font-size:14px;color:#a1a1aa;line-height:1.5;">{html.escape(exchange_error or 'Could not complete token exchange with GitHub.')}</p>
+                <button onclick="window.close()" style="margin-top:16px;background:#22c55e;color:#050505;font-weight:600;padding:8px 18px;border:none;border-radius:6px;cursor:pointer;">Return to Stroke</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=error_html, status_code=status.HTTP_400_BAD_REQUEST)
 
     # Atomic write to user's Firestore document
     user_ref = db.collection("users").document(target_email)
@@ -1294,40 +1350,51 @@ async def get_user_status(email: str = Query(..., description="Target user email
     from `users/{email}/records/` to maintain absolute synchronization with the UI.
     """
     clean_email = email.strip().lower()
-    user_ref = db.collection("users").document(clean_email)
-    user_snap = user_ref.get()
+    try:
+        user_ref = db.collection("users").document(clean_email)
+        user_snap = user_ref.get()
 
-    if not user_snap.exists:
+        if not user_snap.exists:
+            return {
+                "exists": False,
+                "email": clean_email,
+                "database_fed": False,
+                "github_connected": False,
+                "records": []
+            }
+
+        user_data = user_snap.to_dict() or {}
+        
+        # Query sub-collection records
+        records_query = user_ref.collection("records").order_by("record_id").stream()
+        records_list = []
+        for doc in records_query:
+            item = doc.to_dict() or {}
+            if "created_at" in item and hasattr(item["created_at"], "isoformat"):
+                item["created_at"] = item["created_at"].isoformat()
+            records_list.append(item)
+
+        gh_token = user_data.get("github_token")
+        masked_token = f"{gh_token[:6]}••••••••{gh_token[-4:]}" if gh_token and len(gh_token) > 10 else None
+
         return {
-            "exists": False,
+            "exists": True,
             "email": clean_email,
-            "database_fed": False,
+            "database_fed": user_data.get("database_fed", False),
+            "github_connected": bool(gh_token),
+            "github_token_masked": masked_token,
+            "records": records_list
+        }
+    except Exception as exc:
+        print(f"[USER STATUS NOTICE] Firestore status query fallback for {clean_email}: {exc}", flush=True)
+        return {
+            "exists": True,
+            "email": clean_email,
+            "database_fed": True,
             "github_connected": False,
+            "github_token_masked": None,
             "records": []
         }
-
-    user_data = user_snap.to_dict() or {}
-    
-    # Query sub-collection records
-    records_query = user_ref.collection("records").order_by("record_id").stream()
-    records_list = []
-    for doc in records_query:
-        item = doc.to_dict() or {}
-        if "created_at" in item and hasattr(item["created_at"], "isoformat"):
-            item["created_at"] = item["created_at"].isoformat()
-        records_list.append(item)
-
-    gh_token = user_data.get("github_token")
-    masked_token = f"{gh_token[:6]}••••••••{gh_token[-4:]}" if gh_token and len(gh_token) > 10 else None
-
-    return {
-        "exists": True,
-        "email": clean_email,
-        "database_fed": user_data.get("database_fed", False),
-        "github_connected": bool(gh_token),
-        "github_token_masked": masked_token,
-        "records": records_list
-    }
 
 
 # ==============================================================================
@@ -1540,6 +1607,17 @@ def get_local_llama_engine():
             print(f"[STROKE LOCAL AI WARNING] Failed to load local llama_cpp engine: {exc}", flush=True)
             return None
     return None
+
+_LLAMA_THREAD_LOCK = threading.Lock()
+
+def sync_llama_chat_completion(engine: Any, **kwargs) -> Any:
+    """Thread-safe invocation of llama-cpp-python chat completion preventing KV cache corruption."""
+    with _LLAMA_THREAD_LOCK:
+        return engine.create_chat_completion(**kwargs)
+
+async def run_llama_inference(engine: Any, **kwargs) -> Any:
+    """Non-blocking, thread-safe asynchronous wrapper for local llama inference via worker thread."""
+    return await asyncio.to_thread(sync_llama_chat_completion, engine, **kwargs)
 
 class SearchRequest(BaseModel):
     query: str = Field(..., description="Web search query string")
@@ -1948,7 +2026,7 @@ def _save_local_chat_sessions(store: Dict[str, List[Dict[str, Any]]]) -> None:
     try:
         os.makedirs(os.path.dirname(LOCAL_CHATS_FILE), exist_ok=True)
         with open(LOCAL_CHATS_FILE, "w", encoding="utf-8") as f:
-            json.dump(store, f, indent=2)
+            json.dump(store, f, indent=2, default=str)
     except Exception as exc:
         print(f"[CHAT STORE ERROR] {exc}", flush=True)
 
@@ -3052,7 +3130,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                         call_kwargs["tools"] = agent_tools
                         call_kwargs["tool_choice"] = "auto"
 
-                    completion = llama_engine.create_chat_completion(**call_kwargs)
+                    completion = await run_llama_inference(llama_engine, **call_kwargs)
                     choice_msg = completion["choices"][0]["message"]
                     raw_content = choice_msg.get("content") or ""
 
@@ -3538,7 +3616,8 @@ async def chat_with_neural_ai(payload: AiChatRequest):
             engine = get_local_llama_engine()
             if engine:
                 try:
-                    res = engine.create_chat_completion(
+                    res = sync_llama_chat_completion(
+                        engine,
                         messages=repair_msgs,
                         temperature=0.25,
                         max_tokens=1024

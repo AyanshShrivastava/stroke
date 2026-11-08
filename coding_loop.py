@@ -907,22 +907,25 @@ class CodingArchivist:
                 except Exception:
                     records = []
 
+            report = test_report if isinstance(test_report, dict) else {}
+            passed_checks = report.get("passed_checks", []) if isinstance(report.get("passed_checks"), list) else []
+            untested = report.get("untested_limitations", []) if isinstance(report.get("untested_limitations"), list) else []
             entry = {
                 "id": f"CTX-{int(time.time())}",
                 "timestamp": time.time(),
-                "prompt": prompt[:120],
-                "language": language,
-                "passed_checks_count": len(test_report.get("passed_checks", [])),
-                "untested_count": len(test_report.get("untested_limitations", [])),
-                "verified": test_report.get("is_verified", False),
-                "iterations": test_report.get("iteration_count", 1),
+                "prompt": str(prompt)[:120],
+                "language": str(language),
+                "passed_checks_count": len(passed_checks),
+                "untested_count": len(untested),
+                "verified": bool(report.get("is_verified", False)),
+                "iterations": int(report.get("iteration_count", 1) or 1),
                 "user_email": user_email or "anonymous",
-                "summary": f"Verified {language} solution with {len(test_report.get('passed_checks', []))} passing checks."
+                "summary": f"Verified {language} solution with {len(passed_checks)} passing checks."
             }
             records.insert(0, entry)
             # Keep top 50 project context entries
             with open(cls.CONTEXT_FILE, "w", encoding="utf-8") as f:
-                json.dump(records[:50], f, indent=2)
+                json.dump(records[:50], f, indent=2, default=str)
             print(f"[STROKE ARCHIVIST] Saved verified project context entry: {entry['id']}", flush=True)
         except Exception as exc:
             print(f"[STROKE ARCHIVIST NOTICE] Could not save context record: {exc}", flush=True)

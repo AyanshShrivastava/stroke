@@ -561,6 +561,7 @@ async def execute_studio_mcp_command(
                 "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
             }
 
+    proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
             cmd_expanded,
@@ -601,11 +602,6 @@ async def execute_studio_mcp_command(
                 pass
 
         if not studio_id:
-            try:
-                proc.kill()
-                await proc.wait()
-            except Exception:
-                pass
             return {
                 "status": "offline",
                 "connected": False,
@@ -649,12 +645,6 @@ async def execute_studio_mcp_command(
                 except Exception:
                     pass
 
-            try:
-                proc.kill()
-                await proc.wait()
-            except Exception:
-                pass
-
             if exec_result:
                 is_err = exec_result.get("result", {}).get("isError", False)
                 content = exec_result.get("result", {}).get("content", [])
@@ -673,6 +663,13 @@ async def execute_studio_mcp_command(
                 }
     except Exception as exc:
         print(f"[STROKE STUDIO MCP EXECUTION ERROR] {exc}", flush=True)
+    finally:
+        if proc and proc.returncode is None:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
 
     return {
         "status": "offline",
