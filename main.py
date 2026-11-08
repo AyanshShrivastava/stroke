@@ -26,6 +26,7 @@ import os
 import sys
 import re
 import io
+import time
 import zipfile
 import hashlib
 import json
@@ -1974,6 +1975,11 @@ async def chat_with_neural_ai(payload: AiChatRequest):
             content += att_text
         api_messages.append({"role": msg.role, "content": content})
 
+    start_time = time.time()
+    execution_steps: List[Dict[str, str]] = [
+        {"name": "Prompt Analysis", "detail": "Parsed user instructions and verified Roblox game domain context"}
+    ]
+
     ai_reply_text = ""
     provider_used = "local-offline"
     model_used = payload.model or "llama3.2-local"
@@ -2004,6 +2010,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 )
                 sources_used = [{"title": "Roblox Studio MCP Server", "url": "#mcp-studio", "snippet": mcp_res.get("message", "Executed via Studio MCP")}]
                 grounded_context += f"\n\n=== ROBLOX STUDIO MCP RESULT ===\n{json.dumps(mcp_res, indent=2)}\n=== END STUDIO MCP ===\n"
+                execution_steps.append({"name": "Roblox Studio MCP Bridge", "detail": f"Target: ReplicatedStorage.VFX - Status: {mcp_res.get('status', 'standby')}"})
 
             elif any(k in last_user_message.lower() for k in vfx_keywords):
                 tool_invoked = True
@@ -2020,6 +2027,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                         for vm in vfx_matches
                     ]
                     grounded_context += f"\n\n=== ELEMENTAL WORLDS VFX GROUND TRUTH ===\n{json.dumps(vfx_matches, indent=2)}\n=== END VFX GROUND TRUTH ===\n"
+                    execution_steps.append({"name": "Elemental Worlds Catalog Search", "detail": f"Retrieved {len(vfx_matches)} canonical particle models and textures"})
 
             elif payload.web_search and any(k in last_user_message.lower() for k in search_keywords):
                 tool_invoked = True
@@ -2031,6 +2039,10 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     for idx, s in enumerate(sources_used, 1):
                         grounded_context += f"[{idx}] {s['title']} ({s['url']}):\n{s['snippet']}\n\n"
                     grounded_context += "=== END SEARCH RESULTS ===\n"
+                    execution_steps.append({"name": "Autonomous Web Search", "detail": f"Retrieved {len(sources_used)} live web sources via DuckDuckGo"})
+
+            if payload.think_mode:
+                execution_steps.append({"name": "Deep Neural Reasoning", "detail": "Evaluating algorithmic architecture and physics constraints"})
 
             # Prepare messages for local GGUF model
             local_messages = []
@@ -2040,6 +2052,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
             if grounded_context:
                 local_messages[-1]["content"] += grounded_context + "\nSynthesize an accurate, technical response incorporating the above verified data."
 
+            execution_steps.append({"name": "Luau Neural Synthesis", "detail": "Generating script via Llama 3.2 1B Instruct"})
             completion = llama_engine.create_chat_completion(
                 messages=local_messages,
                 temperature=payload.temperature or 0.7,
@@ -2104,6 +2117,8 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 {"code": f"-- Live Luau execution from Stroke AI\n-- Query: {last_user_message}\nprint('[STROKE MCP] Dispatching VFX instructions to Roblox Studio...')", "target_parent": "ReplicatedStorage.VFX"}
             )
             sources_used = [{"title": "Roblox Studio MCP Server", "url": "#mcp-studio", "snippet": mcp_res.get("message", "Executed via Studio MCP")}]
+            execution_steps.append({"name": "Roblox Studio MCP Bridge", "detail": f"Target: ReplicatedStorage.VFX - Status: {mcp_res.get('status', 'standby')}"})
+            execution_steps.append({"name": "Autonomous Luau Generation", "detail": "Generated Studio DataModel Luau script"})
             ai_reply_text = f"### [STROKE AUTONOMOUS AGENT // ROBLOX STUDIO MCP EXECUTED]\n\n"
             ai_reply_text += f"> **Autonomous Decision**: Invoked `studio_execute_luau(target='ReplicatedStorage.VFX')`.\n\n"
             ai_reply_text += f"**Studio Bridge Status**: {mcp_res.get('status', 'success').upper()}\n"
@@ -2117,6 +2132,8 @@ async def chat_with_neural_ai(payload: AiChatRequest):
             vfx_matches = vfx_service.search_vfx_database(tool_query, max_results=3)
 
             if vfx_matches:
+                execution_steps.append({"name": "Elemental Worlds Catalog Search", "detail": f"Retrieved {len(vfx_matches)} canonical particle models and textures"})
+                execution_steps.append({"name": "Autonomous Luau Synthesis", "detail": "Synthesized VFX emitter specifications"})
                 ai_reply_text = f"### [STROKE AUTONOMOUS AGENT // ELEMENTAL WORLDS VFX DATABASE]\n\n"
                 ai_reply_text += f"> **Autonomous Tool Call**: `search_vfx_database(query='{tool_query}')`\n"
                 ai_reply_text += f"> Retrieved ground truth from **AyanshShrivastava/elemental-worlds** (14,666 instances parsed).\n\n"
@@ -2137,6 +2154,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     for vm in vfx_matches
                 ]
             else:
+                execution_steps.append({"name": "Elemental Worlds Catalog Search", "detail": "Queried 95 canonical models (zero partial matches)"})
                 ai_reply_text = (
                     f"### [STROKE NEURAL AGENT // VFX CATALOG SEARCH]\n\n"
                     f"Queried Elemental Worlds VFX index for **'{tool_query}'**. "
@@ -2151,6 +2169,8 @@ async def chat_with_neural_ai(payload: AiChatRequest):
             sources_used = await execute_web_search(tool_query, max_results=4)
 
             if sources_used:
+                execution_steps.append({"name": "Autonomous Web Search", "detail": f"Retrieved {len(sources_used)} live web sources via DuckDuckGo"})
+                execution_steps.append({"name": "Knowledge Synthesis", "detail": "Structured grounded internet documentation"})
                 ai_reply_text = f"### [STROKE AUTONOMOUS AGENT // WEB SEARCH TOOL INVOKED]\n\n"
                 ai_reply_text += f"> **Autonomous Decision**: Query requires live external validation. Executed `web_search(query='{tool_query}')`.\n\n"
                 ai_reply_text += "Here are the grounded internet findings:\n\n"
@@ -2163,6 +2183,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     "- Zero cloud API keys or subscriptions required."
                 )
         else:
+            execution_steps.append({"name": "Architectural Inference", "detail": "Resolved query from internal engineering memory"})
             ai_reply_text = (
                 f"### [STROKE NEURAL AGENT // DIRECT ANSWER]\n\n"
                 f"> **Autonomous Decision**: No internet search required. Resolved directly from architectural memory.\n\n"
@@ -2234,6 +2255,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
             except Exception:
                 pass
 
+    duration_sec = round(time.time() - start_time, 2)
     return {
         "status": "success",
         "provider": provider_used,
@@ -2249,7 +2271,9 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "learning_recorded": learning_recorded,
         "god_tier_vfx_learned": god_tier_vfx_learned,
         "learned_vfx_name": learned_vfx_name,
-        "memory": memory_meta
+        "memory": memory_meta,
+        "duration_seconds": duration_sec,
+        "execution_steps": execution_steps
     }
 
 

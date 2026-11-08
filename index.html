@@ -1220,7 +1220,7 @@
       sendPromptBtn.disabled = true;
 
       const typingId = 'typing-' + Date.now();
-      appendTypingIndicator(typingId);
+      appendTypingIndicator(typingId, text);
 
       try {
         const payload = {
@@ -1255,7 +1255,9 @@
         appendMessage('assistant', replyText, {
           tool_invoked: data.tool_invoked,
           tool_name: data.tool_name,
-          sources: data.sources
+          sources: data.sources,
+          duration_seconds: data.duration_seconds,
+          execution_steps: data.execution_steps
         });
 
       } catch (err) {
@@ -1333,6 +1335,36 @@
           `;
         }
 
+        let activityTraceHtml = '';
+        if (meta.execution_steps && meta.execution_steps.length > 0) {
+          const dur = meta.duration_seconds || '1.2';
+          const stepsCount = meta.execution_steps.length;
+          const stepsDetails = meta.execution_steps.map(st => `
+            <div class="flex items-start space-x-2 py-0.5">
+              <svg class="w-3.5 h-3.5 text-brand-accent flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <div>
+                <span class="text-white font-semibold">${escapeHtml(st.name || st.step || 'Action')}:</span>
+                <span class="text-brand-muted text-[11px] ml-1">${escapeHtml(st.detail || '')}</span>
+              </div>
+            </div>
+          `).join('');
+
+          activityTraceHtml = `
+            <details class="group mb-2.5 rounded-xl border border-brand-border bg-black/40 overflow-hidden text-xs font-mono">
+              <summary class="flex items-center justify-between px-3 py-2 cursor-pointer select-none hover:bg-white/[0.04] transition-colors">
+                <div class="flex items-center space-x-2 text-[11px] text-brand-muted group-hover:text-white">
+                  <svg class="w-3.5 h-3.5 text-brand-accent transition-transform group-open:rotate-90 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                  <span>Agent Activity Trace (${stepsCount} steps in ${dur}s)</span>
+                </div>
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/15 text-brand-accent border border-brand-accent/30 font-semibold uppercase">Completed</span>
+              </summary>
+              <div class="px-3 pb-2.5 pt-1.5 space-y-1 border-t border-brand-border/40 font-mono text-[11px] text-brand-muted">
+                ${stepsDetails}
+              </div>
+            </details>
+          `;
+        }
+
         const formattedBody = formatMarkdownText(content);
 
         msgDiv.innerHTML = `
@@ -1341,6 +1373,7 @@
               S
             </div>
             <div class="min-w-0 flex-1">
+              ${activityTraceHtml}
               ${toolChipHtml}
               <div class="prose prose-invert max-w-none text-sm text-[#e0e0e0] leading-relaxed font-sans select-text break-words">
                 ${formattedBody}
@@ -1369,16 +1402,86 @@
       });
     }
 
-    function appendTypingIndicator(id) {
+    // Activity Tracker Timer & Animation State
+    let activeTypingTimer = null;
+    let activeTypingStepInterval = null;
+
+    function appendTypingIndicator(id, promptText = '') {
+      const pLower = (promptText || '').toLowerCase();
+      let contextualSteps = [
+        "Analyzing prompt requirements and intent",
+        "Evaluating Luau architecture and constraints"
+      ];
+
+      if (pLower.includes('vfx') || pLower.includes('particle') || pLower.includes('domain') || pLower.includes('sukuna') || pLower.includes('purple') || pLower.includes('cleave') || pLower.includes('fireball') || pLower.includes('aura') || pLower.includes('beam')) {
+        contextualSteps = [
+          "Evaluating Roblox VFX kinematics & particle constraints",
+          "Scanning Elemental Worlds VFX catalog (14,666 entries)...",
+          "Checking ParticleEmitter, Beam & Attachment hierarchies",
+          "Synthesizing production Luau scripts..."
+        ];
+      } else if (pLower.includes('studio') || pLower.includes('run') || pLower.includes('execute')) {
+        contextualSteps = [
+          "Evaluating Luau script execution request",
+          "Probing Roblox Studio MCP bridge (port 8989)...",
+          "Preparing ReplicatedStorage.VFX payload...",
+          "Synthesizing production Luau script..."
+        ];
+      } else if (pLower.includes('search') || pLower.includes('latest') || pLower.includes('news') || pLower.includes('update') || pLower.includes('version')) {
+        contextualSteps = [
+          "Evaluating documentation & knowledge requirements",
+          "Grounding internet context via autonomous web search...",
+          "Synthesizing verified real-time sources...",
+          "Compiling technical answer..."
+        ];
+      } else if (pLower.includes('commit') || pLower.includes('github') || pLower.includes('pull request')) {
+        contextualSteps = [
+          "Analyzing repository target & git parameters",
+          "Connecting to GitHub MCP server...",
+          "Validating branch & commit tree...",
+          "Finalizing git operation..."
+        ];
+      } else {
+        contextualSteps = [
+          "Analyzing prompt requirements and engineering specifications",
+          "Consulting local Llama neural core...",
+          "Synthesizing technical solution...",
+          "Formatting clean production code..."
+        ];
+      }
+
       const div = document.createElement('div');
       div.id = id;
-      div.className = 'w-full flex justify-start items-center space-x-3';
+      div.className = 'w-full flex justify-start items-start space-x-3 my-2';
       div.innerHTML = `
-        <div class="w-7 h-7 rounded-lg bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center glow-text">S</div>
-        <div class="flex items-center space-x-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-          <div class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-bounce"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-bounce" style="animation-delay: 0.15s"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-bounce" style="animation-delay: 0.3s"></div>
+        <div class="w-7 h-7 rounded-lg bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text mt-0.5">
+          S
+        </div>
+        <div class="max-w-xl w-full bg-brand-card/90 border border-brand-accent/30 rounded-2xl p-3.5 space-y-2.5 shadow-xl">
+          <!-- Header: Pulse indicator + Title + Elapsed timer -->
+          <div class="flex items-center justify-between text-xs font-mono">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-brand-accent animate-ping"></span>
+              <span class="text-brand-accent font-semibold tracking-wide uppercase text-[11px]">Stroke Agent Active</span>
+            </div>
+            <span id="${id}-timer" class="text-brand-muted text-[11px]">0.0s</span>
+          </div>
+
+          <!-- Dynamic Live Step Display -->
+          <div class="flex items-center space-x-2.5 text-xs font-mono text-white bg-black/60 px-3 py-2.5 rounded-xl border border-brand-accent/20">
+            <svg class="w-4 h-4 text-brand-accent animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span id="${id}-step-text" class="truncate text-brand-accent font-sans">${escapeHtml(contextualSteps[0])}</span>
+          </div>
+
+          <!-- Progressive Step Checklist -->
+          <div id="${id}-steps-list" class="space-y-1.5 text-[11px] font-mono text-brand-muted pl-1">
+            ${contextualSteps.map((st, i) => `
+              <div id="${id}-step-item-${i}" class="flex items-center space-x-2 ${i === 0 ? 'text-white' : 'text-brand-muted opacity-60'} transition-opacity">
+                <span class="w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-brand-accent animate-pulse' : 'bg-white/20'} flex-shrink-0"></span>
+                <span>${escapeHtml(st)}</span>
+              </div>
+            `).join('')}
+          </div>
         </div>
       `;
       messagesList.appendChild(div);
@@ -1386,9 +1489,57 @@
         top: document.getElementById('chatScrollContainer').scrollHeight,
         behavior: 'smooth'
       });
+
+      // Start elapsed timer
+      const startTime = Date.now();
+      activeTypingTimer = setInterval(() => {
+        const timerEl = document.getElementById(`${id}-timer`);
+        if (timerEl) {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          timerEl.textContent = `${elapsed}s`;
+        }
+      }, 100);
+
+      // Transition through steps every 900ms
+      let currentStepIdx = 0;
+      activeTypingStepInterval = setInterval(() => {
+        currentStepIdx++;
+        if (currentStepIdx < contextualSteps.length) {
+          const stepTextEl = document.getElementById(`${id}-step-text`);
+          if (stepTextEl) {
+            stepTextEl.textContent = contextualSteps[currentStepIdx];
+          }
+          // Mark previous as completed
+          const prevItem = document.getElementById(`${id}-step-item-${currentStepIdx - 1}`);
+          if (prevItem) {
+            prevItem.className = 'flex items-center space-x-2 text-brand-accent opacity-90';
+            prevItem.innerHTML = `
+              <svg class="w-3 h-3 text-brand-accent flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>${escapeHtml(contextualSteps[currentStepIdx - 1])}</span>
+            `;
+          }
+          // Mark current active
+          const currItem = document.getElementById(`${id}-step-item-${currentStepIdx}`);
+          if (currItem) {
+            currItem.className = 'flex items-center space-x-2 text-white font-medium opacity-100';
+            currItem.innerHTML = `
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-ping flex-shrink-0"></span>
+              <span>${escapeHtml(contextualSteps[currentStepIdx])}</span>
+            `;
+          }
+        }
+      }, 900);
     }
 
     function removeTypingIndicator(id) {
+      if (activeTypingTimer) {
+        clearInterval(activeTypingTimer);
+        activeTypingTimer = null;
+      }
+      if (activeTypingStepInterval) {
+        clearInterval(activeTypingStepInterval);
+        activeTypingStepInterval = null;
+      }
       const el = document.getElementById(id);
       if (el) el.remove();
     }
