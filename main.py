@@ -842,6 +842,42 @@ async def disconnect_custom_mcp_server(payload: McpDisconnectRequest):
     return {"status": "success", "server_id": payload.server_id, "disconnected": True}
 
 
+class McpConfigPayload(BaseModel):
+    config: Any = Field(..., description="Standard mcpServers JSON configuration dict or string")
+
+
+@app.get("/mcp/config", tags=["Universal MCP Bridge"])
+async def get_mcp_configuration():
+    """
+    GET /mcp/config
+    Returns current active MCP servers as a standard mcpServers JSON configuration block.
+    """
+    return mcp_bridge.get_mcp_config_json()
+
+
+@app.post("/mcp/config", tags=["Universal MCP Bridge"])
+async def save_mcp_configuration(payload: McpConfigPayload):
+    """
+    POST /mcp/config
+    Applies a standard pasted mcpServers JSON configuration block and connects the servers.
+    """
+    cfg = payload.config
+    if isinstance(cfg, str):
+        try:
+            cfg = json.loads(cfg)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON configuration string: {e}")
+
+    if not isinstance(cfg, dict):
+        raise HTTPException(status_code=400, detail="Configuration must be a JSON object.")
+
+    try:
+        res = mcp_bridge.apply_mcp_config_json(cfg)
+        return res
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 # ==============================================================================
 # ROUTE HANDLERS: NOTES AI & LUAU COPILOT
 # ==============================================================================

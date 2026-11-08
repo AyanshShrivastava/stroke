@@ -18,11 +18,11 @@
         extend: {
           colors: {
             brand: {
-              black: '#090a0f',
-              surface: '#0e1017',
-              card: '#141722',
-              input: '#0b0c12',
-              border: '#1e2333',
+              black: '#090b10',
+              surface: '#0e1118',
+              card: '#131822',
+              input: '#0b0e14',
+              border: '#1a2230',
               accent: '#00ff66',
               accentDark: '#006629',
               cyan: '#00d4ff',
@@ -43,7 +43,7 @@
 
   <style>
     body {
-      background-color: #090a0f;
+      background-color: #090b10;
       color: #00ff66;
       font-family: 'JetBrains Mono', monospace;
       height: 100vh;
@@ -55,11 +55,8 @@
     .glow-text {
       text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
     }
-    .glow-cyan {
-      text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-    }
     .glow-box {
-      box-shadow: 0 0 20px rgba(0, 255, 102, 0.12), inset 0 0 10px rgba(0, 255, 102, 0.02);
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.1), inset 0 0 10px rgba(0, 255, 102, 0.02);
     }
     .glow-button {
       box-shadow: 0 0 10px rgba(0, 255, 102, 0.25);
@@ -116,10 +113,10 @@
       height: 5px;
     }
     ::-webkit-scrollbar-track {
-      background: #090a0f;
+      background: #090b10;
     }
     ::-webkit-scrollbar-thumb {
-      background: #1e2535;
+      background: #1a2230;
       border-radius: 4px;
     }
     ::-webkit-scrollbar-thumb:hover {
@@ -168,28 +165,20 @@
         <span class="text-[10px] text-brand-muted font-mono">Cmd+K</span>
       </button>
 
-      <!-- Navigation Apps & Tools -->
+      <!-- Navigation Tools -->
       <nav class="space-y-1 text-xs">
-        <button id="openVfxLibBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
-          <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            <span>VFX Library</span>
-          </span>
-          <span class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">14.6k</span>
-        </button>
-
         <button id="openMcpHubBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
           <span class="flex items-center space-x-2.5">
             <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             <span>MCP Servers</span>
           </span>
-          <span id="mcpConnectedCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">2 Live</span>
+          <span id="mcpConnectedCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">Connected</span>
         </button>
 
         <button id="openContinuousLearningBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
           <span class="flex items-center space-x-2.5">
             <svg class="w-4 h-4 text-brand-cyan group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-            <span>Continuous Learning</span>
+            <span>Learning</span>
           </span>
           <span id="sidebarInsightBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30 font-mono">Active</span>
         </button>
@@ -204,17 +193,16 @@
       <div class="flex-1 overflow-y-auto pr-1 pt-2 space-y-1">
         <div class="text-[10px] uppercase font-bold tracking-wider text-brand-muted px-2.5 py-1">Recents</div>
         <div id="recentChatsList" class="space-y-0.5">
-          <!-- Dynamically populated -->
           <button class="chat-session-item active w-full text-left px-2.5 py-2 rounded-md text-xs text-white bg-white/5 border-l-2 border-brand-accent flex items-center justify-between group">
-            <span class="truncate pr-2">Elemental Worlds Core Design</span>
+            <span class="truncate pr-2">Elemental Worlds Architecture</span>
             <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
           </button>
           <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
-            <span class="truncate pr-2">Sukuna Domain Cleave Luau</span>
+            <span class="truncate pr-2">Sukuna Cleave Script</span>
             <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
           </button>
           <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
-            <span class="truncate pr-2">Hollow Purple Flipbook Bezier</span>
+            <span class="truncate pr-2">Hollow Purple Emitters</span>
             <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
           </button>
         </div>
@@ -225,7 +213,6 @@
     <div class="p-3 border-t border-brand-border bg-brand-surface relative">
       <button id="userProfileBtn" class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors text-left group">
         <div class="flex items-center space-x-2.5 min-w-0">
-          <!-- Circular Avatar with Initials -->
           <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text">
             NN
           </div>
@@ -237,7 +224,6 @@
         <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
       </button>
 
-      <!-- Clean Upgrade Button -->
       <button id="claimOfferBtn" class="mt-2 w-full py-1.5 px-3 rounded-lg border border-brand-accent/30 bg-brand-accent/5 hover:bg-brand-accent/15 text-[11px] text-brand-accent font-medium flex items-center justify-center space-x-1.5 transition-colors">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
         <span>Upgrade to Pro</span>
@@ -249,10 +235,6 @@
           <div class="text-[10px] text-brand-muted uppercase">Signed In As</div>
           <div id="popoverEmail" class="text-xs text-brand-accent truncate font-mono">developer@cyber.matrix</div>
         </div>
-        <button id="trigger5xMatrixBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center justify-between">
-          <span>5X VFX Ingestion</span>
-          <span id="popoverDbFedBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/20 text-brand-accent">Fed</span>
-        </button>
         <button id="authModalTriggerBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center space-x-2">
           <span>Switch Account / Sign In</span>
         </button>
@@ -284,12 +266,11 @@
             <svg class="w-3.5 h-3.5 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
           
-          <!-- Dropdown items -->
           <div id="modelDropdownMenu" class="hidden absolute top-10 left-0 w-64 bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1 z-50">
             <button class="model-option w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 flex items-center justify-between" data-model="stroke-neural">
               <div>
                 <div class="font-semibold text-brand-accent">Stroke 2.5 Neural</div>
-                <div class="text-[10px] text-brand-muted">Autonomous Agent + VFX RAG + MCP</div>
+                <div class="text-[10px] text-brand-muted">Autonomous Agent + Tools + MCP</div>
               </div>
               <span class="text-brand-accent text-xs font-bold">[active]</span>
             </button>
@@ -302,33 +283,27 @@
             <button class="model-option w-full text-left px-3 py-2 text-xs text-brand-text hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama3.2">
               <div>
                 <div class="font-semibold">Local Llama 3.2 1B</div>
-                <div class="text-[10px] text-brand-muted">Offline GGUF weights on device</div>
+                <div class="text-[10px] text-brand-muted">Offline weights on device</div>
               </div>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Right: Temporary Chat Button + Status Badges -->
+      <!-- Right: Temporary Chat Button + MCP Pill -->
       <div class="flex items-center space-x-2 sm:space-x-3">
         
-        <!-- TEMPORARY CHAT TOGGLE -->
-        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-amber text-xs text-brand-muted hover:text-white transition-all group" title="Temporary chat: Excluded from history and continuous learning">
+        <!-- Temporary Chat Toggle -->
+        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-amber text-xs text-brand-muted hover:text-white transition-all group" title="Temporary chat: Excluded from history and learning">
           <svg class="w-3.5 h-3.5 text-brand-muted group-hover:text-brand-amber transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
           <span id="tempChatBtnText" class="font-medium">Temporary chat</span>
           <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-brand-border"></span>
         </button>
 
-        <!-- MCP Hub Trigger Button -->
-        <button id="openMcpHubTopBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-accent text-xs text-brand-muted hover:text-white transition-colors" title="Manage connected MCP servers">
+        <!-- MCP Config Trigger -->
+        <button id="openMcpHubTopBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-accent text-xs text-brand-muted hover:text-white transition-colors" title="Manage MCP servers via JSON config">
           <span class="w-2 h-2 rounded-full bg-brand-accent animate-pulse"></span>
-          <span class="font-mono text-white text-[11px]">MCP Hub</span>
-        </button>
-
-        <!-- Continuous Learning Telemetry Pill -->
-        <button id="learningStatusPill" class="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-full border border-cyan-800/40 bg-cyan-950/20 text-[11px] text-cyan-300 hover:bg-cyan-950/40 transition-colors">
-          <svg class="w-3.5 h-3.5 text-brand-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          <span class="font-mono text-[10px]">Learning <span id="insightsCountHeader">7</span></span>
+          <span class="font-mono text-white text-[11px]">MCP Servers</span>
         </button>
       </div>
     </header>
@@ -349,12 +324,12 @@
           What would you like to build today?
         </h1>
 
-        <!-- Quick Prompt Chips (Clean SVGs, NO Emojis) -->
+        <!-- Quick Prompt Chips (Clean SVGs, Zero Emojis) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl text-left">
           <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
             <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
               <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-              <span>Script Hollow Purple in Luau</span>
+              <span>Script a smooth shockwave in Luau</span>
             </div>
             <div class="text-[11px] text-brand-muted mt-1">Dual Bezier curves with CurveSize0=-9.83</div>
           </button>
@@ -362,7 +337,7 @@
           <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
             <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
               <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a3 3 0 11-4.242-4.242L12 12m0 0l-7-7m7 7l-7 7"/></svg>
-              <span>Synthesize Sukuna 360 Cleave</span>
+              <span>Create a dash and slash visual</span>
             </div>
             <div class="text-[11px] text-brand-muted mt-1">Snap deceleration with Drag=22.0</div>
           </button>
@@ -370,25 +345,23 @@
           <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
             <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
               <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg>
-              <span>Construct 1,460-Emitter Explosion</span>
+              <span>Optimize particle emitters for mobile</span>
             </div>
-            <div class="text-[11px] text-brand-muted mt-1">PointLight synchronized mobile LODs</div>
+            <div class="text-[11px] text-brand-muted mt-1">LOD partitioning and 60 FPS budgets</div>
           </button>
 
           <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
             <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
               <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-              <span>Hydrokinetic Mist Torrent</span>
+              <span>Animate a curved energy beam</span>
             </div>
-            <div class="text-[11px] text-brand-muted mt-1">240-beam dual ribbon vortex</div>
+            <div class="text-[11px] text-brand-muted mt-1">Ribbon attachments and speed curves</div>
           </button>
         </div>
       </div>
 
       <!-- ACTIVE CHAT MESSAGES CONTAINER -->
-      <div id="messagesList" class="hidden w-full max-w-3xl space-y-6 pb-28">
-        <!-- Messages appended dynamically -->
-      </div>
+      <div id="messagesList" class="hidden w-full max-w-3xl space-y-6 pb-28"></div>
     </div>
 
     <!-- ======================================================================= -->
@@ -400,9 +373,7 @@
       <div class="w-full max-w-3xl bg-brand-card border border-brand-border focus-within:border-brand-accent rounded-2xl p-2.5 shadow-2xl transition-all duration-200 glow-box">
         
         <!-- Attachment Previews Strip (Images, Code Files, Text) -->
-        <div id="attachmentsPreviewStrip" class="hidden flex flex-wrap gap-2 pb-2 mb-2 border-b border-brand-border">
-          <!-- Dynamically populated attachment chips -->
-        </div>
+        <div id="attachmentsPreviewStrip" class="hidden flex flex-wrap gap-2 pb-2 mb-2 border-b border-brand-border"></div>
 
         <!-- Textarea Row -->
         <div class="flex items-end space-x-2">
@@ -450,9 +421,9 @@
 
       <!-- Footer Microtext -->
       <div class="text-[11px] text-brand-muted mt-2 flex items-center space-x-2">
-        <span>Stroke AI Systems v2.5</span>
+        <span>Stroke AI</span>
         <span>•</span>
-        <span>Universal MCP Connectable</span>
+        <span>Model Context Protocol (MCP)</span>
         <span>•</span>
         <span>Continuous Learning</span>
       </div>
@@ -460,49 +431,47 @@
   </main>
 
   <!-- ========================================================================= -->
-  <!-- MODAL: UNIVERSAL MCP SERVER CONNECTIVITY HUB                              -->
+  <!-- MODAL: MCP JSON CONFIGURATION EDITOR (Paste JSON to Connect)              -->
   <!-- ========================================================================= -->
-  <div id="mcpHubModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5">
+  <div id="mcpHubModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4">
       <div class="flex items-center justify-between border-b border-brand-border pb-3">
         <div class="flex items-center space-x-2">
           <svg class="w-5 h-5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          <h3 class="font-sans font-bold text-white text-base">Universal MCP Server Hub</h3>
+          <h3 class="font-sans font-bold text-white text-base">MCP Server Configuration</h3>
         </div>
-        <button id="closeMcpHubBtn" class="text-brand-muted hover:text-white p-1">x</button>
+        <button id="closeMcpHubBtn" class="text-brand-muted hover:text-white p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
       </div>
 
       <p class="text-xs text-brand-muted">
-        Connect Stroke to any Model Context Protocol (MCP) server across your system or network (Roblox Studio, GitHub, Blender, local tools, or custom agent endpoints).
+        Paste your standard Model Context Protocol (MCP) JSON configuration below. Stroke will parse your servers, connect tools, and expose them to the AI.
       </p>
 
-      <!-- Active Connected Servers List -->
-      <div class="space-y-2">
-        <div class="text-[11px] uppercase font-bold text-brand-muted">Connected MCP Servers</div>
-        <div id="mcpServersList" class="space-y-2 max-h-48 overflow-y-auto pr-1">
-          <!-- Dynamically populated from /mcp/servers -->
+      <!-- JSON Configuration Textarea -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between text-[11px] text-brand-muted font-mono">
+          <span>mcpServers JSON Config</span>
+          <div class="flex items-center space-x-2">
+            <button id="resetMcpDefaultBtn" class="text-brand-accent hover:underline">Reset Default</button>
+            <span>•</span>
+            <button id="copyMcpJsonBtn" class="text-brand-accent hover:underline">Copy</button>
+          </div>
         </div>
+        <textarea id="mcpJsonConfigInput" rows="9" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-xl p-3 text-xs font-mono text-brand-accent focus:outline-none leading-relaxed resize-none"></textarea>
       </div>
 
-      <!-- Connect Custom MCP Server Form -->
-      <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-3">
-        <div class="text-xs font-semibold text-white">Connect New MCP Server</div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-          <div>
-            <label class="block text-[10px] uppercase text-brand-muted mb-1">Server Identifier</label>
-            <input id="newMcpIdInput" type="text" placeholder="blender_mcp" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-2.5 py-1.5 text-white focus:outline-none font-mono">
-          </div>
-          <div>
-            <label class="block text-[10px] uppercase text-brand-muted mb-1">Display Name</label>
-            <input id="newMcpNameInput" type="text" placeholder="Blender Geometry Engine" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-2.5 py-1.5 text-white focus:outline-none font-mono">
-          </div>
-        </div>
-        <div>
-          <label class="block text-[10px] uppercase text-brand-muted mb-1">Server Base URL / Endpoint</label>
-          <input id="newMcpUrlInput" type="text" placeholder="http://127.0.0.1:9090" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-2.5 py-1.5 text-white focus:outline-none font-mono text-xs">
-        </div>
-        <button id="submitConnectMcpBtn" class="w-full py-2 rounded-lg bg-brand-accent/20 hover:bg-brand-accent/30 border border-brand-accent text-brand-accent text-xs font-semibold transition-colors">
-          Connect MCP Server
+      <!-- Connected Servers Status Summary -->
+      <div class="p-3 rounded-xl border border-brand-border bg-brand-surface space-y-2">
+        <div class="text-[11px] uppercase font-bold text-brand-muted">Active Servers</div>
+        <div id="mcpServersList" class="flex flex-wrap gap-2 text-xs"></div>
+      </div>
+
+      <div class="flex items-center justify-between pt-1">
+        <span id="mcpConfigFeedback" class="text-xs text-brand-accent font-mono"></span>
+        <button id="saveMcpConfigBtn" class="px-5 py-2 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button">
+          Save and Connect Servers
         </button>
       </div>
     </div>
@@ -540,7 +509,7 @@
 
       <div class="text-center max-w-md space-y-2">
         <div id="voiceStateLabel" class="text-xs uppercase tracking-widest text-brand-accent font-mono">
-          Listening... Speak clearly into your microphone
+          Listening... Speak naturally
         </div>
         <p id="voiceLiveTranscript" class="text-base font-sans text-white font-medium min-h-[48px] px-4">
           "How can I construct an optimized particle shockwave in Luau?"
@@ -565,7 +534,7 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- DRAWER: CONTINUOUS LEARNING MATRIX                                        -->
+  <!-- DRAWER: CONTINUOUS LEARNING                                               -->
   <!-- ========================================================================= -->
   <div id="learningDrawer" class="hidden fixed inset-y-0 right-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border shadow-2xl z-50 flex flex-col justify-between">
     <div class="p-4 border-b border-brand-border flex items-center justify-between">
@@ -573,17 +542,19 @@
         <svg class="w-5 h-5 text-brand-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         <span class="font-sans font-bold text-white text-sm">Continuous Learning</span>
       </div>
-      <button id="closeLearningDrawerBtn" class="text-brand-muted hover:text-white p-1">x</button>
+      <button id="closeLearningDrawerBtn" class="text-brand-muted hover:text-white p-1">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 space-y-4">
       <p class="text-xs text-brand-muted leading-relaxed">
-        Stroke automatically distills user prompts and solutions into reusable knowledge patterns. These patterns enrich future AI responses and feed the 5-cycle VFX ingestion pipeline.
+        Stroke automatically distills user prompts and solutions into reusable knowledge patterns. These patterns enrich future AI responses and feed the background knowledge engine.
       </p>
 
       <div class="grid grid-cols-2 gap-2">
         <div class="p-3 rounded-lg border border-brand-border bg-brand-card">
-          <div class="text-[10px] text-brand-muted uppercase">Chats Distilled</div>
+          <div class="text-[10px] text-brand-muted uppercase">Sessions Distilled</div>
           <div id="telemetryChatsCount" class="text-lg font-bold text-white font-mono">14</div>
         </div>
         <div class="p-3 rounded-lg border border-brand-border bg-brand-card">
@@ -591,11 +562,6 @@
           <div id="telemetryAccuracyGain" class="text-lg font-bold text-brand-cyan font-mono">+12.4%</div>
         </div>
       </div>
-
-      <button id="refeedWithLearningsBtn" class="w-full py-2 px-3 rounded-lg bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/40 text-brand-accent text-xs font-semibold flex items-center justify-center space-x-2 transition-all glow-button">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        <span>Re-Feed 5X Matrix with Chat Insights</span>
-      </button>
 
       <div class="space-y-2 pt-2">
         <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Active Distilled Insights</div>
@@ -616,14 +582,16 @@
       <div class="flex items-center justify-between border-b border-brand-border pb-3">
         <div class="flex items-center space-x-2">
           <div class="w-6 h-6 rounded bg-brand-accent/20 border border-brand-accent flex items-center justify-center font-bold text-xs text-brand-accent">S</div>
-          <h3 class="font-sans font-bold text-white text-base">Stroke Account Gateway</h3>
+          <h3 class="font-sans font-bold text-white text-base">Stroke Account</h3>
         </div>
-        <button id="closeAuthModalBtn" class="text-brand-muted hover:text-white">x</button>
+        <button id="closeAuthModalBtn" class="text-brand-muted hover:text-white">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
       </div>
 
       <div id="otpStep1" class="space-y-3">
         <p class="text-xs text-brand-muted leading-relaxed">
-          Enter your email to receive a 6-digit verification code. Database ingestion triggers automatically upon authentication.
+          Enter your email to receive a 6-digit verification code.
         </p>
         <div>
           <label class="block text-[11px] text-brand-muted uppercase mb-1">Email Address</label>
@@ -636,7 +604,7 @@
 
       <div id="otpStep2" class="hidden space-y-3">
         <p class="text-xs text-brand-accent leading-relaxed">
-          Verification token dispatched! Enter the 6-digit code below:
+          Verification token dispatched. Enter the 6-digit code below:
         </p>
         <div>
           <label class="block text-[11px] text-brand-muted uppercase mb-1">6-Digit Code</label>
@@ -653,47 +621,7 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL: 5-CYCLE INGESTION RUNNER                                           -->
-  <!-- ========================================================================= -->
-  <div id="ingestionModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5">
-      <div class="flex items-center justify-between border-b border-brand-border pb-3">
-        <div>
-          <div class="text-[10px] text-brand-cyan uppercase tracking-wider font-mono">Sequential Ingestion Engine</div>
-          <h3 class="font-sans font-bold text-white text-lg">5-Cycle VFX Matrix Feeding</h3>
-        </div>
-        <span class="text-xs px-2 py-0.5 rounded bg-brand-accent/10 border border-brand-accent/30 text-brand-accent font-mono">14,666 Instances</span>
-      </div>
-
-      <p class="text-xs text-brand-muted">
-        Ingesting Elemental Worlds dataset across 5 sequential passes. When Cycle N synthesis is absorbed, Cycle N+1 builds upon it.
-      </p>
-
-      <div class="grid grid-cols-5 gap-2 text-center text-[10px] font-mono">
-        <div id="step-c1" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">1. Void</div>
-        <div id="step-c2" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">2. Slash</div>
-        <div id="step-c3" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">3. Fire</div>
-        <div id="step-c4" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">4. Aqua</div>
-        <div id="step-c5" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">5. Electro</div>
-      </div>
-
-      <div class="bg-brand-black border border-brand-border rounded-xl p-3 font-mono text-xs space-y-2 h-44 overflow-y-auto">
-        <div id="ingestionTerminalLogs" class="text-brand-accent space-y-1">
-          <div>[STROKE] Initializing 5-Cycle Sequential Ingestion Engine...</div>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between pt-2">
-        <button id="cancelIngestionBtn" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-brand-muted">Dismiss</button>
-        <button id="start5CycleIngestionBtn" class="px-6 py-2 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button">
-          Execute 5-Cycle Absorption
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ========================================================================= -->
-  <!-- JAVASCRIPT LOGIC: File Attachments, MCP Hub, Voice Mode, Clean UI         -->
+  <!-- JAVASCRIPT CONTROLLER                                                     -->
   <!-- ========================================================================= -->
   <script>
     const state = {
@@ -702,14 +630,13 @@
       thinkMode: false,
       activeSessionId: 'session-' + Date.now(),
       selectedModel: 'stroke-neural',
-      databaseFed: false,
       isVoiceActive: false,
       isVoiceMuted: false,
       chatMessages: [],
       pendingAttachments: []
     };
 
-    // DOM Elements
+    // Elements
     const sidebar = document.getElementById('sidebar');
     const collapseSidebarBtn = document.getElementById('collapseSidebarBtn');
     const expandSidebarBtn = document.getElementById('expandSidebarBtn');
@@ -740,8 +667,6 @@
     const authModal = document.getElementById('authModal');
     const learningDrawer = document.getElementById('learningDrawer');
     const closeLearningDrawerBtn = document.getElementById('closeLearningDrawerBtn');
-    const refeedWithLearningsBtn = document.getElementById('refeedWithLearningsBtn');
-    const ingestionModal = document.getElementById('ingestionModal');
     const fileAttachmentInput = document.getElementById('fileAttachmentInput');
     const attachBtn = document.getElementById('attachBtn');
     const attachmentsPreviewStrip = document.getElementById('attachmentsPreviewStrip');
@@ -750,9 +675,12 @@
     const openMcpHubTopBtn = document.getElementById('openMcpHubTopBtn');
     const closeMcpHubBtn = document.getElementById('closeMcpHubBtn');
     const mcpServersList = document.getElementById('mcpServersList');
-    const submitConnectMcpBtn = document.getElementById('submitConnectMcpBtn');
+    const mcpJsonConfigInput = document.getElementById('mcpJsonConfigInput');
+    const saveMcpConfigBtn = document.getElementById('saveMcpConfigBtn');
+    const resetMcpDefaultBtn = document.getElementById('resetMcpDefaultBtn');
+    const copyMcpJsonBtn = document.getElementById('copyMcpJsonBtn');
+    const mcpConfigFeedback = document.getElementById('mcpConfigFeedback');
 
-    // Speech APIs
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let voiceRecognition = null;
     let dictationRecognition = null;
@@ -762,7 +690,7 @@
       loadUserChats();
       fetchLearningTelemetry();
       setupSpeechEngines();
-      loadConnectedMcpServers();
+      loadMcpConfigJson();
     });
 
     // 1. Identity
@@ -791,7 +719,7 @@
       expandSidebarBtn.classList.add('hidden');
     });
 
-    // 3. Temporary Chat Toggle
+    // 3. Temporary Chat
     temporaryChatToggleBtn.addEventListener('click', () => {
       toggleTemporaryChatMode(!state.isTemporaryMode);
     });
@@ -814,7 +742,7 @@
       }
     }
 
-    // 4. Think Mode Toggle
+    // 4. Think Mode
     thinkModeBtn.addEventListener('click', () => {
       state.thinkMode = !state.thinkMode;
       if (state.thinkMode) {
@@ -824,7 +752,7 @@
       }
     });
 
-    // 5. Model Selector Dropdown
+    // 5. Model Dropdown
     document.getElementById('modelDropdownBtn').addEventListener('click', (e) => {
       e.stopPropagation();
       document.getElementById('modelDropdownMenu').classList.toggle('hidden');
@@ -838,10 +766,8 @@
       });
     });
 
-    // 6. PLUS BUTTON (+) FOR ATTACHING CODE, IMAGES, TEXT FILES
-    attachBtn.addEventListener('click', () => {
-      fileAttachmentInput.click();
-    });
+    // 6. Plus Button (+) for Attachments
+    attachBtn.addEventListener('click', () => fileAttachmentInput.click());
 
     fileAttachmentInput.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files);
@@ -851,10 +777,9 @@
 
         if (isImage) {
           reader.onload = (event) => {
-            const base64Data = event.target.result;
             state.pendingAttachments.push({
               name: file.name,
-              content: base64Data,
+              content: event.target.result,
               type: file.type,
               is_image: true,
               size: file.size
@@ -864,10 +789,9 @@
           reader.readAsDataURL(file);
         } else {
           reader.onload = (event) => {
-            const textContent = event.target.result;
             state.pendingAttachments.push({
               name: file.name,
-              content: textContent,
+              content: event.target.result,
               type: file.type || 'text/plain',
               is_image: false,
               size: file.size
@@ -922,83 +846,107 @@
       }
     };
 
-    // 7. Universal MCP Hub Controllers
+    // 7. MCP JSON Configuration Hub
     openMcpHubBtn.addEventListener('click', openMcpModal);
     openMcpHubTopBtn.addEventListener('click', openMcpModal);
     closeMcpHubBtn.addEventListener('click', () => mcpHubModal.classList.add('hidden'));
 
     function openMcpModal() {
       mcpHubModal.classList.remove('hidden');
-      loadConnectedMcpServers();
+      loadMcpConfigJson();
     }
 
-    async function loadConnectedMcpServers() {
+    async function loadMcpConfigJson() {
       try {
-        const res = await fetch('/mcp/servers');
+        const res = await fetch('/mcp/config');
         if (!res.ok) return;
-        const servers = await res.json();
-        const serverKeys = Object.keys(servers);
-        document.getElementById('mcpConnectedCountBadge').textContent = `${serverKeys.length} Live`;
-
-        mcpServersList.innerHTML = '';
-        serverKeys.forEach(k => {
-          const s = servers[k];
-          const div = document.createElement('div');
-          div.className = 'p-3 rounded-lg border border-brand-border bg-brand-surface flex items-start justify-between text-xs';
-          div.innerHTML = `
-            <div class="space-y-1">
-              <div class="flex items-center space-x-2">
-                <span class="font-semibold text-white">${escapeHtml(s.name)}</span>
-                <span class="text-[9px] px-1.5 py-0.2 rounded bg-brand-accent/20 text-brand-accent font-mono">${s.connected ? 'Connected' : 'Offline'}</span>
-              </div>
-              <div class="text-[11px] text-brand-muted">${escapeHtml(s.description || '')}</div>
-              <div class="text-[10px] text-brand-accent font-mono">${s.tools ? s.tools.length : 0} tools available</div>
-            </div>
-            ${s.is_custom ? `
-              <button onclick="disconnectCustomMcpServer('${k}')" class="text-xs text-brand-danger hover:underline">Disconnect</button>
-            ` : '<span class="text-[10px] text-brand-muted">Core Built-in</span>'}
-          `;
-          mcpServersList.appendChild(div);
-        });
+        const data = await res.json();
+        mcpJsonConfigInput.value = JSON.stringify(data, null, 2);
+        renderMcpServersSummary(data.mcpServers || {});
       } catch(e){}
     }
 
-    submitConnectMcpBtn.addEventListener('click', async () => {
-      const id = document.getElementById('newMcpIdInput').value.trim();
-      const name = document.getElementById('newMcpNameInput').value.trim();
-      const url = document.getElementById('newMcpUrlInput').value.trim();
+    function renderMcpServersSummary(serversObj) {
+      mcpServersList.innerHTML = '';
+      const keys = Object.keys(serversObj);
+      if (keys.length === 0) {
+        mcpServersList.innerHTML = '<span class="text-brand-muted text-xs">No servers configured.</span>';
+        return;
+      }
+      keys.forEach(k => {
+        const s = serversObj[k];
+        const span = document.createElement('span');
+        span.className = 'px-2 py-1 rounded bg-brand-card border border-brand-border text-white text-[11px] font-mono flex items-center space-x-1';
+        span.innerHTML = `
+          <span class="w-1.5 h-1.5 rounded-full bg-brand-accent"></span>
+          <span>${escapeHtml(k)}</span>
+          <span class="text-brand-muted text-[10px]">(${escapeHtml(s.url || 'local')})</span>
+        `;
+        mcpServersList.appendChild(span);
+      });
+    }
 
-      if (!id || !name || !url) return;
-      submitConnectMcpBtn.disabled = true;
-      submitConnectMcpBtn.textContent = 'Connecting...';
+    saveMcpConfigBtn.addEventListener('click', async () => {
+      const raw = mcpJsonConfigInput.value.trim();
+      mcpConfigFeedback.textContent = '';
+      let parsed = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch(e) {
+        mcpConfigFeedback.className = 'text-xs text-brand-danger font-mono';
+        mcpConfigFeedback.textContent = 'Invalid JSON: ' + e.message;
+        return;
+      }
+
+      saveMcpConfigBtn.disabled = true;
+      saveMcpConfigBtn.textContent = 'Connecting...';
 
       try {
-        const res = await fetch('/mcp/connect', {
+        const res = await fetch('/mcp/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ server_id: id, name: name, url: url })
+          body: JSON.stringify({ config: parsed })
         });
+        const result = await res.json();
         if (res.ok) {
-          document.getElementById('newMcpIdInput').value = '';
-          document.getElementById('newMcpNameInput').value = '';
-          document.getElementById('newMcpUrlInput').value = '';
-          loadConnectedMcpServers();
+          mcpConfigFeedback.className = 'text-xs text-brand-accent font-mono';
+          mcpConfigFeedback.textContent = 'Configuration saved and servers connected.';
+          renderMcpServersSummary(result.config?.mcpServers || parsed.mcpServers || {});
+          setTimeout(() => { mcpConfigFeedback.textContent = ''; }, 3000);
+        } else {
+          mcpConfigFeedback.className = 'text-xs text-brand-danger font-mono';
+          mcpConfigFeedback.textContent = result.detail || 'Connection failed.';
         }
-      } catch(e){}
-      submitConnectMcpBtn.disabled = false;
-      submitConnectMcpBtn.textContent = 'Connect MCP Server';
+      } catch(e) {
+        mcpConfigFeedback.className = 'text-xs text-brand-danger font-mono';
+        mcpConfigFeedback.textContent = 'Network error saving config.';
+      }
+
+      saveMcpConfigBtn.disabled = false;
+      saveMcpConfigBtn.textContent = 'Save and Connect Servers';
     });
 
-    window.disconnectCustomMcpServer = async function(serverId) {
-      try {
-        await fetch('/mcp/disconnect', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ server_id: serverId })
-        });
-        loadConnectedMcpServers();
-      } catch(e){}
-    };
+    resetMcpDefaultBtn.addEventListener('click', () => {
+      const defaultConfig = {
+        mcpServers: {
+          roblox_studio: {
+            url: "http://127.0.0.1:8989",
+            description: "Roblox Studio live execution and DataModel bridge"
+          },
+          github: {
+            url: "https://api.github.com",
+            description: "GitHub repository and pull request bridge"
+          }
+        }
+      };
+      mcpJsonConfigInput.value = JSON.stringify(defaultConfig, null, 2);
+    });
+
+    copyMcpJsonBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(mcpJsonConfigInput.value);
+      copyMcpJsonBtn.textContent = 'Copied!';
+      setTimeout(() => { copyMcpJsonBtn.textContent = 'Copy'; }, 2000);
+    });
 
     // 8. New Chat & Prompt Handling
     newChatBtn.addEventListener('click', startNewConversation);
@@ -1037,7 +985,7 @@
 
     sendPromptBtn.addEventListener('click', submitUserPrompt);
 
-    // 9. Submit Prompt (Including Attached Files)
+    // 9. Submit Prompt
     async function submitUserPrompt() {
       const text = promptInput.value.trim();
       const currentAttachments = [...state.pendingAttachments];
@@ -1047,7 +995,6 @@
       emptyStateHero.classList.add('hidden');
       messagesList.classList.remove('hidden');
 
-      // Append User message with attachment previews
       appendMessage('user', text || '(Attached files provided)', { attachments: currentAttachments });
       state.chatMessages.push({ role: 'user', content: text || 'Analyze the attached files.' });
 
@@ -1081,7 +1028,7 @@
         removeTypingIndicator(typingId);
 
         if (!res.ok) {
-          appendMessage('assistant', 'Error communicating with Stroke Neural Core: ' + res.statusText);
+          appendMessage('assistant', 'Error communicating with Stroke: ' + res.statusText);
           return;
         }
 
@@ -1139,13 +1086,8 @@
             <div class="mb-2 flex flex-wrap gap-1.5 text-[11px] font-mono">
               <span class="px-2 py-0.5 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/30 flex items-center space-x-1">
                 <span>Tool:</span>
-                <span class="font-bold">${meta.tool_name || 'autonomous_rag'}</span>
+                <span class="font-bold">${meta.tool_name || 'mcp'}</span>
               </span>
-              ${meta.learning_recorded ? `
-                <span class="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/30 flex items-center space-x-1">
-                  <span>Distilled into 5X loop</span>
-                </span>
-              ` : ''}
             </div>
           `;
         }
@@ -1354,7 +1296,6 @@
         if (!res.ok) return;
         const data = await res.json();
         const telem = data.telemetry || {};
-        document.getElementById('insightsCountHeader').textContent = telem.active_insights_count || '7';
         document.getElementById('telemetryChatsCount').textContent = telem.total_chats_distilled || '14';
         document.getElementById('telemetryAccuracyGain').textContent = telem.accuracy_enhancement_ratio || '+12.4%';
 
@@ -1374,26 +1315,6 @@
         });
       } catch(e){}
     }
-
-    refeedWithLearningsBtn.addEventListener('click', async () => {
-      refeedWithLearningsBtn.disabled = true;
-      refeedWithLearningsBtn.textContent = 'Refeeding 5X Matrix...';
-      try {
-        await fetch('/ai/refeed-with-learnings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: state.userEmail })
-        });
-        refeedWithLearningsBtn.textContent = 'Refeed Complete';
-        setTimeout(() => {
-          refeedWithLearningsBtn.disabled = false;
-          refeedWithLearningsBtn.textContent = 'Re-Feed 5X Matrix with Chat Insights';
-        }, 3000);
-      } catch(e) {
-        refeedWithLearningsBtn.textContent = 'Failed';
-        refeedWithLearningsBtn.disabled = false;
-      }
-    });
 
     // 13. Chats Loader
     async function loadUserChats() {
@@ -1419,7 +1340,7 @@
       } catch(e){}
     }
 
-    // 14. Auth Modal
+    // 14. Auth Modal & Silent Ingestion
     document.getElementById('authModalTriggerBtn').addEventListener('click', () => {
       profilePopover.classList.add('hidden');
       authModal.classList.remove('hidden');
@@ -1456,48 +1377,14 @@
           localStorage.setItem('stroke_user_email', email);
           updateUserIdentityUI();
           authModal.classList.add('hidden');
-          ingestionModal.classList.remove('hidden');
-        }
-      } catch(e){}
-    });
-
-    // 15. Ingestion Runner
-    document.getElementById('trigger5xMatrixBtn').addEventListener('click', () => {
-      profilePopover.classList.add('hidden');
-      ingestionModal.classList.remove('hidden');
-    });
-    document.getElementById('cancelIngestionBtn').addEventListener('click', () => ingestionModal.classList.add('hidden'));
-
-    document.getElementById('start5CycleIngestionBtn').addEventListener('click', async () => {
-      const btn = document.getElementById('start5CycleIngestionBtn');
-      const terminal = document.getElementById('ingestionTerminalLogs');
-      btn.disabled = true;
-      btn.textContent = 'Feeding 5 Cycles...';
-
-      let prevSynth = '';
-      for (let c = 1; c <= 5; c++) {
-        const stepEl = document.getElementById(`step-c${c}`);
-        stepEl.className = 'p-2 rounded border border-brand-accent bg-brand-accent/10 text-brand-accent animate-pulse';
-        terminal.innerHTML += `<div>[CYCLE ${c}/5] Ingesting dataset slice from vfx_data.json &amp; vfx_dump.txt...</div>`;
-
-        try {
-          const res = await fetch('/database/feed-cycle', {
+          // Silently trigger background feeding if needed without disturbing the user
+          fetch('/database/feed-5-cycles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: state.userEmail, cycle: c, previous_synthesis: prevSynth })
-          });
-          const data = await res.json();
-          prevSynth = data.ai_synthesis || '';
-          terminal.innerHTML += `<div class="text-white">Record ${data.record.record_id} committed. Load: ${data.record.metric_load}%</div>`;
-          stepEl.className = 'p-2 rounded border border-brand-accent bg-brand-accent/20 text-brand-accent font-bold';
-        } catch(e) {
-          terminal.innerHTML += `<div class="text-red-400">Error in Cycle ${c}</div>`;
+            body: JSON.stringify({ email })
+          }).catch(()=>{});
         }
-      }
-
-      terminal.innerHTML += `<div class="text-brand-accent font-bold mt-2">Database feeding completed successfully.</div>`;
-      btn.textContent = 'Ingestion Succeeded';
-      setTimeout(() => ingestionModal.classList.add('hidden'), 2000);
+      } catch(e){}
     });
 
     // Utilities

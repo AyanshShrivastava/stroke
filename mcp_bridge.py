@@ -221,6 +221,73 @@ def remove_custom_mcp_server(server_id: str) -> bool:
     return False
 
 
+MCP_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "mcp_config.json")
+
+
+def get_mcp_config_json() -> Dict[str, Any]:
+    """Returns current MCP servers as a standard mcpServers JSON configuration dict."""
+    servers_dict = {}
+    for key, s in _MCP_REGISTRY.items():
+        entry = {}
+        if s.get("url"):
+            entry["url"] = s["url"]
+        if s.get("command"):
+            entry["command"] = s["command"]
+            if s.get("args"):
+                entry["args"] = s["args"]
+        if s.get("description"):
+            entry["description"] = s["description"]
+        servers_dict[key] = entry
+    return {"mcpServers": servers_dict}
+
+
+def apply_mcp_config_json(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parses a pasted JSON configuration block and connects all declared MCP servers.
+    Accepts:
+      {
+        "mcpServers": {
+          "roblox_studio": { "url": "http://127.0.0.1:8989" },
+          "custom_server": { "url": "http://localhost:3000" }
+        }
+      }
+    """
+    servers_section = config.get("mcpServers", config)
+    if not isinstance(servers_section, dict):
+        raise ValueError("Invalid configuration: 'mcpServers' must be a JSON object mapping server names to server configs.")
+
+    connected = []
+    for s_name, s_cfg in servers_section.items():
+        if not isinstance(s_cfg, dict):
+            continue
+        url = s_cfg.get("url") or s_cfg.get("endpoint") or "http://127.0.0.1:8000"
+        desc = s_cfg.get("description", f"MCP server '{s_name}'")
+        tools = s_cfg.get("tools")
+        register_custom_mcp_server(
+            server_id=s_name,
+            name=s_name.replace("_", " ").title(),
+            description=desc,
+            url=url,
+            tools=tools
+        )
+        connected.append(s_name)
+
+    # Persist configuration
+    try:
+        os.makedirs(os.path.dirname(MCP_CONFIG_PATH), exist_ok=True)
+        with open(MCP_CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump({"mcpServers": servers_section}, f, indent=2)
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "message": f"Successfully applied configuration for {len(connected)} MCP servers.",
+        "connected_servers": connected,
+        "config": get_mcp_config_json()
+    }
+
+
 get_mcp_servers_info = get_all_mcp_servers
 
 
