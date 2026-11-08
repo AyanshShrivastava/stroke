@@ -179,23 +179,51 @@ class TerminalSession:
         self.output_lines: deque = deque(maxlen=MAX_OUTPUT_LINES)
         self.total_output_bytes = 0
         self.lock = threading.Lock()
+        self.exec_lock = threading.RLock()
         
         # Process handles
         self.current_process: Optional[subprocess.Popen] = None
+        self.reader_threads: List[threading.Thread] = []
         self.last_exit_code: Optional[int] = None
         self.last_command: Optional[str] = None
         self.last_command_info: Optional[Dict[str, Any]] = None
         self.last_duration_ms: Optional[float] = None
         self.pending_approval: Optional[Dict[str, Any]] = None
 
+    @staticmethod
+    def _terminate_process_tree(proc: subprocess.Popen):
+        """Terminates an entire process tree (process group) to prevent orphaned child processes."""
+        if not proc:
+            return
+        pid = proc.pid
+        if sys.platform != "win32":
+            try:
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGTERM)
+                time.sleep(0.05)
+                if proc.poll() is None:
+                    os.killpg(pgid, signal.SIGKILL)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+        else:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+
     def _append_output(self, stream_name: str, text: str):
-        """Thread-safe append of redacted stream output lines."""
+        """Thread-safe append of redacted stream output lines with length capping."""
         if not text:
             return
         redacted = redact_sensitive_data(text)
         with self.lock:
             for line in redacted.splitlines():
-                formatted_line = f"[{stream_name}] {line}"
+                # Cap individual line length to prevent memory saturation
+                clamped_line = line[:4000] + "...[line truncated]" if len(line) > 4000 else line
+                formatted_line = f"[{stream_name}] {clamped_line}"
                 self.output_lines.append(formatted_line)
                 self.total_output_bytes += len(formatted_line.encode("utf-8"))
 
@@ -346,50 +374,131 @@ class TerminalSession:
 
         # Safe for routine execution: Launch real background process
         full_argv = [cmd_path] + [str(a) for a in args]
-        self.state = "running"
         self.last_command = " ".join(full_argv)
         self._append_output("system", f"EXEC: {self.last_command} (cwd: {self.cwd})")
 
-        try:
-            env = os.environ.copy()
-            extra_path_str = ":".join(d for d in extra_search_dirs if os.path.isdir(d))
-            env["PATH"] = f"{extra_path_str}:{env.get('PATH', '')}"
+        with self.exec_lock:
+            # Clean up prior running process in this session if still active to avoid leaks
+            if self.current_process and self.current_process.poll() is None:
+                self.stop()
 
-            # shell=False ensures structured arguments and prevents shell injection
-            proc = subprocess.Popen(
-                full_argv,
-                cwd=self.cwd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.DEVNULL,
-                shell=False,
-                env=env
-            )
-            self.current_process = proc
+            self.state = "running"
+            try:
+                env = os.environ.copy()
+                extra_path_str = ":".join(d for d in extra_search_dirs if os.path.isdir(d))
+                env["PATH"] = f"{extra_path_str}:{env.get('PATH', '')}"
 
-            if is_background:
-                # Persistent background process (e.g. test web server)
-                def _stream_output():
+                # start_new_session=True creates a new process group on POSIX,
+                # allowing clean teardown of child processes and preventing communication pipe hangs.
+                popen_kwargs = {
+                    "cwd": self.cwd,
+                    "stdout": subprocess.PIPE,
+                    "stderr": subprocess.PIPE,
+                    "stdin": subprocess.DEVNULL,
+                    "shell": False,
+                    "env": env
+                }
+                if sys.platform != "win32":
+                    popen_kwargs["start_new_session"] = True
+
+                proc = subprocess.Popen(full_argv, **popen_kwargs)
+                self.current_process = proc
+
+                if is_background:
+                    # Persistent background process with concurrent dual-stream reader threads
+                    # (Prevents pipe buffer deadlocks and ensures real-time capture of stderr)
+                    def _stream_pipe(pipe, stream_name):
+                        try:
+                            for line in iter(pipe.readline, b''):
+                                if not line:
+                                    break
+                                decoded = redact_sensitive_data(line.decode("utf-8", errors="replace").rstrip("\r\n"))
+                                self._append_output(stream_name, decoded)
+                        except Exception:
+                            pass
+                        finally:
+                            try:
+                                pipe.close()
+                            except Exception:
+                                pass
+
+                    stdout_thread = threading.Thread(target=_stream_pipe, args=(proc.stdout, "stdout"), daemon=True)
+                    stderr_thread = threading.Thread(target=_stream_pipe, args=(proc.stderr, "stderr"), daemon=True)
+                    stdout_thread.start()
+                    stderr_thread.start()
+                    self.reader_threads = [stdout_thread, stderr_thread]
+
+                    self.state = "running"
+                    return {
+                        "session_id": self.session_id,
+                        "command": command,
+                        "executable": command,
+                        "arguments": args,
+                        "args": args,
+                        "cwd": self.cwd,
+                        "exit_code": None,
+                        "pid": proc.pid,
+                        "stdout": f"Background process started with PID {proc.pid}",
+                        "stderr": "",
+                        "duration_ms": round((time.time() - start_time) * 1000, 2),
+                        "state": "running",
+                        "timed_out": False,
+                        "is_background": True,
+                        "timeout_sec": timeout
+                    }
+
+                timed_out = False
+                try:
+                    stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
+                    exit_code = proc.returncode
+                    self.state = "completed" if exit_code == 0 else "failed"
+                except subprocess.TimeoutExpired:
+                    # Terminate entire process tree (group) immediately to kill child processes
+                    self._terminate_process_tree(proc)
                     try:
-                        for line in iter(proc.stdout.readline, b''):
-                            if not line:
-                                break
-                            decoded = redact_sensitive_data(line.decode("utf-8", errors="replace").rstrip())
-                            self._append_output("stdout", decoded)
-                    except Exception:
-                        pass
-                    try:
-                        for line in iter(proc.stderr.readline, b''):
-                            if not line:
-                                break
-                            decoded = redact_sensitive_data(line.decode("utf-8", errors="replace").rstrip())
-                            self._append_output("stderr", decoded)
-                    except Exception:
-                        pass
+                        stdout_bytes, stderr_bytes = proc.communicate(timeout=0.5)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            if proc.stdout: proc.stdout.close()
+                            if proc.stderr: proc.stderr.close()
+                        except Exception:
+                            pass
+                        stdout_bytes, stderr_bytes = b"", b""
+                    exit_code = -signal.SIGKILL
+                    self.state = "timed_out"
+                    timed_out = True
+                    self._append_output("system", f"TIMEOUT: Command exceeded limit of {timeout}s.")
 
-                stream_thread = threading.Thread(target=_stream_output, daemon=True)
-                stream_thread.start()
-                self.state = "running"
+                stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
+                stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+
+                # Redact secrets
+                clean_stdout = redact_sensitive_data(stdout_text)
+                clean_stderr = redact_sensitive_data(stderr_text)
+
+                self._append_output("stdout", clean_stdout)
+                self._append_output("stderr", clean_stderr)
+
+                # Context Protection: cap returned streams to prevent overwhelming LLM context
+                max_context_chars = 4000
+                model_stdout = clean_stdout
+                if len(clean_stdout) > max_context_chars:
+                    model_stdout = clean_stdout[:max_context_chars] + f"\n\n[... Output truncated ({len(clean_stdout)} total bytes). Use terminal_read_output(tail_lines=N) to inspect more ...]"
+
+                model_stderr = clean_stderr
+                if len(clean_stderr) > max_context_chars:
+                    model_stderr = clean_stderr[:max_context_chars] + f"\n\n[... Error output truncated ({len(clean_stderr)} total bytes) ...]"
+
+                duration_ms = round((time.time() - start_time) * 1000, 2)
+                self.last_exit_code = exit_code
+                self.last_duration_ms = duration_ms
+                self.last_command_info = {
+                    "command": command,
+                    "args": list(args),
+                    "timeout_sec": timeout,
+                    "is_background": is_background
+                }
+
                 return {
                     "session_id": self.session_id,
                     "command": command,
@@ -397,123 +506,61 @@ class TerminalSession:
                     "arguments": args,
                     "args": args,
                     "cwd": self.cwd,
-                    "exit_code": None,
-                    "pid": proc.pid,
-                    "stdout": f"Background process started with PID {proc.pid}",
-                    "stderr": "",
-                    "duration_ms": round((time.time() - start_time) * 1000, 2),
-                    "state": "running",
-                    "timed_out": False,
-                    "is_background": True,
+                    "exit_code": exit_code,
+                    "stdout": model_stdout,
+                    "stderr": model_stderr,
+                    "raw_stdout_bytes": len(clean_stdout.encode("utf-8")),
+                    "raw_stderr_bytes": len(clean_stderr.encode("utf-8")),
+                    "duration_ms": duration_ms,
+                    "state": self.state,
+                    "timed_out": timed_out,
+                    "is_background": False,
                     "timeout_sec": timeout
                 }
 
-            timed_out = False
-            try:
-                stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
-                exit_code = proc.returncode
-                self.state = "completed" if exit_code == 0 else "failed"
-            except subprocess.TimeoutExpired:
-                # Terminate and reap process
-                proc.kill()
-                stdout_bytes, stderr_bytes = proc.communicate()
-                exit_code = -signal.SIGKILL
-                self.state = "timed_out"
-                timed_out = True
-                self._append_output("system", f"TIMEOUT: Command exceeded limit of {timeout}s.")
-
-            stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
-            stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
-
-            # Redact secrets
-            clean_stdout = redact_sensitive_data(stdout_text)
-            clean_stderr = redact_sensitive_data(stderr_text)
-
-            self._append_output("stdout", clean_stdout)
-            self._append_output("stderr", clean_stderr)
-
-            # Context Protection: cap returned streams to prevent overwhelming LLM context
-            max_context_chars = 4000
-            model_stdout = clean_stdout
-            if len(clean_stdout) > max_context_chars:
-                model_stdout = clean_stdout[:max_context_chars] + f"\n\n[... Output truncated ({len(clean_stdout)} total bytes). Use terminal_read_output(tail_lines=N) to inspect more ...]"
-
-            model_stderr = clean_stderr
-            if len(clean_stderr) > max_context_chars:
-                model_stderr = clean_stderr[:max_context_chars] + f"\n\n[... Error output truncated ({len(clean_stderr)} total bytes) ...]"
-
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-            self.last_exit_code = exit_code
-            self.last_duration_ms = duration_ms
-            self.last_command_info = {
-                "command": command,
-                "args": list(args),
-                "timeout_sec": timeout,
-                "is_background": is_background
-            }
-
-            return {
-                "session_id": self.session_id,
-                "command": command,
-                "executable": command,
-                "arguments": args,
-                "args": args,
-                "cwd": self.cwd,
-                "exit_code": exit_code,
-                "stdout": model_stdout,
-                "stderr": model_stderr,
-                "raw_stdout_bytes": len(clean_stdout.encode("utf-8")),
-                "raw_stderr_bytes": len(clean_stderr.encode("utf-8")),
-                "duration_ms": duration_ms,
-                "state": self.state,
-                "timed_out": timed_out,
-                "is_background": False,
-                "timeout_sec": timeout
-            }
-
-        except FileNotFoundError:
-            self.state = "failed"
-            self.last_exit_code = 127
-            msg = f"Binary not found: '{command}' in environment or workspace."
-            self._append_output("stderr", msg)
-            return {
-                "session_id": self.session_id,
-                "command": command,
-                "executable": command,
-                "arguments": args,
-                "args": args,
-                "cwd": self.cwd,
-                "exit_code": 127,
-                "stdout": "",
-                "stderr": msg,
-                "duration_ms": round((time.time() - start_time) * 1000, 2),
-                "state": "failed",
-                "timed_out": False,
-                "is_background": False
-            }
-        except Exception as exc:
-            self.state = "failed"
-            self.last_exit_code = 1
-            msg = f"ProcessExecutionError: {str(exc)}"
-            self._append_output("stderr", msg)
-            return {
-                "session_id": self.session_id,
-                "command": command,
-                "executable": command,
-                "arguments": args,
-                "args": args,
-                "cwd": self.cwd,
-                "exit_code": 1,
-                "stdout": "",
-                "stderr": msg,
-                "duration_ms": round((time.time() - start_time) * 1000, 2),
-                "state": "failed",
-                "timed_out": False,
-                "is_background": False
-            }
-        finally:
-            if not is_background:
-                self.current_process = None
+            except FileNotFoundError:
+                self.state = "failed"
+                self.last_exit_code = 127
+                msg = f"Binary not found: '{command}' in environment or workspace."
+                self._append_output("stderr", msg)
+                return {
+                    "session_id": self.session_id,
+                    "command": command,
+                    "executable": command,
+                    "arguments": args,
+                    "args": args,
+                    "cwd": self.cwd,
+                    "exit_code": 127,
+                    "stdout": "",
+                    "stderr": msg,
+                    "duration_ms": round((time.time() - start_time) * 1000, 2),
+                    "state": "failed",
+                    "timed_out": False,
+                    "is_background": False
+                }
+            except Exception as exc:
+                self.state = "failed"
+                self.last_exit_code = 1
+                msg = f"ProcessExecutionError: {str(exc)}"
+                self._append_output("stderr", msg)
+                return {
+                    "session_id": self.session_id,
+                    "command": command,
+                    "executable": command,
+                    "arguments": args,
+                    "args": args,
+                    "cwd": self.cwd,
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": msg,
+                    "duration_ms": round((time.time() - start_time) * 1000, 2),
+                    "state": "failed",
+                    "timed_out": False,
+                    "is_background": False
+                }
+            finally:
+                if not is_background:
+                    self.current_process = None
 
     def read_output(self, tail_lines: Optional[int] = None) -> List[str]:
         """Returns the chronological captured output lines, defaulting to last 50 lines to prevent overwhelming model context."""
@@ -526,39 +573,40 @@ class TerminalSession:
             return list(self.output_lines)
 
     def stop(self) -> Dict[str, Any]:
-        """Terminates any active running process in this session."""
-        killed = False
-        if self.current_process:
-            if self.current_process.poll() is None:
-                try:
-                    self.current_process.terminate()
+        """Terminates any active running process in this session and its process group."""
+        with self.exec_lock:
+            killed = False
+            if self.current_process:
+                if self.current_process.poll() is None:
                     try:
-                        self.current_process.wait(timeout=1.5)
-                    except subprocess.TimeoutExpired:
-                        self.current_process.kill()
-                        self.current_process.wait(timeout=1.0)
-                    killed = True
+                        self._terminate_process_tree(self.current_process)
+                        try:
+                            self.current_process.wait(timeout=1.5)
+                        except subprocess.TimeoutExpired:
+                            self.current_process.kill()
+                            self.current_process.wait(timeout=1.0)
+                        killed = True
+                    except Exception:
+                        pass
+                try:
+                    if self.current_process.stdout:
+                        self.current_process.stdout.close()
                 except Exception:
                     pass
-            try:
-                if self.current_process.stdout:
-                    self.current_process.stdout.close()
-            except Exception:
-                pass
-            try:
-                if self.current_process.stderr:
-                    self.current_process.stderr.close()
-            except Exception:
-                pass
-            self.current_process = None
-        self.state = "terminated"
-        self._append_output("system", "Session process terminated.")
-        return {
-            "session_id": self.session_id,
-            "status": "terminated",
-            "state": "terminated",
-            "process_killed": killed
-        }
+                try:
+                    if self.current_process.stderr:
+                        self.current_process.stderr.close()
+                except Exception:
+                    pass
+                self.current_process = None
+            self.state = "terminated"
+            self._append_output("system", "Session process terminated.")
+            return {
+                "session_id": self.session_id,
+                "status": "terminated",
+                "state": "terminated",
+                "process_killed": killed
+            }
 
     def restart(self) -> Dict[str, Any]:
         """Terminates active process and restarts the last executed command with its original arguments."""
@@ -580,23 +628,25 @@ class TerminalSession:
 
     def get_status(self) -> Dict[str, Any]:
         """Returns the live status summary of the session."""
-        has_active = bool(self.current_process and self.current_process.poll() is None)
-        if not has_active and self.current_process and self.state == "running":
-            self.state = "completed" if self.current_process.poll() == 0 else "failed"
-            self.last_exit_code = self.current_process.poll()
-        return {
-            "session_id": self.session_id,
-            "workspace_path": self.workspace_path,
-            "cwd": self.cwd,
-            "state": self.state,
-            "has_active_process": has_active,
-            "last_command": self.last_command,
-            "last_exit_code": self.last_exit_code,
-            "last_duration_ms": self.last_duration_ms,
-            "output_lines_count": len(self.output_lines),
-            "pending_approval": bool(self.pending_approval),
-            "idle_seconds": round(time.time() - self.last_activity_at, 1)
-        }
+        with self.lock:
+            has_active = bool(self.current_process and self.current_process.poll() is None)
+            if not has_active and self.current_process and self.state == "running":
+                self.state = "completed" if self.current_process.poll() == 0 else "failed"
+                self.last_exit_code = self.current_process.poll()
+            return {
+                "session_id": self.session_id,
+                "workspace_path": self.workspace_path,
+                "cwd": self.cwd,
+                "state": self.state,
+                "status": self.state,
+                "has_active_process": has_active,
+                "last_command": self.last_command,
+                "last_exit_code": self.last_exit_code,
+                "last_duration_ms": self.last_duration_ms,
+                "output_lines_count": len(self.output_lines),
+                "pending_approval": bool(self.pending_approval),
+                "idle_seconds": round(time.time() - self.last_activity_at, 1)
+            }
 
 
 # ==============================================================================
@@ -615,6 +665,7 @@ class TerminalManager:
       - stop_terminal(session_id)
     """
     _sessions: Dict[str, TerminalSession] = {}
+    _reaped_history: deque = deque(maxlen=20)
     _lock = threading.Lock()
 
     @classmethod
@@ -622,14 +673,16 @@ class TerminalManager:
         """
         Tool: create_terminal(workspace_path)
         Creates a new independent background terminal session.
+        Uses lock-free LRU reaping to prevent deadlocks when at session capacity.
         """
+        oldest_session = None
         with cls._lock:
             # Enforce max sessions limit
             if len(cls._sessions) >= MAX_SESSIONS:
                 # Reap oldest completed/idle session
                 oldest_id = min(cls._sessions.keys(), key=lambda k: cls._sessions[k].last_activity_at)
-                cls._sessions[oldest_id].stop()
-                del cls._sessions[oldest_id]
+                oldest_session = cls._sessions.pop(oldest_id)
+                cls._reaped_history.append((oldest_id, oldest_session))
 
             target_ws = workspace_path or DEFAULT_WORKSPACE
             canonical_ws = os.path.realpath(target_ws)
@@ -640,13 +693,20 @@ class TerminalManager:
             session = TerminalSession(session_id, canonical_ws)
             cls._sessions[session_id] = session
 
-            return {
-                "status": "created",
-                "session_id": session_id,
-                "workspace_path": canonical_ws,
-                "cwd": canonical_ws,
-                "message": f"Silent background terminal session '{session_id}' initialized in {canonical_ws}."
-            }
+        # Stop reaped session outside the lock to prevent blocking concurrent creates
+        if oldest_session:
+            try:
+                oldest_session.stop()
+            except Exception:
+                pass
+
+        return {
+            "status": "created",
+            "session_id": session_id,
+            "workspace_path": canonical_ws,
+            "cwd": canonical_ws,
+            "message": f"Silent background terminal session '{session_id}' initialized in {canonical_ws}."
+        }
 
     @classmethod
     def run_command(
@@ -665,12 +725,20 @@ class TerminalManager:
         Executes an approved dev command inside the target session.
         Accepts command/executable and args/arguments aliases.
         """
-        session = cls._sessions.get(session_id)
+        with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                for sid, sess in cls._reaped_history:
+                    if sid == session_id:
+                        session = sess
+                        break
+
         if not session:
             # Auto-create fallback session if ID not found
             created = cls.create_terminal()
-            session = cls._sessions[created["session_id"]]
             session_id = created["session_id"]
+            with cls._lock:
+                session = cls._sessions[session_id]
 
         cmd = command or executable or "python"
         args_list = args if args is not None else (arguments or [])
@@ -680,9 +748,16 @@ class TerminalManager:
     def read_terminal_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
         """
         Tool: read_terminal_output / terminal_read_output
-        Reads the captured output of the session.
+        Reads the captured output of the session (including stopped or reaped sessions).
         """
-        session = cls._sessions.get(session_id)
+        with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                for sid, sess in cls._reaped_history:
+                    if sid == session_id:
+                        session = sess
+                        break
+
         if not session:
             return {"status": "error", "message": f"Session '{session_id}' not found."}
         lines = session.read_output(tail_lines=tail_lines)
@@ -699,7 +774,8 @@ class TerminalManager:
         Tool: get_terminal_status / terminal_get_status
         Returns current state, active process, and exit code.
         """
-        session = cls._sessions.get(session_id)
+        with cls._lock:
+            session = cls._sessions.get(session_id)
         if not session:
             return {"status": "error", "message": f"Session '{session_id}' not found."}
         return session.get_status()
@@ -717,15 +793,27 @@ class TerminalManager:
     def stop_terminal(cls, session_id: str) -> Dict[str, Any]:
         """
         Tool: stop_terminal / terminal_stop
-        Terminates the background session and reclaims resources.
+        Terminates the background session process and reclaims active resources.
+        Buffered output remains inspectable via read_terminal_output.
         """
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
                 return {"status": "error", "message": f"Session '{session_id}' not found."}
             res = session.stop()
+            cls._reaped_history.append((session_id, session))
             del cls._sessions[session_id]
             return res
+
+    @classmethod
+    def delete_terminal(cls, session_id: str) -> Dict[str, Any]:
+        """Explicitly removes a terminal session from registry."""
+        with cls._lock:
+            session = cls._sessions.pop(session_id, None)
+        if session:
+            session.stop()
+            return {"status": "deleted", "session_id": session_id}
+        return {"status": "not_found", "session_id": session_id}
 
     # ==========================================================================
     # CANONICAL TOOL METHOD ALIASES (EXACT NAMES SPECIFIED IN AI SPECIFICATION)
@@ -837,56 +925,110 @@ class ToolDispatcher:
     }
 
     @classmethod
-    def dispatch(cls, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def _extract_json_objects(cls, text: str) -> List[Dict[str, Any]]:
+        """Extracts all well-formed JSON objects from arbitrary text using brace-depth scanning."""
+        objs = []
+        n = len(text)
+        i = 0
+        while i < n:
+            if text[i] == '{':
+                start = i
+                depth = 0
+                in_string = False
+                escape = False
+                while i < n:
+                    ch = text[i]
+                    if in_string:
+                        if escape:
+                            escape = False
+                        elif ch == '\\':
+                            escape = True
+                        elif ch == '"':
+                            in_string = False
+                    else:
+                        if ch == '"':
+                            in_string = True
+                        elif ch == '{':
+                            depth += 1
+                        elif ch == '}':
+                            depth -= 1
+                            if depth == 0:
+                                chunk = text[start:i+1]
+                                try:
+                                    parsed = json.loads(chunk)
+                                    if isinstance(parsed, dict):
+                                        objs.append(parsed)
+                                except Exception:
+                                    pass
+                                break
+                    i += 1
+            i += 1
+        return objs
+
+    @classmethod
+    def dispatch(cls, tool_name: str, arguments: Optional[Any] = None) -> Dict[str, Any]:
         """Routes a tool call to the native background implementation."""
-        args = arguments or {}
+        args: Dict[str, Any] = {}
+        if isinstance(arguments, dict):
+            args = arguments
+        elif isinstance(arguments, str):
+            try:
+                parsed = json.loads(arguments)
+                if isinstance(parsed, dict):
+                    args = parsed
+            except Exception:
+                args = {}
+
         name = tool_name.strip()
 
-        if name in ("terminal_create_session", "create_terminal"):
-            ws = args.get("workspace_path")
-            return TerminalManager.terminal_create_session(workspace_path=ws)
+        try:
+            if name in ("terminal_create_session", "create_terminal"):
+                ws = args.get("workspace_path")
+                return TerminalManager.terminal_create_session(workspace_path=ws)
 
-        elif name in ("terminal_run", "run_command"):
-            session_id = args.get("session_id", "")
-            cmd = args.get("executable") or args.get("command") or "python"
-            cmd_args = args.get("arguments") or args.get("args") or []
-            timeout_sec = args.get("timeout_sec", DEFAULT_TIMEOUT_SEC)
-            is_bg = args.get("is_background", False)
-            return TerminalManager.terminal_run(
-                session_id=session_id,
-                executable=cmd,
-                arguments=cmd_args,
-                timeout_sec=timeout_sec,
-                is_background=is_bg
-            )
+            elif name in ("terminal_run", "run_command"):
+                session_id = args.get("session_id", "")
+                cmd = args.get("executable") or args.get("command") or "python"
+                cmd_args = args.get("arguments") or args.get("args") or []
+                timeout_sec = args.get("timeout_sec", DEFAULT_TIMEOUT_SEC)
+                is_bg = args.get("is_background", False)
+                return TerminalManager.terminal_run(
+                    session_id=session_id,
+                    executable=cmd,
+                    arguments=cmd_args,
+                    timeout_sec=timeout_sec,
+                    is_background=is_bg
+                )
 
-        elif name in ("terminal_read_output", "read_terminal_output"):
-            session_id = args.get("session_id", "")
-            tail = args.get("tail_lines")
-            return TerminalManager.terminal_read_output(session_id=session_id, tail_lines=tail)
+            elif name in ("terminal_read_output", "read_terminal_output"):
+                session_id = args.get("session_id", "")
+                tail = args.get("tail_lines")
+                return TerminalManager.terminal_read_output(session_id=session_id, tail_lines=tail)
 
-        elif name in ("terminal_get_status", "get_terminal_status"):
-            session_id = args.get("session_id", "")
-            return TerminalManager.terminal_get_status(session_id=session_id)
+            elif name in ("terminal_get_status", "get_terminal_status"):
+                session_id = args.get("session_id", "")
+                return TerminalManager.terminal_get_status(session_id=session_id)
 
-        elif name in ("terminal_stop", "stop_terminal"):
-            session_id = args.get("session_id", "")
-            return TerminalManager.terminal_stop(session_id=session_id)
+            elif name in ("terminal_stop", "stop_terminal"):
+                session_id = args.get("session_id", "")
+                return TerminalManager.terminal_stop(session_id=session_id)
 
-        elif name in ("terminal_restart", "restart_terminal"):
-            session_id = args.get("session_id", "")
-            return TerminalManager.terminal_restart(session_id=session_id)
+            elif name in ("terminal_restart", "restart_terminal"):
+                session_id = args.get("session_id", "")
+                return TerminalManager.terminal_restart(session_id=session_id)
 
-        elif name in ("terminal_list_sessions", "list_terminals"):
-            return {"terminals": TerminalManager.terminal_list_sessions()}
+            elif name in ("terminal_list_sessions", "list_terminals"):
+                return {"terminals": TerminalManager.terminal_list_sessions()}
 
-        return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
+            return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
+        except Exception as exc:
+            return {"status": "error", "message": f"Tool execution failed: {str(exc)}"}
 
     @classmethod
     def parse_and_execute_calls(cls, text: str) -> List[Dict[str, Any]]:
         """
         Inspects raw LLM output for tool calling formats and executes them silently.
-        Supports raw JSON, JSON markdown blocks, and <tool_call> XML tags.
+        Supports raw JSON, JSON markdown blocks, XML <tool_call> tags, and embedded raw JSON objects.
         """
         results = []
         if not text:
@@ -936,19 +1078,15 @@ class ToolDispatcher:
             except Exception:
                 pass
 
-        # 4. Regex fallback: embedded JSON objects containing a supported tool name
+        # 4. Fallback: Brace-depth scanning for embedded JSON objects containing supported tool names
         if not results:
-            obj_pattern = r"\{[^{}]*?\"(?:name|tool|function)\"\s*:\s*\"([a-zA-Z0-9_-]+)\"[^{}]*?\}"
-            for match in re.finditer(obj_pattern, text):
-                try:
-                    tool_name = match.group(1)
-                    if tool_name in cls.SUPPORTED_TOOLS:
-                        data = json.loads(match.group(0))
-                        args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
-                        res = cls.dispatch(tool_name, args)
-                        results.append({"tool": tool_name, "arguments": args, "result": res})
-                except Exception:
-                    pass
+            candidates = cls._extract_json_objects(text)
+            for item in candidates:
+                tool_name = item.get("tool") or item.get("name") or item.get("function")
+                if tool_name in cls.SUPPORTED_TOOLS:
+                    args = item.get("parameters") or item.get("arguments") or item.get("args") or {}
+                    res = cls.dispatch(tool_name, args)
+                    results.append({"tool": tool_name, "arguments": args, "result": res})
 
         return results
 
