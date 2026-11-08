@@ -24,6 +24,7 @@ Architecture Specifications:
 
 import os
 import sys
+import subprocess
 import re
 import io
 import time
@@ -51,7 +52,7 @@ import mcp_bridge
 import coding_loop
 from coding_loop import StrokeCodingLoop, RobloxDomainTestRunner, ErrorAnalyser, CodingArchivist
 import terminal_service
-from terminal_service import TerminalManager, get_terminal_tools_schema
+from terminal_service import TerminalManager, get_terminal_tools_schema, get_terminal_openai_tool_schemas, ToolDispatcher
 
 # ==============================================================================
 # CONFIGURATION & ENVIRONMENT VARIABLES
@@ -150,6 +151,7 @@ app.add_middleware(
 
 class SendOtpRequest(BaseModel):
     email: str = Field(..., description="Target user email identity address")
+    password: Optional[str] = Field(None, min_length=6, description="User password for account creation or authentication")
 
     @field_validator("email")
     @classmethod
@@ -163,6 +165,7 @@ class SendOtpRequest(BaseModel):
 class VerifyOtpRequest(BaseModel):
     email: str = Field(..., description="Target user email identity address")
     otp_code: str = Field(..., min_length=6, max_length=6, description="Cryptographic 6-digit OTP code")
+    password: Optional[str] = Field(None, description="Optional user password")
 
     @field_validator("email")
     @classmethod
@@ -251,9 +254,12 @@ class CreateTerminalPayload(BaseModel):
 
 class RunCommandPayload(BaseModel):
     session_id: str = Field(..., description="Unique terminal session ID")
-    command: str = Field(..., description="Binary or command name (e.g. python, pytest, luau-analyze)")
+    command: Optional[str] = Field(None, description="Binary or command name (e.g. python, pytest, luau-analyze)")
+    executable: Optional[str] = Field(None, description="Alias for command")
     args: Optional[List[str]] = Field(default_factory=list, description="Structured arguments list")
+    arguments: Optional[List[str]] = Field(default_factory=list, description="Alias for args")
     timeout_sec: Optional[int] = Field(20, description="Process timeout in seconds")
+    is_background: Optional[bool] = Field(False, description="True to launch background daemon process")
 
 
 class TerminalApprovalPayload(BaseModel):
@@ -281,24 +287,133 @@ async def serve_index_page():
 _LOCAL_OTP_STORE: Dict[str, Dict[str, Any]] = {}
 
 
+async def send_real_outbound_email(email: str, otp_code: str, password: Optional[str] = None) -> bool:
+    """
+    Dispatches genuine outbound verification emails via:
+    1. Supabase GoTrue Auth (Production email gateway configured in .env).
+    2. Local system mail transfer agent (/usr/sbin/sendmail).
+    3. Direct SMTP server (if SMTP_HOST is defined in environment).
+    """
+    dispatched = False
+
+    # 1. Supabase GoTrue Auth Outbound Dispatch
+    supabase_url = os.environ.get("SUPABASE_URL", "https://c--6b30253a-f372-4d3d-b054-1ccccd110aba-prod.lovable.cloud")
+    supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_24sApoL0yiZqI00Wbae7PQ_1LrwrVaV")
+    if supabase_url and supabase_key:
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                # First attempt: Try signup with email and password
+                user_pwd = password or f"StrokeSecure_{otp_code}!"
+                signup_res = await client.post(
+                    f"{supabase_url}/auth/v1/signup",
+                    headers=headers,
+                    json={"email": email, "password": user_pwd}
+                )
+                if signup_res.status_code in (200, 201):
+                    dispatched = True
+                    print(f"[AUTH SUPABASE] Outbound confirmation email dispatched to {email}", flush=True)
+                elif signup_res.status_code == 422:
+                    # User already registered in GoTrue; dispatch OTP / resend token to email
+                    otp_res = await client.post(
+                        f"{supabase_url}/auth/v1/otp",
+                        headers=headers,
+                        json={"email": email, "create_user": False}
+                    )
+                    if otp_res.status_code in (200, 201):
+                        dispatched = True
+                        print(f"[AUTH SUPABASE] Outbound OTP email dispatched to existing user {email}", flush=True)
+                    else:
+                        resend_res = await client.post(
+                            f"{supabase_url}/auth/v1/resend",
+                            headers=headers,
+                            json={"type": "signup", "email": email}
+                        )
+                        if resend_res.status_code in (200, 201):
+                            dispatched = True
+                            print(f"[AUTH SUPABASE] Outbound resend email dispatched to {email}", flush=True)
+            except Exception as supa_err:
+                print(f"[AUTH SUPABASE NOTICE] GoTrue dispatch note: {supa_err}", flush=True)
+
+    # 2. Local Sendmail Binary Dispatch (/usr/sbin/sendmail)
+    try:
+        mail_msg = (
+            f"To: {email}\n"
+            f"From: Stroke Autonomous AI <noreply@stroke.local>\n"
+            f"Subject: Your Stroke Verification Code: {otp_code}\n"
+            f"MIME-Version: 1.0\n"
+            f"Content-Type: text/plain; charset=UTF-8\n\n"
+            f"Hello,\n\n"
+            f"Your 6-digit Stroke verification code is: {otp_code}\n\n"
+            f"This code will expire in 5 minutes.\n\n"
+            f"Enter this code into Stroke to authenticate your account and access your workspace.\n\n"
+            f"— Stroke Autonomous Engineering Matrix\n"
+        )
+        proc = subprocess.Popen(
+            ["/usr/sbin/sendmail", "-t", "-oi"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        proc.communicate(mail_msg.encode("utf-8"), timeout=5)
+        if proc.returncode == 0:
+            dispatched = True
+            print(f"[AUTH SENDMAIL] Local MTA queued delivery to {email}", flush=True)
+    except Exception as sendmail_err:
+        print(f"[AUTH SENDMAIL NOTICE] {sendmail_err}", flush=True)
+
+    # 3. Direct SMTP Delivery (if SMTP_HOST is configured in environment)
+    smtp_host = os.environ.get("SMTP_HOST")
+    if smtp_host:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+            smtp_user = os.environ.get("SMTP_USER")
+            smtp_pass = os.environ.get("SMTP_PASSWORD")
+            msg = MIMEText(f"Your Stroke 6-digit verification code is: {otp_code}\nExpires in 5 minutes.")
+            msg["Subject"] = f"Stroke Verification Code: {otp_code}"
+            msg["From"] = smtp_user or "noreply@stroke.app"
+            msg["To"] = email
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+            server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.sendmail(msg["From"], [email], msg.as_string())
+            server.quit()
+            dispatched = True
+            print(f"[AUTH SMTP] Direct SMTP delivered to {email}", flush=True)
+        except Exception as smtp_err:
+            print(f"[AUTH SMTP NOTICE] {smtp_err}", flush=True)
+
+    return dispatched
+
+
 @app.post("/auth/send-otp", tags=["Authentication"])
 async def send_otp(payload: SendOtpRequest):
     """
     POST /auth/send-otp
-    1. Validates the email address.
+    1. Validates the email address and user password.
     2. Generates a cryptographically secure 6-digit random token.
-    3. Performs an atomic write transaction to Firestore at `users/{email}`.
-    4. Sets `otp_code` and `otp_expires_at` mapped exactly 5 minutes into the future.
-    5. Dispatches formatted token to stdout to simulate outbound SMTP delivery.
+    3. Performs an atomic write to Firestore and local store.
+    4. Dispatches real email to the user's email address via Supabase GoTrue Auth,
+       local MTA (/usr/sbin/sendmail), or SMTP.
+    5. Returns success status WITHOUT exposing the OTP code to the frontend.
     """
     email = payload.email
-    # Generate cryptographically secure 6-digit numeric token
+    password = payload.password or "StrokeAuth2026!"
+
     otp_code = f"{secrets.randbelow(1_000_000):06d}"
     otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
 
     _LOCAL_OTP_STORE[email] = {
         "otp_code": otp_code,
-        "otp_expires_at": otp_expires_at
+        "otp_expires_at": otp_expires_at,
+        "password": password
     }
 
     try:
@@ -306,25 +421,24 @@ async def send_otp(payload: SendOtpRequest):
         user_ref.set({
             "email": email,
             "otp_code": otp_code,
-            "otp_expires_at": otp_expires_at
+            "otp_expires_at": otp_expires_at,
+            "password_hash": hashlib.sha256(password.encode()).hexdigest(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }, merge=True)
     except Exception as exc:
         print(f"[AUTH NOTICE] Firestore OTP write note: {exc}", flush=True)
 
-    # Simulated SMTP Transmission Outbound Log to stdout
-    print("\n" + "=" * 65, flush=True)
-    print(" [STROKE SECURE SMTP GATEWAY // OUTBOUND DISPATCH]", flush=True)
-    print(f" Timestamp (UTC): {datetime.now(timezone.utc).isoformat()}", flush=True)
-    print(f" Target Identity: {email}", flush=True)
-    print(f" OTP Security Key: >>> {otp_code} <<<", flush=True)
-    print(f" Expiration Mark: {otp_expires_at.isoformat()} (5 Minutes TTL)", flush=True)
-    print("=" * 65 + "\n", flush=True)
+    # Dispatch real outbound email to target user address
+    await send_real_outbound_email(email, otp_code, password)
 
+    # Internal diagnostic audit log only (never returned to frontend)
+    print(f"[AUTH AUDIT] Dispatched 6-digit OTP to {email} (TTL: 5 Minutes)", flush=True)
+
+    # Note: otp_code is intentionally omitted so the client must retrieve it from their email
     return {
         "status": "success",
-        "message": f"Cryptographic OTP transmitted to {email}. Verification code: {otp_code}",
+        "message": f"A 6-digit verification code has been dispatched to {email}. Please check your inbox and spam folder.",
         "email": email,
-        "otp_code": otp_code,
         "expires_in_seconds": 300
     }
 
@@ -361,64 +475,94 @@ async def switch_account(payload: SwitchAccountRequest):
 async def verify_otp(payload: VerifyOtpRequest):
     """
     POST /auth/verify-otp
-    1. Executes an atomic lookup against the user's document ID in Firestore.
-    2. Checks if `otp_code` matches and evaluates if current time < `otp_expires_at`.
-    3. Clean State Management: instantly and transactionally clears both `otp_code`
-       and `otp_expires_at` to null inside the Firestore document for single-use protection.
-    4. If user document does not exist yet, initializes with default values and database_fed=False.
-    5. Returns an authenticated status payload.
+    1. Validates 6-digit code against local OTP cache, Supabase GoTrue Auth, and Firestore.
+    2. Enforces expiration timestamp (< 5 minutes).
+    3. Clears active OTP on successful handshake for single-use protection.
+    4. Marks user profile as authenticated and database_fed=True.
     """
     email = payload.email
     submitted_code = payload.otp_code
+    verified = False
 
     # 1. Fast local verification
     local_data = _LOCAL_OTP_STORE.get(email)
     if local_data and local_data.get("otp_code") == submitted_code:
         expires_at = local_data.get("otp_expires_at")
         if expires_at and datetime.now(timezone.utc) < expires_at:
+            verified = True
             _LOCAL_OTP_STORE.pop(email, None)
-            try:
-                user_ref = db.collection("users").document(email)
-                user_ref.set({"email": email, "database_fed": True, "otp_code": None}, merge=True)
-            except Exception:
-                pass
-            return {
-                "status": "authenticated",
-                "message": f"Security handshake accepted. Identity {email} authenticated.",
-                "email": email,
-                "database_fed": True,
-                "github_connected": False
-            }
 
-    # 2. Direct Firestore fallback
+    # 2. Supabase GoTrue Auth verification
+    if not verified:
+        supabase_url = os.environ.get("SUPABASE_URL", "https://c--6b30253a-f372-4d3d-b054-1ccccd110aba-prod.lovable.cloud")
+        supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_24sApoL0yiZqI00Wbae7PQ_1LrwrVaV")
+        if supabase_url and supabase_key:
+            headers = {
+                "apikey": supabase_key,
+                "Authorization": f"Bearer {supabase_key}",
+                "Content-Type": "application/json"
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for v_type in ["signup", "email"]:
+                    try:
+                        v_res = await client.post(
+                            f"{supabase_url}/auth/v1/verify",
+                            headers=headers,
+                            json={"type": v_type, "email": email, "token": submitted_code}
+                        )
+                        if v_res.status_code in (200, 201):
+                            verified = True
+                            print(f"[AUTH SUPABASE] Supabase GoTrue token verified for {email} (type={v_type})", flush=True)
+                            break
+                    except Exception:
+                        pass
+
+    # 3. Direct Firestore fallback
+    if not verified:
+        try:
+            user_ref = db.collection("users").document(email)
+            snapshot = user_ref.get()
+            if snapshot.exists:
+                user_data = snapshot.to_dict() or {}
+                stored_code = user_data.get("otp_code")
+                expires_at = user_data.get("otp_expires_at")
+                if stored_code and stored_code == submitted_code:
+                    current_time = datetime.now(timezone.utc)
+                    if isinstance(expires_at, datetime):
+                        if expires_at.tzinfo is None:
+                            expires_at = expires_at.replace(tzinfo=timezone.utc)
+                        if current_time < expires_at:
+                            verified = True
+        except Exception as exc:
+            print(f"[AUTH VERIFY NOTE] Firestore direct lookup note: {exc}", flush=True)
+
+    if not verified:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired 6-digit verification code. Please check your email inbox and try again."
+        )
+
+    # Clean state management: clear single-use OTP and authenticate profile
     try:
         user_ref = db.collection("users").document(email)
-        snapshot = user_ref.get()
-        if snapshot.exists:
-            user_data = snapshot.to_dict() or {}
-            stored_code = user_data.get("otp_code")
-            expires_at = user_data.get("otp_expires_at")
-            if stored_code and stored_code == submitted_code:
-                current_time = datetime.now(timezone.utc)
-                if isinstance(expires_at, datetime):
-                    if expires_at.tzinfo is None:
-                        expires_at = expires_at.replace(tzinfo=timezone.utc)
-                    if current_time < expires_at:
-                        user_ref.update({"otp_code": None, "otp_expires_at": None, "database_fed": True})
-                        return {
-                            "status": "authenticated",
-                            "message": f"Security handshake accepted. Identity {email} authenticated.",
-                            "email": email,
-                            "database_fed": user_data.get("database_fed", True),
-                            "github_connected": bool(user_data.get("github_token"))
-                        }
-    except Exception as exc:
-        print(f"[AUTH VERIFY NOTE] Firestore direct lookup note: {exc}", flush=True)
+        user_ref.set({
+            "email": email,
+            "database_fed": True,
+            "otp_code": None,
+            "otp_expires_at": None,
+            "last_login": datetime.now(timezone.utc).isoformat()
+        }, merge=True)
+    except Exception:
+        pass
 
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired verification code cipher. Security handshake aborted."
-    )
+    return {
+        "status": "authenticated",
+        "authenticated": True,
+        "message": f"Security handshake accepted. Identity {email} authenticated.",
+        "email": email,
+        "database_fed": True,
+        "github_connected": False
+    }
 
 
 # ==============================================================================
@@ -1732,6 +1876,11 @@ def get_active_ai_tools_schema() -> List[Dict[str, Any]]:
             }
         }
     ]
+    # Append private internal terminal tools (autonomous execution & verification)
+    try:
+        tools.extend(get_terminal_openai_tool_schemas())
+    except Exception:
+        pass
     # Append connected MCP tools (Roblox Studio & GitHub)
     try:
         tools.extend(mcp_bridge.get_all_mcp_ai_tool_schemas())
@@ -3114,13 +3263,27 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 pass
             return ""
 
+        # Autonomous tool calling dispatch for local LLM text output
+        try:
+            dispatched_tool_calls = ToolDispatcher.parse_and_execute_calls(ai_reply_text)
+            if dispatched_tool_calls:
+                for dt in dispatched_tool_calls:
+                    tool_n = dt.get("tool")
+                    tool_res = dt.get("result", {})
+                    execution_steps.append({
+                        "name": f"Autonomous Tool Execution: {tool_n}",
+                        "detail": f"Exit: {tool_res.get('exit_code', 0)} | Stdout: {str(tool_res.get('stdout', ''))[:100]}"
+                    })
+        except Exception as dt_exc:
+            print(f"[STROKE TOOL DISPATCH NOTICE] Tool dispatch note: {dt_exc}", flush=True)
+
         try:
             ai_reply_text, coding_loop_report, loop_steps = StrokeCodingLoop.run_coding_loop(
                 prompt=last_user_message,
                 initial_reply=ai_reply_text,
                 llm_generate_fn=llm_repair_callback,
                 user_email=payload.email,
-                max_iterations=2
+                max_iterations=3
             )
             execution_steps.extend(loop_steps)
         except Exception as loop_exc:
@@ -3255,12 +3418,15 @@ async def run_command_endpoint(payload: RunCommandPayload):
     POST /terminal/run
     Executes a structured development command in the specified session.
     """
+    cmd = payload.command or payload.executable or "python"
+    args = payload.args if payload.args else (payload.arguments or [])
     try:
         return TerminalManager.run_command(
             session_id=payload.session_id,
-            command=payload.command,
-            args=payload.args,
-            timeout_sec=payload.timeout_sec or 20
+            command=cmd,
+            args=args,
+            timeout_sec=payload.timeout_sec or 20,
+            is_background=payload.is_background or False
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

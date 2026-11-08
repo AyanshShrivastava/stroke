@@ -24,6 +24,7 @@ Architecture Specifications:
 import os
 import sys
 import re
+import json
 import time
 import uuid
 import signal
@@ -217,10 +218,11 @@ class TerminalSession:
         self.cwd = validated
         self._append_output("system", f"Working directory updated to: {self.cwd}")
 
-    def execute_command(self, command: str, args: List[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC) -> Dict[str, Any]:
+    def execute_command(self, command: str, args: List[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC, is_background: bool = False) -> Dict[str, Any]:
         """
         Executes a command silently in the background with strict sandboxing and timeouts.
         Returns a structured dictionary with stdout, stderr, exit_code, and execution metadata.
+        Supports both synchronous and asynchronous (background server/daemon) execution.
         """
         self.last_activity_at = time.time()
         start_time = time.time()
@@ -237,42 +239,62 @@ class TerminalSession:
                 return {
                     "session_id": self.session_id,
                     "command": "cd",
+                    "executable": "cd",
+                    "arguments": args,
                     "args": args,
                     "cwd": self.cwd,
                     "exit_code": 0,
                     "stdout": f"Changed working directory to {self.cwd}",
                     "stderr": "",
                     "duration_ms": 1.0,
-                    "state": "completed"
+                    "state": "completed",
+                    "timed_out": False,
+                    "is_background": False
                 }
             except Exception as e:
                 self.last_exit_code = 1
                 return {
                     "session_id": self.session_id,
                     "command": "cd",
+                    "executable": "cd",
+                    "arguments": args,
                     "args": args,
                     "cwd": self.cwd,
                     "exit_code": 1,
                     "stdout": "",
                     "stderr": str(e),
                     "duration_ms": 1.0,
-                    "state": "failed"
+                    "state": "failed",
+                    "timed_out": False,
+                    "is_background": False
                 }
 
-        # Resolve command binary (prefer venv binaries, local node bin, and system paths)
+        # Resolve command binary (prefer sys.executable for python, venv binaries, local node bin, and system paths)
         extra_search_dirs = [
             os.path.join(self.workspace_path, "venv", "bin"),
             os.path.expanduser("~/.local/node/bin"),
             os.path.expanduser("~/.aftman/bin"),
+            os.path.expanduser("~/.rokit/bin"),
             "/usr/local/bin",
             "/opt/homebrew/bin",
         ]
         cmd_path = command
-        for d in extra_search_dirs:
-            candidate = os.path.join(d, command)
-            if os.path.exists(candidate) and os.access(candidate, os.X_OK):
-                cmd_path = candidate
-                break
+        if command in ("python", "python3"):
+            if sys.executable and os.path.exists(sys.executable):
+                cmd_path = sys.executable
+
+        if cmd_path == command:
+            for d in extra_search_dirs:
+                candidate = os.path.join(d, command)
+                if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+                    cmd_path = candidate
+                    break
+
+        if cmd_path == command:
+            import shutil
+            found = shutil.which(command)
+            if found:
+                cmd_path = found
 
         # Verify command security policy
         decision, rationale = evaluate_command_security(command, args)
@@ -282,13 +304,17 @@ class TerminalSession:
             return {
                 "session_id": self.session_id,
                 "command": command,
+                "executable": command,
+                "arguments": args,
                 "args": args,
                 "cwd": self.cwd,
                 "exit_code": 126,
                 "stdout": "",
                 "stderr": f"CommandExecutionDenied: {rationale}",
                 "duration_ms": 0.0,
-                "state": "failed"
+                "state": "failed",
+                "timed_out": False,
+                "is_background": False
             }
 
         if decision == SecurityDecision.REQUIRES_APPROVAL:
@@ -300,7 +326,8 @@ class TerminalSession:
                 "command": command,
                 "args": args,
                 "rationale": rationale,
-                "created_at": time.time()
+                "created_at": time.time(),
+                "is_background": is_background
             }
             self._append_output("security", f"APPROVAL REQUIRED: {rationale} (Token: {approval_id})")
             return {
@@ -308,9 +335,12 @@ class TerminalSession:
                 "status": "requires_approval",
                 "approval_id": approval_id,
                 "command": command,
+                "executable": command,
+                "arguments": args,
                 "args": args,
                 "rationale": rationale,
-                "message": f"{rationale}"
+                "message": f"{rationale}",
+                "is_background": is_background
             }
 
         # Safe for routine execution: Launch real background process
@@ -318,9 +348,6 @@ class TerminalSession:
         self.state = "running"
         self.last_command = " ".join(full_argv)
         self._append_output("system", f"EXEC: {self.last_command} (cwd: {self.cwd})")
-
-        stdout_chunks = []
-        stderr_chunks = []
 
         try:
             env = os.environ.copy()
@@ -339,6 +366,48 @@ class TerminalSession:
             )
             self.current_process = proc
 
+            if is_background:
+                # Persistent background process (e.g. test web server)
+                def _stream_output():
+                    try:
+                        for line in iter(proc.stdout.readline, b''):
+                            if not line:
+                                break
+                            decoded = redact_sensitive_data(line.decode("utf-8", errors="replace").rstrip())
+                            self._append_output("stdout", decoded)
+                    except Exception:
+                        pass
+                    try:
+                        for line in iter(proc.stderr.readline, b''):
+                            if not line:
+                                break
+                            decoded = redact_sensitive_data(line.decode("utf-8", errors="replace").rstrip())
+                            self._append_output("stderr", decoded)
+                    except Exception:
+                        pass
+
+                stream_thread = threading.Thread(target=_stream_output, daemon=True)
+                stream_thread.start()
+                self.state = "running"
+                return {
+                    "session_id": self.session_id,
+                    "command": command,
+                    "executable": command,
+                    "arguments": args,
+                    "args": args,
+                    "cwd": self.cwd,
+                    "exit_code": None,
+                    "pid": proc.pid,
+                    "stdout": f"Background process started with PID {proc.pid}",
+                    "stderr": "",
+                    "duration_ms": round((time.time() - start_time) * 1000, 2),
+                    "state": "running",
+                    "timed_out": False,
+                    "is_background": True,
+                    "timeout_sec": timeout
+                }
+
+            timed_out = False
             try:
                 stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
                 exit_code = proc.returncode
@@ -349,6 +418,7 @@ class TerminalSession:
                 stdout_bytes, stderr_bytes = proc.communicate()
                 exit_code = -signal.SIGKILL
                 self.state = "timed_out"
+                timed_out = True
                 self._append_output("system", f"TIMEOUT: Command exceeded limit of {timeout}s.")
 
             stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
@@ -368,13 +438,18 @@ class TerminalSession:
             return {
                 "session_id": self.session_id,
                 "command": command,
+                "executable": command,
+                "arguments": args,
                 "args": args,
                 "cwd": self.cwd,
                 "exit_code": exit_code,
                 "stdout": clean_stdout,
                 "stderr": clean_stderr,
                 "duration_ms": duration_ms,
-                "state": self.state
+                "state": self.state,
+                "timed_out": timed_out,
+                "is_background": False,
+                "timeout_sec": timeout
             }
 
         except FileNotFoundError:
@@ -385,13 +460,17 @@ class TerminalSession:
             return {
                 "session_id": self.session_id,
                 "command": command,
+                "executable": command,
+                "arguments": args,
                 "args": args,
                 "cwd": self.cwd,
                 "exit_code": 127,
                 "stdout": "",
                 "stderr": msg,
                 "duration_ms": round((time.time() - start_time) * 1000, 2),
-                "state": "failed"
+                "state": "failed",
+                "timed_out": False,
+                "is_background": False
             }
         except Exception as exc:
             self.state = "failed"
@@ -401,16 +480,21 @@ class TerminalSession:
             return {
                 "session_id": self.session_id,
                 "command": command,
+                "executable": command,
+                "arguments": args,
                 "args": args,
                 "cwd": self.cwd,
                 "exit_code": 1,
                 "stdout": "",
                 "stderr": msg,
                 "duration_ms": round((time.time() - start_time) * 1000, 2),
-                "state": "failed"
+                "state": "failed",
+                "timed_out": False,
+                "is_background": False
             }
         finally:
-            self.current_process = None
+            if not is_background:
+                self.current_process = None
 
     def read_output(self, tail_lines: Optional[int] = None) -> List[str]:
         """Returns the chronological captured output lines, optionally limited to tail."""
@@ -425,9 +509,11 @@ class TerminalSession:
         if self.current_process and self.current_process.poll() is None:
             try:
                 self.current_process.terminate()
-                time.sleep(0.1)
-                if self.current_process.poll() is None:
+                try:
+                    self.current_process.wait(timeout=1.5)
+                except subprocess.TimeoutExpired:
                     self.current_process.kill()
+                    self.current_process.wait(timeout=1.0)
                 killed = True
             except Exception:
                 pass
@@ -436,17 +522,22 @@ class TerminalSession:
         return {
             "session_id": self.session_id,
             "status": "terminated",
+            "state": "terminated",
             "process_killed": killed
         }
 
     def get_status(self) -> Dict[str, Any]:
         """Returns the live status summary of the session."""
+        has_active = bool(self.current_process and self.current_process.poll() is None)
+        if not has_active and self.current_process and self.state == "running":
+            self.state = "completed" if self.current_process.poll() == 0 else "failed"
+            self.last_exit_code = self.current_process.poll()
         return {
             "session_id": self.session_id,
             "workspace_path": self.workspace_path,
             "cwd": self.cwd,
             "state": self.state,
-            "has_active_process": bool(self.current_process and self.current_process.poll() is None),
+            "has_active_process": has_active,
             "last_command": self.last_command,
             "last_exit_code": self.last_exit_code,
             "last_duration_ms": self.last_duration_ms,
@@ -506,7 +597,7 @@ class TerminalManager:
             }
 
     @classmethod
-    def run_command(cls, session_id: str, command: str, args: Optional[List[str]] = None, timeout_sec: int = DEFAULT_TIMEOUT_SEC) -> Dict[str, Any]:
+    def run_command(cls, session_id: str, command: str, args: Optional[List[str]] = None, timeout_sec: int = DEFAULT_TIMEOUT_SEC, is_background: bool = False, **kwargs) -> Dict[str, Any]:
         """
         Tool: run_command(session_id, command, args)
         Executes an approved dev command inside the target session.
@@ -691,3 +782,36 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             }
         }
     ]
+
+
+def get_terminal_openai_tool_schemas() -> List[Dict[str, Any]]:
+    """Returns terminal tools formatted for OpenAI / Llama function calling."""
+    tools = get_terminal_tools_schema()
+    return [{"type": "function", "function": t} for t in tools]
+
+
+class ToolDispatcher:
+    """Dispatches autonomous model tool calls extracted from model output."""
+
+    @classmethod
+    def parse_and_execute_calls(cls, text: str) -> List[Dict[str, Any]]:
+        results = []
+        matches = re.finditer(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", text, re.DOTALL)
+        for m in matches:
+            try:
+                call_data = json.loads(m.group(1))
+                tool_name = call_data.get("name") or call_data.get("tool")
+                arguments = call_data.get("arguments") or call_data.get("parameters") or {}
+                if tool_name == "run_command":
+                    sid = arguments.get("session_id") or TerminalManager.create_terminal()["session_id"]
+                    res = TerminalManager.run_command(sid, arguments.get("command", ""), arguments.get("args", []))
+                    results.append({"tool": tool_name, "result": res})
+                elif tool_name == "create_terminal":
+                    res = TerminalManager.create_terminal(arguments.get("workspace_path"))
+                    results.append({"tool": tool_name, "result": res})
+                elif tool_name == "list_terminals":
+                    res = {"terminals": TerminalManager.list_terminals()}
+                    results.append({"tool": tool_name, "result": res})
+            except Exception as e:
+                print(f"[TOOL DISPATCH NOTICE] parse note: {e}", flush=True)
+        return results

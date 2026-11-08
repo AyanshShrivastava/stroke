@@ -453,8 +453,20 @@ get_mcp_servers_info = get_all_mcp_servers
 def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
     """Transforms registered MCP tools into standard function schemas for the AI."""
     ai_tools = []
+    has_studio = any("studio" in s.lower() for s in _MCP_REGISTRY.keys())
+    if not has_studio:
+        for t in get_roblox_studio_tools():
+            ai_tools.append({
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["parameters"]
+                }
+            })
+
     for s in _MCP_REGISTRY.values():
-        for t in s["tools"]:
+        for t in s.get("tools", []):
             ai_tools.append({
                 "type": "function",
                 "function": {
