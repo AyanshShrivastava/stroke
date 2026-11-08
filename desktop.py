@@ -31,10 +31,26 @@ def run_backend(port: int):
     from main import app
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
+def check_and_bootstrap_ai():
+    """Checks if offline Llama 3.2 GGUF exists; if not, triggers background bootstrap."""
+    try:
+        import download_model
+        if not download_model.is_model_installed():
+            print("[STROKE DESKTOP] Offline AI weights not detected. Initiating background auto-download...", flush=True)
+            t = threading.Thread(target=download_model.download_model, daemon=True)
+            t.start()
+        else:
+            print("[STROKE DESKTOP] Verified offline Llama 3.2 AI weights in models/ directory.", flush=True)
+    except Exception as exc:
+        print(f"[STROKE DESKTOP NOTICE] Model bootstrap note: {exc}", flush=True)
+
 def main():
     print("=" * 65)
     print(" [STROKE // NATIVE CYBERPUNK DESKTOP RUNNER]")
     print("=" * 65)
+
+    # Check and bootstrap offline AI model
+    check_and_bootstrap_ai()
 
     port = find_available_port(8765)
     server_url = f"http://127.0.0.1:{port}"

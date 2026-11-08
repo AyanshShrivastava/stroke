@@ -35,6 +35,7 @@ def run_build():
         f"index.html{sep}.",
         f"download_model.py{sep}.",
         f"vfx_service.py{sep}.",
+        f"mcp_bridge.py{sep}.",
         f"requirements.txt{sep}.",
         f".env.example{sep}."
     ]

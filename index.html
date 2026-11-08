@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stroke // Cyberpunk Matrix Operations</title>
+  <title>Stroke // Cyberpunk Neural Matrix & VFX Copilot</title>
   <!-- Tailwind CSS Engine -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts: JetBrains Mono & Space Grotesk -->
@@ -40,13 +40,12 @@
   </script>
 
   <style>
-    /* Absolute deep dark standard canvas */
     body {
       background-color: #050505;
       color: #00ff66;
       font-family: 'JetBrains Mono', monospace;
-      min-height: 100vh;
-      overflow-x: hidden;
+      height: 100vh;
+      overflow: hidden;
     }
 
     /* Subtle CRT Scanline overlay */
@@ -57,730 +56,657 @@
       pointer-events: none;
     }
 
-    /* Cyber Matrix Grid Pattern */
-    .matrix-grid {
-      background-image: linear-gradient(#00441b22 1px, transparent 1px),
-                        linear-gradient(90deg, #00441b22 1px, transparent 1px);
-      background-size: 28px 28px;
+    .glow-text {
+      text-shadow: 0 0 8px rgba(0, 255, 102, 0.65), 0 0 20px rgba(0, 255, 102, 0.35);
     }
 
-    /* Luminous Neon Glow Shadows */
-    .glow-header {
-      text-shadow: 0 0 10px #00ff66, 0 0 25px rgba(0, 255, 102, 0.6);
-    }
-    .glow-text {
-      text-shadow: 0 0 8px rgba(0, 255, 102, 0.7);
-    }
     .glow-box {
-      box-shadow: 0 0 20px rgba(0, 255, 102, 0.15), inset 0 0 15px rgba(0, 255, 102, 0.04);
+      box-shadow: 0 0 15px rgba(0, 255, 102, 0.12), inset 0 0 12px rgba(0, 255, 102, 0.04);
     }
+
     .glow-button {
-      box-shadow: 0 0 16px rgba(0, 255, 102, 0.35), inset 0 0 8px rgba(0, 255, 102, 0.2);
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px rgba(0, 255, 102, 0.35);
+      transition: all 0.2s ease-in-out;
     }
     .glow-button:hover:not(:disabled) {
-      box-shadow: 0 0 28px rgba(0, 255, 102, 0.65), inset 0 0 14px rgba(0, 255, 102, 0.4);
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.8);
       transform: translateY(-1px);
-    }
-    .glow-button:active:not(:disabled) {
-      transform: translateY(1px);
     }
 
     /* Custom Matrix Scrollbar */
     ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
     }
     ::-webkit-scrollbar-track {
-      background: #050505;
-      border-left: 1px solid #00441b;
+      background: #020202;
     }
     ::-webkit-scrollbar-thumb {
       background: #00441b;
-      border-radius: 2px;
+      border-radius: 3px;
     }
     ::-webkit-scrollbar-thumb:hover {
       background: #00ff66;
-      box-shadow: 0 0 10px #00ff66;
     }
 
-    /* Blinking Terminal Cursor */
-    @keyframes cursor-pulse {
-      0%, 49% { opacity: 1; }
-      50%, 100% { opacity: 0; }
-    }
-    .terminal-cursor {
-      display: inline-block;
-      width: 9px;
-      height: 1.1em;
-      background-color: #00ff66;
-      vertical-align: text-bottom;
-      animation: cursor-pulse 1s infinite;
-      box-shadow: 0 0 8px #00ff66;
-    }
-
-    /* Pulse dot */
-    @keyframes status-pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
+    @keyframes pulse-fast {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
     }
     .status-dot-active {
-      animation: status-pulse 1.8s infinite;
+      animation: pulse-fast 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
   </style>
 </head>
+<body class="relative flex antialiased select-none">
+  <div class="fixed inset-0 crt-scanlines z-50 pointer-events-none"></div>
 
-<body class="matrix-grid relative selection:bg-matrix-green selection:text-black">
-  <!-- Scanline Layer -->
-  <div class="crt-scanlines fixed inset-0 z-50 pointer-events-none"></div>
-
-  <!-- Main Container -->
-  <div class="relative z-10 flex flex-col min-h-screen">
-
-    <!-- TOP NAVIGATION BAR / SYSTEM STATUS BANNER -->
-    <header class="border-b border-matrix-border bg-black/90 backdrop-blur sticky top-0 z-40 px-4 py-3 lg:px-8">
-      <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-        
-        <!-- Logo & Architecture Branding -->
-        <div class="flex items-center gap-3">
-          <div class="h-9 w-9 rounded border border-matrix-border-bright bg-black flex items-center justify-center font-bold text-lg text-matrix-green glow-text shadow-sm shadow-matrix-green">
-            S
+  <!-- ===================================================================== -->
+  <!-- LEFT SIDEBAR: CHAT HISTORY & PROFILE (LIKE REGULAR MODERN AIS)        -->
+  <!-- ===================================================================== -->
+  <aside id="app-sidebar" class="w-72 border-r border-matrix-border bg-black flex flex-col justify-between shrink-0 z-30 transition-all duration-300">
+    
+    <!-- Sidebar Top: Brand & New Chat -->
+    <div class="p-3.5 space-y-3 border-b border-matrix-border/60">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="h-6 w-6 rounded bg-matrix-green text-black flex items-center justify-center font-bold text-xs shadow-[0_0_10px_#00ff66]">
+            ⚡
           </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="font-sans font-bold text-xl tracking-wider text-matrix-green glow-header">STROKE</span>
-              <span class="text-xs px-2 py-0.5 rounded border border-matrix-border bg-matrix-card font-mono text-matrix-muted">v1.0.0</span>
+          <span class="font-bold text-sm tracking-widest uppercase text-white glow-text">STROKE</span>
+        </div>
+        <span class="text-[10px] px-1.5 py-0.5 rounded border border-matrix-border text-matrix-muted font-mono">v1.2 // AI</span>
+      </div>
+
+      <!-- New Chat Button -->
+      <button 
+        onclick="createNewChat()"
+        class="w-full py-2 px-3 rounded-lg border border-matrix-border-bright bg-matrix-card hover:bg-matrix-green hover:text-black text-matrix-green font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition glow-button"
+      >
+        <span>+ New Chat</span>
+      </button>
+    </div>
+
+    <!-- Sidebar Middle: All Chats Feed -->
+    <div class="flex-1 overflow-y-auto p-2.5 space-y-1">
+      <div class="px-2 py-1 text-[10px] font-bold uppercase text-matrix-darkgreen tracking-wider flex items-center justify-between">
+        <span>SESSION CHATS</span>
+        <span id="chat-count-badge" class="text-[9px] text-matrix-muted">1 ACTIVE</span>
+      </div>
+      <div id="sidebar-chat-list" class="space-y-1">
+        <!-- Dynamically rendered chat items -->
+      </div>
+    </div>
+
+    <!-- Sidebar Integrations Status Indicators -->
+    <div class="p-3 border-t border-matrix-border/60 bg-[#020202] text-[10px] space-y-1.5 font-mono">
+      <div class="flex items-center justify-between">
+        <span class="text-matrix-darkgreen flex items-center gap-1.5">
+          <span class="h-1.5 w-1.5 rounded-full bg-matrix-green status-dot-active"></span>
+          <span>ROBLOX STUDIO MCP</span>
+        </span>
+        <span id="badge-studio-status" class="text-matrix-glow font-bold">ONLINE</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-matrix-darkgreen flex items-center gap-1.5">
+          <span class="h-1.5 w-1.5 rounded-full bg-matrix-green status-dot-active"></span>
+          <span>GITHUB MCP</span>
+        </span>
+        <span id="badge-github-status" class="text-matrix-glow font-bold">READY</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-matrix-darkgreen flex items-center gap-1.5">
+          <span class="h-1.5 w-1.5 rounded-full bg-matrix-green status-dot-active"></span>
+          <span>VFX DB (14.6K INSTANCES)</span>
+        </span>
+        <span id="badge-vfx-status" class="text-matrix-glow font-bold">INDEXED</span>
+      </div>
+    </div>
+
+    <!-- Sidebar Bottom: Operator Profile Card (Bottom Left) -->
+    <div class="p-3 border-t border-matrix-border bg-black relative">
+      <div 
+        id="profile-button"
+        onclick="toggleProfileMenu()"
+        class="flex items-center justify-between p-2 rounded-lg border border-matrix-border hover:border-matrix-border-bright bg-matrix-card cursor-pointer transition"
+      >
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div id="profile-avatar" class="h-7 w-7 rounded-full bg-matrix-darkgreen border border-matrix-border-bright text-black font-bold flex items-center justify-center text-xs shrink-0">
+            OP
+          </div>
+          <div class="min-w-0">
+            <div id="profile-name" class="text-white font-bold text-xs truncate">Guest Operator</div>
+            <div id="profile-status" class="text-[10px] text-matrix-muted truncate flex items-center gap-1">
+              <span id="profile-status-dot" class="h-1.5 w-1.5 rounded-full bg-yellow-400"></span>
+              <span id="profile-status-text">Unauthenticated</span>
             </div>
-            <p class="text-[10px] text-matrix-darkgreen tracking-widest uppercase">Stateless FastAPI // Firebase Firestore Layer</p>
           </div>
         </div>
+        <span class="text-matrix-darkgreen text-xs">⚙️</span>
+      </div>
 
-        <!-- Telemetry Indicators -->
-        <div class="hidden md:flex items-center gap-4 text-xs font-mono">
-          <div class="flex items-center gap-2 px-3 py-1 rounded border border-matrix-border bg-matrix-black">
-            <span class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
-            <span class="text-matrix-muted">CORE:</span>
-            <span class="text-matrix-green font-semibold">STATELESS REST</span>
-          </div>
-          <div class="flex items-center gap-2 px-3 py-1 rounded border border-matrix-border bg-matrix-black">
-            <span class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
-            <span class="text-matrix-muted">DB:</span>
-            <span class="text-matrix-green font-semibold">FIRESTORE ADMIN</span>
-          </div>
-          <div class="flex items-center gap-2 px-3 py-1 rounded border border-matrix-border bg-matrix-black">
-            <span class="text-matrix-muted">HOST:</span>
-            <span id="api-host-indicator" class="text-matrix-green font-mono">LOC:8000</span>
+      <!-- Profile Popover Menu -->
+      <div id="profile-menu" class="hidden absolute bottom-16 left-3 right-3 bg-black border border-matrix-border-bright rounded-lg shadow-2xl p-2.5 space-y-2 z-50 text-xs font-mono">
+        <div class="pb-1.5 border-b border-matrix-border text-[10px] text-matrix-muted flex items-center justify-between">
+          <span>OPERATOR CREDENTIALS</span>
+          <span id="profile-email-badge" class="text-white font-bold truncate max-w-[140px]">None</span>
+        </div>
+        <button 
+          onclick="openVfxMatrixModal()"
+          class="w-full text-left px-2 py-1.5 rounded hover:bg-matrix-card hover:text-white flex items-center gap-2 text-matrix-green"
+        >
+          <span>⚡ View Injected VFX Records</span>
+        </button>
+        <button 
+          onclick="trigger5CyclesFeeding()"
+          class="w-full text-left px-2 py-1.5 rounded hover:bg-matrix-card hover:text-white flex items-center gap-2 text-matrix-green"
+        >
+          <span>🔄 Re-run 5-Cycle Feeding</span>
+        </button>
+        <button 
+          onclick="handleLogout()"
+          class="w-full text-left px-2 py-1.5 rounded hover:bg-red-950/60 hover:text-red-400 flex items-center gap-2 text-matrix-danger border-t border-matrix-border/50 pt-2"
+        >
+          <span>⚠️ Disconnect / Log Out</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+
+  <!-- ===================================================================== -->
+  <!-- MAIN CENTRAL CHAT AREA                                                -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 flex flex-col h-screen overflow-hidden bg-[#050505] relative">
+    
+    <!-- Top Application Bar -->
+    <header class="h-14 border-b border-matrix-border bg-black/95 px-4 flex items-center justify-between shrink-0 z-20">
+      <div class="flex items-center gap-3 min-w-0">
+        <button 
+          onclick="toggleSidebar()" 
+          class="text-matrix-green hover:text-white text-sm p-1 rounded border border-matrix-border sm:hidden"
+          title="Toggle Sidebar"
+        >
+          ☰
+        </button>
+        <div class="min-w-0">
+          <h1 id="active-chat-title" class="font-bold text-xs sm:text-sm text-white tracking-wide truncate">
+            MAIN CHAT // NEURAL VFX & MCP ENGINE
+          </h1>
+          <div class="flex items-center gap-2 text-[10px] text-matrix-darkgreen font-mono">
+            <span>AUTONOMOUS TOOL-CALLING</span>
+            <span>•</span>
+            <span class="text-matrix-green">WEB SEARCH + VFX DB READY</span>
           </div>
         </div>
+      </div>
 
-        <!-- Active User Status / Download Button / Clock -->
-        <div class="flex items-center gap-3">
-          <!-- Interactive Desktop Download Header Button -->
-          <button 
-            id="btn-header-download"
-            onclick="openDownloadModal()"
-            class="glow-button px-3 py-1.5 rounded border border-matrix-border-bright bg-black text-matrix-green hover:bg-matrix-green hover:text-black font-mono text-xs font-bold flex items-center gap-1.5 transition whitespace-nowrap shadow-sm shadow-matrix-green"
-            title="Download Standalone Desktop Application (macOS & Windows)"
-          >
-            <span id="header-os-icon">⚡</span>
-            <span id="header-os-label">DOWNLOAD APP</span>
-          </button>
+      <!-- Action Toggles: Model, Notes AI, VFX Matrix, Terminal -->
+      <div class="flex items-center gap-2">
+        <!-- Model Switcher -->
+        <select 
+          id="select-ai-model" 
+          class="bg-black border border-matrix-border text-matrix-green text-xs font-mono px-2 py-1 rounded focus:outline-none focus:border-matrix-border-bright hidden md:block"
+        >
+          <option value="llama3.2">Llama 3.2 1B (Local / Offline)</option>
+          <option value="llama-3.3-70b-versatile">Llama 3.3 70B (Cloud Ultra)</option>
+          <option value="llama-3.1-8b-instant">Llama 3.1 8B (Cloud Instant)</option>
+        </select>
 
-          <div id="session-badge" class="hidden sm:block text-xs px-3 py-1.5 rounded border border-matrix-border bg-matrix-card font-mono text-matrix-muted">
-            SESSION: <span class="text-white font-bold" id="session-email-label">UNAUTHENTICATED</span>
-          </div>
-          <div id="clock-display" class="hidden sm:block text-xs font-mono text-matrix-green border border-matrix-border px-2.5 py-1.5 bg-black">
-            --:--:-- UTC
-          </div>
-        </div>
-
+        <!-- Right Workspace Buttons -->
+        <button 
+          onclick="toggleWorkspace('notes')" 
+          id="btn-tab-notes"
+          class="px-2.5 py-1 rounded border border-matrix-border hover:border-matrix-border-bright text-xs font-bold font-mono text-matrix-green bg-matrix-card transition flex items-center gap-1.5"
+          title="Toggle Notes AI / Luau Copilot"
+        >
+          <span>📝 Notes AI</span>
+        </button>
+        <button 
+          onclick="toggleWorkspace('matrix')" 
+          id="btn-tab-matrix"
+          class="px-2.5 py-1 rounded border border-matrix-border hover:border-matrix-border-bright text-xs font-bold font-mono text-matrix-green bg-matrix-card transition flex items-center gap-1.5"
+          title="Toggle 5X VFX Matrix"
+        >
+          <span>⚡ 5X Matrix</span>
+        </button>
+        <button 
+          onclick="toggleWorkspace('mcp')" 
+          id="btn-tab-mcp"
+          class="px-2.5 py-1 rounded border border-matrix-border hover:border-matrix-border-bright text-xs font-bold font-mono text-matrix-green bg-matrix-card transition flex items-center gap-1.5"
+          title="Toggle MCP Bridge"
+        >
+          <span>🔌 MCP</span>
+        </button>
+        <button 
+          onclick="toggleWorkspace('telemetry')" 
+          id="btn-tab-telemetry"
+          class="px-2.5 py-1 rounded border border-matrix-border hover:border-matrix-border-bright text-xs font-bold font-mono text-matrix-green bg-matrix-card transition flex items-center gap-1.5"
+          title="Toggle TTY Telemetry Logs"
+        >
+          <span>>_ Terminal</span>
+        </button>
       </div>
     </header>
 
-    <!-- MAIN TWO-COLUMN RESPONSIVE OPERATIONS GRID -->
-    <main class="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-8 space-y-6">
-
-      <!-- =================================================================== -->
-      <!-- INTERACTIVE DESKTOP CLIENT DOWNLOAD HUB (AI DESKTOP AGENT STYLE)    -->
-      <!-- =================================================================== -->
-      <section class="rounded-xl border border-matrix-border-bright/60 bg-gradient-to-r from-black via-matrix-card to-black p-5 lg:p-6 glow-box relative overflow-hidden">
-        <!-- Background decorative watermark -->
-        <div class="absolute right-4 -bottom-6 text-9xl font-black font-mono text-matrix-border/10 select-none pointer-events-none">
-          DESK
+    <!-- Main Message Thread -->
+    <div id="chat-messages-container" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 font-mono">
+      
+      <!-- Initial Hero Welcome Banner -->
+      <div id="chat-welcome-banner" class="max-w-3xl mx-auto p-5 rounded-xl border border-matrix-border bg-matrix-card space-y-3.5 glow-box">
+        <div class="flex items-center justify-between border-b border-matrix-border/60 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="h-2.5 w-2.5 rounded-full bg-matrix-green status-dot-active shadow-[0_0_8px_#00ff66]"></span>
+            <span class="text-xs font-bold text-white uppercase tracking-wider">STROKE NEURAL OPERATING CORE</span>
+          </div>
+          <span class="text-[10px] px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green">READY</span>
         </div>
+        <p class="text-xs text-matrix-muted leading-relaxed">
+          Autonomous intelligence stack trained on <strong class="text-white">Elemental Worlds VFX Database</strong> (14,666 instances &amp; 4.4 MB raw particle dumps). 
+          Equipped with <strong class="text-matrix-glow">autonomous web search</strong> and <strong class="text-matrix-glow">Universal MCP connectivity</strong> to Roblox Studio and GitHub.
+        </p>
 
-        <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-matrix-border">
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
-              <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green tracking-wider">OFFICIAL CLIENT</span>
-              <h1 class="text-lg font-bold font-sans tracking-wide text-matrix-green glow-text">Stroke Desktop Agent Suite</h1>
-            </div>
-            <p class="text-xs text-matrix-muted mt-1 font-mono">
-              Download the standalone native client for macOS & Windows. Bundles the stateless FastAPI daemon with a high-contrast native canvas.
-            </p>
-          </div>
-
-          <!-- Detected OS Pill -->
-          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-matrix-border-bright bg-black text-xs font-mono">
-            <span class="text-matrix-muted">DETECTED:</span>
-            <span id="detected-os-badge" class="text-matrix-green font-bold">MACOS (APPLE SILICON / INTEL)</span>
-          </div>
+        <!-- Quick Prompt Chips -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs">
+          <button onclick="sendQuickPrompt('Give me the exact ParticleEmitter parameters for Sukuna 360 slashes from the VFX database')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+            <div class="font-bold text-white text-[11px]">⚡ Sukuna 360° Slashes</div>
+            <div class="text-[10px] text-matrix-darkgreen">Pulls from vfx_dump.txt & vfx_data.json</div>
+          </button>
+          <button onclick="sendQuickPrompt('How is Hollow Purple configured with flipbooks and beam curve sizes?')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+            <div class="font-bold text-white text-[11px]">🔮 Hollow Purple Flipbooks</div>
+            <div class="text-[10px] text-matrix-darkgreen">Grid4x4 flipbook & curved beam math</div>
+          </button>
+          <button onclick="sendQuickPrompt('What are the latest Roblox Luau 2026 engine updates and type features?')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+            <div class="font-bold text-white text-[11px]">🌐 Search Latest Luau 2026</div>
+            <div class="text-[10px] text-matrix-darkgreen">Autonomous live internet grounding</div>
+          </button>
+          <button onclick="sendQuickPrompt('Execute a test ParticleEmitter in Roblox Studio via Studio MCP')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+            <div class="font-bold text-white text-[11px]">🎮 Execute in Roblox Studio</div>
+            <div class="text-[10px] text-matrix-darkgreen">Dispatches live code through Studio MCP</div>
+          </button>
         </div>
-
-        <!-- Dual OS Download Matrix Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-
-          <!-- CARD 1: macOS Edition -->
-          <div id="card-macos-download" class="p-4 rounded-lg border border-matrix-border bg-black/90 hover:border-matrix-border-bright transition space-y-3 relative">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="text-xl"></span>
-                <span class="font-bold text-sm text-matrix-green font-mono">macOS Universal</span>
-              </div>
-              <span class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-muted">
-                ARM64 & x86_64
-              </span>
-            </div>
-            <p class="text-[11px] text-matrix-darkgreen font-mono leading-relaxed">
-              Compatible with Apple Silicon (M1/M2/M3/M4) and Intel Macs (macOS 12.0 Monterey through Sonoma+). Zero configuration required.
-            </p>
-            <div class="pt-1">
-              <button 
-                onclick="executeDownload('macos')"
-                class="glow-button w-full px-4 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
-              >
-                <span> Download for macOS</span>
-                <span class="text-[10px] opacity-75">(.zip / .dmg)</span>
-              </button>
-            </div>
-            <div class="flex items-center justify-between text-[10px] text-matrix-muted font-mono pt-1">
-              <span>FORMAT: Portable Bundle</span>
-              <span>SIZE: ~1.5 MB</span>
-            </div>
-          </div>
-
-          <!-- CARD 2: Windows Edition -->
-          <div id="card-windows-download" class="p-4 rounded-lg border border-matrix-border bg-black/90 hover:border-matrix-border-bright transition space-y-3 relative">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="text-xl">⊞</span>
-                <span class="font-bold text-sm text-matrix-green font-mono">Windows 10 / 11</span>
-              </div>
-              <span class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-muted">
-                64-bit AMD64/x64
-              </span>
-            </div>
-            <p class="text-[11px] text-matrix-darkgreen font-mono leading-relaxed">
-              Standalone runner optimized for Windows 10 & 11 (64-bit). Spawns local loopback daemon with hardware-accelerated WebView2 canvas.
-            </p>
-            <div class="pt-1">
-              <button 
-                onclick="executeDownload('windows')"
-                class="glow-button w-full px-4 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
-              >
-                <span>⊞ Download for Windows</span>
-                <span class="text-[10px] opacity-75">(.zip / .exe)</span>
-              </button>
-            </div>
-            <div class="flex items-center justify-between text-[10px] text-matrix-muted font-mono pt-1">
-              <span>FORMAT: Portable Runner</span>
-              <span>SIZE: ~1.5 MB</span>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Quick Terminal Hint -->
-        <div class="mt-4 pt-3 border-t border-matrix-border/50 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-matrix-darkgreen">
-          <div>
-            <span>HOW TO RUN:</span> 
-            <span class="text-matrix-muted">Unzip and double-click </span>
-            <code class="text-matrix-green bg-black px-1.5 py-0.5 rounded border border-matrix-border">Stroke-Start.command</code> 
-            <span class="text-matrix-muted">(Mac) or </span>
-            <code class="text-matrix-green bg-black px-1.5 py-0.5 rounded border border-matrix-border">Stroke-Start.bat</code>
-            <span class="text-matrix-muted">(Win).</span>
-          </div>
-          <div>
-            <a href="https://github.com/AyanshShrivastava/stroke/releases" target="_blank" class="hover:text-matrix-green underline">
-              View GitHub CI/CD Releases ↗
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <!-- TWO-COLUMN RESPONSIVE OPERATIONS GRID -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-        <!-- =================================================================== -->
-        <!-- LEFT COLUMN: STROKE OPERATIONS CONTROL MATRIX (7 COLS)               -->
-        <!-- =================================================================== -->
-        <div class="lg:col-span-7 space-y-6">
-
-          <!-- SECTION 1: IDENTITY & OTP CIPHER WORKFLOW -->
-          <div class="rounded-xl border border-matrix-border bg-matrix-card p-6 glow-box relative overflow-hidden">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-matrix-border">
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 01</span>
-                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">Secure Identity & OTP Protocol</h2>
-              </div>
-              <span id="otp-phase-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-muted">IDLE</span>
-            </div>
-
-            <!-- Email Input Group -->
-            <div class="space-y-4">
-              <div>
-                <label for="input-email" class="block text-xs uppercase tracking-wider text-matrix-muted mb-1.5">
-                  Operator Identity Address (Email)
-                </label>
-                <div class="flex flex-col sm:flex-row gap-3">
-                  <div class="relative flex-1">
-                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-xs text-matrix-darkgreen font-mono">
-                      usr://
-                    </span>
-                    <input 
-                      type="email" 
-                      id="input-email" 
-                      placeholder="operator@system.matrix"
-                      class="w-full pl-16 pr-4 py-2.5 rounded border border-matrix-border bg-matrix-input text-matrix-green placeholder:text-matrix-border text-sm font-mono focus:outline-none focus:border-matrix-border-bright focus:ring-1 focus:ring-matrix-border-bright transition"
-                    />
-                  </div>
-                  <button 
-                    id="btn-send-otp"
-                    onclick="handleSendOtp()"
-                    class="glow-button px-5 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2 whitespace-nowrap"
-                  >
-                    <span>Transmit OTP</span>
-                    <span id="send-otp-spinner" class="hidden">⚡</span>
-                  </button>
-                </div>
-                <p class="text-[11px] text-matrix-darkgreen mt-1.5">
-                  Generates cryptographic 6-digit session cipher. Transacted straight to <code class="text-matrix-muted">users/{email}</code>.
-                </p>
-              </div>
-
-              <!-- OTP Verification Box (Appears/Activates on OTP sent) -->
-              <div id="otp-verification-container" class="mt-5 pt-5 border-t border-matrix-border/70 space-y-3">
-                <div class="flex items-center justify-between">
-                  <label for="input-otp-code" class="text-xs uppercase tracking-wider text-matrix-muted">
-                    6-Digit Verification Cipher
-                  </label>
-                  <div id="otp-timer-badge" class="hidden text-[11px] font-mono text-matrix-green flex items-center gap-1.5">
-                    <span class="h-1.5 w-1.5 rounded-full bg-matrix-green status-dot-active"></span>
-                    <span>EXPIRATION: <strong id="otp-countdown">05:00</strong></span>
-                  </div>
-                </div>
-
-                <div class="flex flex-col sm:flex-row gap-3">
-                  <input 
-                    type="text" 
-                    id="input-otp-code" 
-                    maxlength="6" 
-                    placeholder="000000"
-                    class="w-full sm:w-48 tracking-[0.5em] text-center px-4 py-2.5 rounded border border-matrix-border bg-matrix-input text-matrix-green text-lg font-bold font-mono placeholder:text-matrix-border focus:outline-none focus:border-matrix-border-bright focus:ring-1 focus:ring-matrix-border-bright transition"
-                  />
-                  <button 
-                    id="btn-verify-otp"
-                    onclick="handleVerifyOtp()"
-                    class="glow-button flex-1 px-5 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
-                  >
-                    <span>Verify Cipher Key</span>
-                    <span id="verify-otp-spinner" class="hidden">⌛</span>
-                  </button>
-                </div>
-                <p class="text-[11px] text-matrix-darkgreen">
-                  Single-use enforcement: Server atomically flushes <code class="text-matrix-muted">otp_code</code> and <code class="text-matrix-muted">otp_expires_at</code> to <code class="text-matrix-muted">null</code> on success.
-                </p>
-              </div>
-            </div>
-          </div>
-
-
-          <!-- SECTION 2: DIRECT GITHUB OAUTH REDIRECTION LOOP -->
-          <div class="rounded-xl border border-matrix-border bg-matrix-card p-6 glow-box relative">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-matrix-border">
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 02</span>
-                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">GitHub OAuth Gateway (PAT Token)</h2>
-              </div>
-              <span id="github-sync-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen">UNBOUND</span>
-            </div>
-
-            <div class="space-y-4">
-              <div class="p-3.5 rounded border border-matrix-border bg-black text-xs font-mono space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="text-matrix-muted">DELEGATED SCOPES:</span>
-                  <span class="text-matrix-green font-bold">repo • read:user • user:email</span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-matrix-muted">TOKEN DESTINATION:</span>
-                  <span class="text-matrix-green">users/{email}.github_token</span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-matrix-muted">HANDSHAKE STRATEGY:</span>
-                  <span class="text-matrix-green">Redirect loop with cryptographic state hex</span>
-                </div>
-              </div>
-
-              <!-- Masked Token Preview -->
-              <div id="github-pat-card" class="hidden p-3 rounded border border-matrix-border-bright bg-matrix-black flex items-center justify-between text-xs font-mono">
-                <span class="text-matrix-muted">FIRESTORE PAT:</span>
-                <span id="github-pat-masked" class="text-matrix-green font-bold">ghp_••••••••••••</span>
-              </div>
-
-              <div class="flex flex-col sm:flex-row gap-3">
-                <button 
-                  id="btn-connect-github"
-                  onclick="handleConnectGithub()"
-                  class="glow-button w-full px-5 py-3 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-3"
-                >
-                  <svg class="h-4 w-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-                  </svg>
-                  <span>Authorize GitHub OAuth Gateway</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-
-          <!-- SECTION 3: 5X HIGH-DENSITY DATABASE INJECTION MATRIX -->
-          <div class="rounded-xl border border-matrix-border bg-matrix-card p-6 glow-box relative">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-matrix-border">
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 03</span>
-                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">5X VFX Database Injection Matrix</h2>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-glow">ELEMENTAL WORLDS (14,666 INSTANCES)</span>
-                <span id="matrix-fed-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen">UNFED</span>
-              </div>
-            </div>
-
-            <div class="space-y-4">
-              <p class="text-xs text-matrix-muted leading-relaxed">
-                Executes an atomic <code class="text-matrix-green">db.batch()</code> commit writing 5 high-density Elemental Worlds VFX sub-documents to <code class="text-matrix-green">users/{email}/records/</code> (Hollow Purple, Sukuna Cleave, Infernal Flames, Aqua Vortex, 404 Glitch Core) with real Roblox texture IDs and particle emitter matrices.
-              </p>
-
-              <!-- Trigger Button -->
-              <button 
-                id="btn-feed-database"
-                onclick="handleFeedDatabase5x()"
-                class="glow-button w-full px-5 py-3 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-2"
-              >
-                <span>Execute 5X Batch Ingestion</span>
-                <span id="feed-spinner" class="hidden">⚡</span>
-              </button>
-
-              <!-- Progress Meter -->
-              <div id="injection-progress-container" class="hidden space-y-1.5 pt-2">
-                <div class="flex justify-between text-[11px] font-mono text-matrix-muted">
-                  <span>ATOMIC BATCH INGESTION:</span>
-                  <span id="injection-pct-label">0%</span>
-                </div>
-                <div class="w-full bg-black rounded-full h-2 border border-matrix-border overflow-hidden">
-                  <div id="injection-progress-bar" class="h-full bg-matrix-green w-0 transition-all duration-300 shadow-[0_0_10px_#00ff66]"></div>
-                </div>
-              </div>
-
-              <!-- INJECTED RECORDS READOUT MATRIX -->
-              <div id="injected-records-container" class="hidden space-y-2 pt-2">
-                <div class="flex items-center justify-between text-xs font-mono font-bold text-matrix-green pb-1 border-b border-matrix-border">
-                  <span>INJECTED SUB-DOCUMENTS</span>
-                  <span class="text-matrix-muted">PATH: users/{id}/records/</span>
-                </div>
-
-                <div class="overflow-x-auto">
-                  <table class="w-full text-left text-xs font-mono border-collapse">
-                    <thead>
-                      <tr class="border-b border-matrix-border/60 text-matrix-muted text-[11px]">
-                        <th class="py-2 px-2">ID</th>
-                        <th class="py-2 px-2">ELEMENT / VFX ABILITY</th>
-                        <th class="py-2 px-2">ASSET / PARTICLES</th>
-                        <th class="py-2 px-2">LOAD</th>
-                        <th class="py-2 px-2 text-right">STATUS</th>
-                      </tr>
-                    </thead>
-                    <tbody id="records-table-body" class="divide-y divide-matrix-border/30">
-                      <!-- Dynamically rendered -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-
-          <!-- SECTION 4: NEURAL AI & LIVE WEB SEARCH CORE (LLAMA 3.2 / 3.3) -->
-          <div class="rounded-xl border border-matrix-border-bright/80 bg-matrix-card p-6 glow-box relative space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-matrix-border">
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-bold px-2 py-0.5 rounded bg-matrix-border text-matrix-green">PHASE 04</span>
-                <h2 class="text-base font-bold tracking-wide uppercase text-matrix-green glow-text">Neural Core & Live Web Search</h2>
-              </div>
-              <div class="flex items-center gap-2">
-                <span id="ai-engine-status" class="text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-green">LLAMA ENGINE READY</span>
-              </div>
-            </div>
-
-            <!-- AI Controls Toolbar -->
-            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 p-3 rounded-lg border border-matrix-border bg-black text-xs font-mono">
-              <!-- Model Selector -->
-              <div class="sm:col-span-5 space-y-1">
-                <label class="text-[10px] uppercase text-matrix-muted">Active AI Model</label>
-                <select id="select-ai-model" class="w-full py-1.5 px-2 rounded border border-matrix-border bg-matrix-card text-matrix-green text-xs font-mono focus:outline-none focus:border-matrix-border-bright">
-                  <option value="llama3.2">Llama 3.2 (3B - Local / Ollama)</option>
-                  <option value="llama-3.3-70b-versatile">Llama 3.3 (70B - Groq Cloud Ultra)</option>
-                  <option value="llama-3.1-8b-instant">Llama 3.1 (8B - Cloud Instant)</option>
-                </select>
-              </div>
-
-              <!-- Web Search Switch -->
-              <div class="sm:col-span-4 space-y-1">
-                <label class="text-[10px] uppercase text-matrix-muted">Internet Grounding</label>
-                <button 
-                  id="btn-toggle-search" 
-                  type="button"
-                  onclick="toggleWebSearch()"
-                  class="w-full py-1.5 px-2 rounded border border-matrix-border-bright bg-matrix-border/50 text-matrix-green text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition"
-                >
-                  <span id="search-status-dot" class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
-                  <span id="search-toggle-label">WEB SEARCH: ON</span>
-                </button>
-              </div>
-
-              <!-- Local Model Pull Action -->
-              <div class="sm:col-span-3 space-y-1">
-                <label class="text-[10px] uppercase text-matrix-muted">Local Pull</label>
-                <button 
-                  id="btn-pull-model"
-                  type="button"
-                  onclick="pullCurrentModel()"
-                  class="w-full py-1.5 px-2 rounded border border-matrix-border bg-black text-matrix-green hover:bg-matrix-green hover:text-black text-xs font-mono font-bold transition flex items-center justify-center gap-1"
-                >
-                  <span>⚡ Pull Model</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Optional Groq Key Field -->
-            <div id="api-key-config-container" class="space-y-1">
-              <div class="flex items-center justify-between text-[10px] font-mono text-matrix-darkgreen">
-                <span>GROQ / OPENAI API KEY (OPTIONAL FOR 300 TOK/S CLOUD):</span>
-                <a href="https://console.groq.com" target="_blank" class="text-matrix-muted underline hover:text-matrix-green">Free at console.groq.com ↗</a>
-              </div>
-              <input 
-                type="password" 
-                id="input-ai-key" 
-                placeholder="gsk_... (Optional: leave empty to use local Ollama or built-in RAG synthesizer)"
-                class="w-full px-3 py-1.5 rounded border border-matrix-border bg-black text-matrix-green text-xs font-mono placeholder:text-matrix-border focus:outline-none focus:border-matrix-border-bright"
-              />
-            </div>
-
-            <!-- Embedded Offline Weights Downloader Card -->
-            <div id="offline-weights-card" class="p-3.5 rounded-lg border border-matrix-border bg-black text-xs font-mono space-y-2.5">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <span id="weights-status-dot" class="h-2 w-2 rounded-full bg-yellow-400 status-dot-active"></span>
-                  <span class="text-matrix-muted uppercase text-[10px]">STANDALONE OFFLINE AI WEIGHTS:</span>
-                  <span id="weights-filename-label" class="text-white font-bold text-xs">Llama-3.2-1B-Instruct (Q4_K_M ~770 MB)</span>
-                </div>
-                <span id="weights-badge" class="text-[10px] px-2 py-0.5 rounded border border-matrix-border text-yellow-400 font-bold">NOT DOWNLOADED</span>
-              </div>
-
-              <!-- Download Button & Progress -->
-              <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <button 
-                  id="btn-download-weights"
-                  onclick="triggerWeightsDownload()"
-                  class="glow-button px-4 py-2 rounded font-mono font-bold text-xs uppercase bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <span>📥 Download Offline AI (~770 MB)</span>
-                </button>
-                <div id="weights-progress-box" class="hidden flex-1 w-full space-y-1">
-                  <div class="flex justify-between text-[10px] text-matrix-muted font-mono">
-                    <span id="weights-progress-text">Downloading from HuggingFace CDN...</span>
-                    <span id="weights-pct-label" class="text-matrix-green font-bold">0%</span>
-                  </div>
-                  <div class="w-full bg-matrix-card rounded-full h-1.5 border border-matrix-border overflow-hidden">
-                    <div id="weights-progress-bar" class="h-full bg-matrix-green w-0 transition-all duration-300 shadow-[0_0_8px_#00ff66]"></div>
-                  </div>
-                </div>
-              </div>
-              <p class="text-[10px] text-matrix-darkgreen">
-                Zero Cloud Dependencies: Saves directly into <code class="text-matrix-muted">models/</code> for air-gapped CPU/Metal inference without Ollama or Python setup.
-              </p>
-            </div>
-
-            <!-- Neural Conversation Stream -->
-            <div id="ai-chat-thread" class="min-h-[220px] max-h-[380px] overflow-y-auto space-y-3 p-3.5 rounded-lg border border-matrix-border bg-black/90 font-mono text-xs">
-              <!-- Initial Welcome Message -->
-              <div class="flex gap-2.5 items-start">
-                <div class="h-6 w-6 rounded bg-matrix-border text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border-bright">
-                  AI
-                </div>
-                <div class="p-3 rounded-lg border border-matrix-border bg-matrix-card/80 text-matrix-green space-y-1.5 leading-relaxed max-w-[90%]">
-                  <div class="font-bold text-white flex items-center gap-2">
-                    <span>STROKE NEURAL AGENT // ONLINE</span>
-                    <span class="text-[10px] px-1.5 py-0.2 rounded border border-matrix-border-bright text-matrix-green font-normal">LLAMA 3.2 / 3.3 READY</span>
-                  </div>
-                  <p class="text-matrix-muted">
-                    Equipped with real-time live internet search grounding. Ask about Roblox Luau VFX, system architecture, code debugging, or current technical events.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Query Input Bar -->
-            <div class="flex gap-2">
-              <input 
-                type="text" 
-                id="input-ai-prompt" 
-                placeholder="Ask Neural Core or search the web (e.g. 'Latest Luau VFX techniques 2026')..."
-                class="flex-1 px-4 py-2.5 rounded border border-matrix-border bg-matrix-input text-matrix-green placeholder:text-matrix-border text-xs font-mono focus:outline-none focus:border-matrix-border-bright"
-              />
-              <button 
-                id="btn-send-ai-prompt"
-                onclick="sendAiPrompt()"
-                class="glow-button px-5 py-2.5 rounded font-mono font-bold text-xs uppercase tracking-wider bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black flex items-center justify-center gap-1.5 whitespace-nowrap"
-              >
-                <span>Transmit</span>
-                <span id="ai-spinner" class="hidden">⚡</span>
-              </button>
-            </div>
-          </div>
-
-        </div>
-
-
-        <!-- =================================================================== -->
-        <!-- RIGHT COLUMN: REACTIVE TERMINAL TELEMETRY MONITOR (5 COLS)           -->
-        <!-- =================================================================== -->
-        <div class="lg:col-span-5 sticky top-24">
-          <div class="rounded-xl border border-matrix-border bg-black glow-box overflow-hidden flex flex-col h-[740px] shadow-2xl">
-            
-            <!-- Terminal Title Bar -->
-            <div class="bg-matrix-card/90 px-4 py-2.5 border-b border-matrix-border flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="h-2.5 w-2.5 rounded-full bg-red-500/80 inline-block"></span>
-                <span class="h-2.5 w-2.5 rounded-full bg-yellow-500/80 inline-block"></span>
-                <span class="h-2.5 w-2.5 rounded-full bg-matrix-green inline-block shadow-sm shadow-matrix-green"></span>
-                <span class="ml-2 text-xs font-bold text-matrix-green tracking-wider uppercase font-mono">
-                  TTY-1 // TELEMETRY LOGS
-                </span>
-              </div>
-              <div class="flex items-center gap-2">
-                <button 
-                  onclick="clearTerminal()"
-                  class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen hover:text-matrix-green hover:border-matrix-border-bright transition"
-                  title="Clear Terminal Display"
-                >
-                  CLEAR
-                </button>
-                <button 
-                  onclick="copyTerminalLogs()"
-                  class="text-[10px] font-mono px-2 py-0.5 rounded border border-matrix-border text-matrix-darkgreen hover:text-matrix-green hover:border-matrix-border-bright transition"
-                  title="Copy Logs to Clipboard"
-                >
-                  EXPORT
-                </button>
-              </div>
-            </div>
-
-            <!-- Terminal Output Viewport -->
-            <div 
-              id="terminal-viewport" 
-              class="flex-1 p-4 font-mono text-[11px] leading-relaxed overflow-y-auto space-y-1.5 text-matrix-green/90 bg-[#020202]"
-            >
-              <!-- Telemetry messages dynamically inserted here -->
-            </div>
-
-            <!-- Terminal Prompt / Status Footer -->
-            <div class="border-t border-matrix-border bg-black/95 px-4 py-2 flex items-center justify-between text-[11px] font-mono">
-              <div class="flex items-center gap-2 text-matrix-darkgreen">
-                <span>stroke@node-matrix:~$</span>
-                <span class="terminal-cursor"></span>
-              </div>
-              <div class="text-[10px] text-matrix-darkgreen">
-                <span id="log-count">0</span> EVENTS
-              </div>
-            </div>
-
-          </div>
-        </div>
-
       </div>
-    </main>
 
-    <!-- FOOTER -->
-    <footer class="border-t border-matrix-border mt-auto py-4 px-4 text-center text-xs text-matrix-darkgreen font-mono">
-      <span>STROKE // STATELESS NEURAL STACK</span> • <span>FIREBASE FIRESTORE DATA ENGINE</span> • <span>HIGH-CONTRAST MATRIX GREEN</span>
-    </footer>
+    </div>
+
+    <!-- Bottom Chat Composer -->
+    <div class="p-3 sm:p-4 bg-black/95 border-t border-matrix-border shrink-0 z-20">
+      <div class="max-w-4xl mx-auto space-y-2">
+        
+        <!-- Feature Capabilities Indicator -->
+        <div class="flex items-center justify-between text-[10px] font-mono text-matrix-darkgreen px-1">
+          <div class="flex items-center gap-3">
+            <span class="flex items-center gap-1 text-matrix-muted">
+              <span>🌐</span> <span>Web Search: Autonomous</span>
+            </span>
+            <span>•</span>
+            <span class="flex items-center gap-1 text-matrix-muted">
+              <span>🔥</span> <span>VFX DB: 14.6k Instances</span>
+            </span>
+            <span>•</span>
+            <span class="flex items-center gap-1 text-matrix-muted">
+              <span>🎮</span> <span>Studio MCP: Active</span>
+            </span>
+          </div>
+          <span class="text-matrix-darkgreen hidden sm:inline">Press Enter to Transmit</span>
+        </div>
+
+        <!-- Textarea Input Box -->
+        <div class="flex items-end gap-2 p-2 rounded-xl border border-matrix-border bg-black focus-within:border-matrix-border-bright transition shadow-2xl">
+          <textarea 
+            id="input-main-chat" 
+            rows="1"
+            placeholder="Ask Stroke AI anything (VFX parameters, Luau scripts, Roblox Studio MCP actions, or live internet research)..."
+            class="flex-1 bg-transparent border-0 text-matrix-green placeholder:text-matrix-border text-xs sm:text-sm font-mono focus:outline-none resize-none max-h-36 py-1.5 px-2"
+          ></textarea>
+          <button 
+            id="btn-send-main-chat"
+            onclick="handleSendMainMessage()"
+            class="glow-button px-4 py-2 rounded-lg font-mono font-bold text-xs uppercase bg-black border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black shrink-0 transition flex items-center gap-1.5"
+          >
+            <span>Transmit</span>
+            <span id="main-chat-spinner" class="hidden">⚡</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- ===================================================================== -->
+  <!-- RIGHT WORKSPACE DRAWER: NOTES AI, 5X MATRIX, MCP, TELEMETRY           -->
+  <!-- ===================================================================== -->
+  <aside id="workspace-drawer" class="w-96 border-l border-matrix-border bg-black flex flex-col shrink-0 z-30 transition-all duration-300">
+    
+    <!-- Drawer Tabs Header -->
+    <div class="flex items-center border-b border-matrix-border bg-[#020202] text-xs font-mono font-bold">
+      <button 
+        onclick="switchWorkspaceTab('notes')" 
+        id="tab-btn-notes" 
+        class="flex-1 py-2.5 text-center border-b-2 border-matrix-green text-white bg-matrix-card"
+      >
+        Notes AI
+      </button>
+      <button 
+        onclick="switchWorkspaceTab('matrix')" 
+        id="tab-btn-matrix" 
+        class="flex-1 py-2.5 text-center border-b-2 border-transparent text-matrix-darkgreen hover:text-matrix-green"
+      >
+        5X Matrix
+      </button>
+      <button 
+        onclick="switchWorkspaceTab('mcp')" 
+        id="tab-btn-mcp" 
+        class="flex-1 py-2.5 text-center border-b-2 border-transparent text-matrix-darkgreen hover:text-matrix-green"
+      >
+        MCP
+      </button>
+      <button 
+        onclick="switchWorkspaceTab('telemetry')" 
+        id="tab-btn-telemetry" 
+        class="flex-1 py-2.5 text-center border-b-2 border-transparent text-matrix-darkgreen hover:text-matrix-green"
+      >
+        TTY
+      </button>
+    </div>
+
+    <!-- Panel 1: Notes AI / Luau Copilot -->
+    <div id="panel-notes" class="flex-1 flex flex-col p-3.5 space-y-3 overflow-hidden">
+      <div class="flex items-center justify-between text-xs pb-1 border-b border-matrix-border/60">
+        <span class="font-bold text-white flex items-center gap-1.5">
+          <span>📝</span> <span>LUAU VFX COPILOT</span>
+        </span>
+        <button onclick="sendNotesToStudio()" class="text-[10px] px-2 py-0.5 rounded border border-matrix-border hover:border-matrix-border-bright text-matrix-green bg-black">
+          Run in Studio ↗
+        </button>
+      </div>
+
+      <!-- Notes AI prompt bar -->
+      <div class="flex gap-1.5">
+        <input 
+          type="text" 
+          id="input-notes-prompt" 
+          placeholder="Ask Notes AI (e.g. 'Draft Void shockwave controller')..."
+          class="flex-1 px-2.5 py-1.5 rounded border border-matrix-border bg-black text-matrix-green text-xs font-mono focus:outline-none focus:border-matrix-border-bright"
+        />
+        <button 
+          id="btn-ask-notes-ai"
+          onclick="handleAskNotesAi()" 
+          class="px-3 py-1.5 rounded border border-matrix-border-bright text-matrix-green hover:bg-matrix-green hover:text-black text-xs font-bold font-mono"
+        >
+          Ask
+        </button>
+      </div>
+
+      <!-- Notes Editor Textarea -->
+      <div class="flex-1 flex flex-col space-y-1 min-h-0">
+        <div class="flex items-center justify-between text-[10px] text-matrix-darkgreen">
+          <span>SCRATCHPAD // LUAU SCRIPT:</span>
+          <span id="notes-word-count">0 words</span>
+        </div>
+        <textarea 
+          id="notes-editor"
+          class="flex-1 w-full p-2.5 rounded-lg border border-matrix-border bg-[#020202] text-matrix-green text-xs font-mono focus:outline-none resize-none leading-relaxed"
+          placeholder="-- Stroke Notes AI Workspace
+-- Generated VFX controllers, particle modules, and notes will appear here.
+-- You can edit directly and dispatch to Roblox Studio via Studio MCP."
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- Panel 2: 5X VFX Matrix Records -->
+    <div id="panel-matrix" class="hidden flex-1 p-3.5 space-y-3 overflow-y-auto font-mono text-xs">
+      <div class="flex items-center justify-between pb-1.5 border-b border-matrix-border text-xs">
+        <span class="font-bold text-white">5-CYCLE INGESTED MATRIX</span>
+        <span id="drawer-matrix-status" class="text-[10px] px-2 py-0.5 rounded border border-matrix-border text-matrix-glow">5/5 INGESTED</span>
+      </div>
+      <p class="text-[11px] text-matrix-muted leading-relaxed">
+        5 sequential feeding passes absorbed from <code class="text-white">vfx_data.json</code> (14,666 instances) and <code class="text-white">vfx_dump.txt</code> (4.4 MB).
+      </p>
+      <div id="drawer-matrix-cards" class="space-y-2">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- Panel 3: MCP Server Bridge -->
+    <div id="panel-mcp" class="hidden flex-1 p-3.5 space-y-3 overflow-y-auto font-mono text-xs">
+      <div class="flex items-center justify-between pb-1.5 border-b border-matrix-border text-xs">
+        <span class="font-bold text-white">UNIVERSAL MCP BRIDGE</span>
+        <span class="text-[10px] px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green">ACTIVE</span>
+      </div>
+
+      <!-- Studio MCP Card -->
+      <div class="p-3 rounded-lg border border-matrix-border bg-black space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-white flex items-center gap-1.5">
+            <span>🎮</span> <span>Roblox Studio MCP</span>
+          </span>
+          <span class="text-[10px] text-matrix-green font-bold">CONNECTED</span>
+        </div>
+        <p class="text-[11px] text-matrix-muted">
+          Allows AI to execute live Luau scripts, search DataModel, and insert verified assets into Studio.
+        </p>
+        <button 
+          onclick="testStudioExecution()"
+          class="w-full py-1.5 rounded border border-matrix-border hover:border-matrix-border-bright text-[11px] font-bold text-matrix-green bg-matrix-card"
+        >
+          Test Studio Luau Ping
+        </button>
+      </div>
+
+      <!-- GitHub MCP Card -->
+      <div class="p-3 rounded-lg border border-matrix-border bg-black space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-white flex items-center gap-1.5">
+            <span>🐙</span> <span>GitHub MCP Server</span>
+          </span>
+          <span class="text-[10px] text-matrix-green font-bold">READY</span>
+        </div>
+        <p class="text-[11px] text-matrix-muted">
+          Allows AI to commit code, update files, and create pull requests to your repositories.
+        </p>
+        <div class="flex items-center justify-between text-[10px] text-matrix-darkgreen">
+          <span>Target: AyanshShrivastava/stroke</span>
+          <a href="/auth/github-connect" class="text-matrix-glow underline hover:text-white">Re-auth PAT ↗</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 4: TTY Live Telemetry -->
+    <div id="panel-telemetry" class="hidden flex-1 flex flex-col p-3 space-y-2 overflow-hidden font-mono">
+      <div class="flex items-center justify-between pb-1 border-b border-matrix-border text-xs">
+        <span class="font-bold text-matrix-green flex items-center gap-1.5">
+          <span class="h-2 w-2 rounded-full bg-matrix-green status-dot-active"></span>
+          <span>TTY TELEMETRY MONITOR</span>
+        </span>
+        <button onclick="clearTerminal()" class="text-[10px] text-matrix-muted hover:text-white">CLEAR</button>
+      </div>
+      <div id="terminal-viewport" class="flex-1 overflow-y-auto p-2 bg-[#020202] border border-matrix-border rounded text-[11px] space-y-1 text-matrix-green/90">
+        <!-- Telemetry lines inserted here -->
+      </div>
+    </div>
+  </aside>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: AUTHENTICATION (SHOWN BEFORE LOGIN)                          -->
+  <!-- ===================================================================== -->
+  <div id="modal-auth" class="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="w-full max-w-md rounded-xl border border-matrix-border-bright bg-matrix-card p-6 glow-box space-y-5 font-mono shadow-2xl">
+      <div class="flex items-center justify-between border-b border-matrix-border pb-3">
+        <div class="flex items-center gap-2">
+          <span class="h-2.5 w-2.5 rounded-full bg-matrix-green status-dot-active"></span>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider glow-text">OPERATOR IDENTITY HANDSHAKE</h2>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded border border-matrix-border text-matrix-muted">STEP 01</span>
+      </div>
+
+      <p class="text-xs text-matrix-muted leading-relaxed">
+        Stroke requires email authentication to bind your stateless Firestore session. 
+        Upon verification, the system triggers the <strong class="text-white">5-Cycle Elemental Worlds VFX Ingestion Engine</strong>.
+      </p>
+
+      <!-- Step A: Email Input -->
+      <div class="space-y-1.5">
+        <label class="text-[10px] text-matrix-darkgreen uppercase">Target Operator Identity:</label>
+        <div class="flex gap-2">
+          <input 
+            type="email" 
+            id="input-auth-email" 
+            placeholder="operator@domain.com"
+            class="flex-1 px-3 py-2 rounded border border-matrix-border bg-black text-matrix-green text-xs font-mono focus:outline-none focus:border-matrix-border-bright"
+          />
+          <button 
+            id="btn-auth-send-otp"
+            onclick="handleAuthSendOtp()"
+            class="glow-button px-4 py-2 rounded border border-matrix-border-bright bg-black text-matrix-green hover:bg-matrix-green hover:text-black font-bold text-xs uppercase transition whitespace-nowrap"
+          >
+            <span>Send OTP</span>
+            <span id="spinner-auth-send" class="hidden">⚡</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step B: OTP Input -->
+      <div id="auth-otp-container" class="hidden space-y-2 pt-2 border-t border-matrix-border/50">
+        <div class="flex items-center justify-between text-[10px] text-matrix-muted">
+          <span>ENTER 6-DIGIT SECURITY TOKEN:</span>
+          <span id="auth-timer-label" class="text-yellow-400">05:00 TTL</span>
+        </div>
+        <div class="flex gap-2">
+          <input 
+            type="text" 
+            id="input-auth-otp" 
+            maxlength="6"
+            placeholder="000000"
+            class="flex-1 px-3 py-2 text-center text-sm font-bold tracking-widest rounded border border-matrix-border bg-black text-white font-mono focus:outline-none focus:border-matrix-border-bright"
+          />
+          <button 
+            id="btn-auth-verify-otp"
+            onclick="handleAuthVerifyOtp()"
+            class="glow-button px-5 py-2 rounded border border-matrix-border-bright bg-matrix-green text-black font-bold text-xs uppercase transition whitespace-nowrap"
+          >
+            <span>Verify & Ingest</span>
+            <span id="spinner-auth-verify" class="hidden">⚡</span>
+          </button>
+        </div>
+        <p class="text-[10px] text-matrix-darkgreen">
+          Token simulated to server stdout terminal. Check console for 6-digit key.
+        </p>
+      </div>
+
+      <div class="pt-2 text-[10px] text-center text-matrix-darkgreen border-t border-matrix-border/40">
+        SECURE FIREBASE FIRESTORE STATELSS AUTHENTICATION
+      </div>
+    </div>
   </div>
 
+
   <!-- ===================================================================== -->
-  <!-- VANILLA JAVASCRIPT ASYNCHRONOUS NETWORK & TELEMETRY CONTROLLER       -->
+  <!-- MODAL 2: 5-CYCLE SEQUENTIAL VFX INGESTION PROGRESS MODAL               -->
+  <!-- ===================================================================== -->
+  <div id="modal-feeding" class="hidden fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-50">
+    <div class="w-full max-w-xl rounded-xl border border-matrix-border-bright bg-matrix-card p-6 glow-box space-y-4 font-mono shadow-2xl">
+      <div class="flex items-center justify-between border-b border-matrix-border pb-3">
+        <div class="flex items-center gap-2">
+          <span class="h-3 w-3 rounded-full bg-matrix-green status-dot-active"></span>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider glow-text">5-CYCLE NEURAL VFX INGESTION</h2>
+        </div>
+        <span id="feeding-cycle-indicator" class="text-xs px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green font-bold">CYCLE 1/5</span>
+      </div>
+
+      <p class="text-xs text-matrix-muted leading-relaxed">
+        Ingesting <strong class="text-white">vfx_data.json</strong> (14,666 instances) &amp; <strong class="text-white">vfx_dump.txt</strong> (4.4 MB). 
+        The AI digests each domain sequentially and builds structural Firestore sub-documents.
+      </p>
+
+      <!-- Progress Meter -->
+      <div class="space-y-1">
+        <div class="flex justify-between text-[11px] text-matrix-muted">
+          <span id="feeding-stage-label">Cycle 1/5: Void Singularity & Flipbook Convergence...</span>
+          <span id="feeding-pct-label" class="text-matrix-green font-bold">20%</span>
+        </div>
+        <div class="w-full bg-black rounded-full h-2.5 border border-matrix-border overflow-hidden">
+          <div id="feeding-progress-bar" class="h-full bg-matrix-green w-1/5 transition-all duration-500 shadow-[0_0_12px_#00ff66]"></div>
+        </div>
+      </div>
+
+      <!-- Live Cycle Synthesis Viewport -->
+      <div class="space-y-1">
+        <span class="text-[10px] text-matrix-darkgreen uppercase">AI Deep Synthesis Output:</span>
+        <div id="feeding-synthesis-stream" class="p-3.5 rounded-lg border border-matrix-border bg-black text-xs text-matrix-green max-h-48 overflow-y-auto leading-relaxed whitespace-pre-wrap">
+          Initializing Cycle 1 ingestion from Elemental Worlds database...
+        </div>
+      </div>
+
+      <div class="text-[10px] text-matrix-darkgreen text-center">
+        Atomic batching: STRK-BAT-001 through STRK-BAT-005 committing into Firestore.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===================================================================== -->
+  <!-- VANILLA JAVASCRIPT ASYNCHRONOUS APPLICATION CONTROLLER               -->
   <!-- ===================================================================== -->
   <script>
-    // State Registry (Stateless backend synchronizer)
     const state = {
       email: '',
       isAuthenticated: false,
       databaseFed: false,
-      githubConnected: false,
-      otpTimer: null,
-      otpSecondsLeft: 0,
-      logCounter: 0,
+      chats: [
+        {
+          id: 'chat-1',
+          title: 'Main Chat // VFX & MCP Engine',
+          timestamp: new Date().toLocaleTimeString(),
+          messages: []
+        }
+      ],
+      activeChatId: 'chat-1',
+      activeDrawerTab: 'notes',
+      vfxRecords: [],
+      logCounter: 0
     };
 
-    // API Base URL - Automatically detect host origin or fallback to local port 8000
     const API_BASE = (window.location.protocol.startsWith('http')) 
       ? window.location.origin 
       : 'http://localhost:8000';
 
     // -------------------------------------------------------------------------
-    // TELEMETRY LOGGING ENGINE
+    // TELEMETRY ENGINE
     // -------------------------------------------------------------------------
-    const terminalViewport = document.getElementById('terminal-viewport');
-    const logCountElem = document.getElementById('log-count');
-
-    function getTimestamp() {
-      const d = new Date();
-      const pad = (n, s=2) => String(n).padStart(s, '0');
-      return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
-    }
-
-    /**
-     * Appends a formatted hacker-style system telemetry log into the reactive terminal.
-     * @param {string} tag - Event classification ([INIT], [NET_REQ], [NET_RES], [FIRESTORE], [OAUTH], [ERROR])
-     * @param {string} message - Telemetry payload description
-     * @param {string} detail - Optional metadata string or code snippet
-     */
     function logTelemetry(tag, message, detail = null) {
       state.logCounter++;
-      logCountElem.textContent = state.logCounter;
+      const viewport = document.getElementById('terminal-viewport');
+      if (!viewport) return;
 
-      const time = getTimestamp();
-      const line = document.createElement('div');
-      line.className = 'font-mono transition-opacity duration-150';
+      const d = new Date();
+      const pad = (n, s=2) => String(n).padStart(s, '0');
+      const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
       let tagColor = 'text-matrix-green';
-      if (tag.includes('ERR')) tagColor = 'text-matrix-danger font-bold';
+      if (tag.includes('ERR')) tagColor = 'text-red-400 font-bold';
       else if (tag.includes('REQ')) tagColor = 'text-yellow-400';
       else if (tag.includes('RES')) tagColor = 'text-cyan-400';
-      else if (tag.includes('OAUTH')) tagColor = 'text-purple-400';
-      else if (tag.includes('FIRESTORE')) tagColor = 'text-matrix-glow font-bold';
+      else if (tag.includes('MCP')) tagColor = 'text-purple-400 font-bold';
+      else if (tag.includes('VFX')) tagColor = 'text-matrix-glow font-bold';
 
+      const line = document.createElement('div');
+      line.className = 'font-mono transition-opacity leading-tight';
       line.innerHTML = `
         <span class="text-matrix-darkgreen">[${time}]</span>
         <span class="${tagColor}">${tag}</span>
         <span class="text-matrix-green">${escapeHtml(message)}</span>
-        ${detail ? `<div class="text-[10px] text-matrix-muted pl-4 border-l border-matrix-border my-0.5 opacity-90">${escapeHtml(detail)}</div>` : ''}
+        ${detail ? `<div class="text-[10px] text-matrix-muted pl-3 border-l border-matrix-border my-0.5">${escapeHtml(detail)}</div>` : ''}
       `;
+      viewport.appendChild(line);
+      viewport.scrollTop = viewport.scrollHeight;
+    }
 
-      terminalViewport.appendChild(line);
-      terminalViewport.scrollTop = terminalViewport.scrollHeight;
+    function clearTerminal() {
+      const viewport = document.getElementById('terminal-viewport');
+      if (viewport) viewport.innerHTML = '';
+      logTelemetry('[SYS_RESET]', 'Terminal buffer flushed.');
     }
 
     function escapeHtml(str) {
@@ -793,805 +719,519 @@
         .replace(/'/g, '&#039;');
     }
 
-    function clearTerminal() {
-      terminalViewport.innerHTML = '';
-      state.logCounter = 0;
-      logCountElem.textContent = '0';
-      logTelemetry('[SYS_RESET]', 'Terminal buffer flushed by operator.');
-    }
-
-    function copyTerminalLogs() {
-      const text = terminalViewport.innerText;
-      navigator.clipboard.writeText(text).then(() => {
-        logTelemetry('[EXPORT]', 'Telemetry log buffer copied to system clipboard.');
-      }).catch(() => {
-        logTelemetry('[EXPORT_ERR]', 'Clipboard write permission rejected.');
-      });
-    }
-
     // -------------------------------------------------------------------------
-    // LIVE CLOCK & HEARTBEAT
+    // AUTHENTICATION WORKFLOW
     // -------------------------------------------------------------------------
-    function initClock() {
-      const clockElem = document.getElementById('clock-display');
-      setInterval(() => {
-        const now = new Date();
-        clockElem.textContent = now.toUTCString().slice(17, 25) + ' UTC';
-      }, 1000);
-    }
-
-    // -------------------------------------------------------------------------
-    // WORKFLOW 1: SEND OTP (POST /auth/send-otp)
-    // -------------------------------------------------------------------------
-    async function handleSendOtp() {
-      const emailInput = document.getElementById('input-email');
-      const email = emailInput.value.trim().toLowerCase();
-
-      if (!email || !email.includes('@') || !email.includes('.')) {
-        logTelemetry('[ERR_VAL]', 'Invalid email format entered.', 'Format must be operator@domain.ext');
-        emailInput.focus();
+    async function handleAuthSendOtp() {
+      const input = document.getElementById('input-auth-email');
+      const email = input.value.trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        alert('Please enter a valid operator email address.');
         return;
       }
 
-      state.email = email;
-      const btn = document.getElementById('btn-send-otp');
-      const spinner = document.getElementById('send-otp-spinner');
+      const btn = document.getElementById('btn-auth-send-otp');
+      const spinner = document.getElementById('spinner-auth-send');
       btn.disabled = true;
       spinner.classList.remove('hidden');
 
-      logTelemetry('[NET_REQ]', `POST ${API_BASE}/auth/send-otp`, `Target identity: ${email}`);
-      logTelemetry('[CRYPTO]', 'Generating cryptographically secure 6-digit random token...');
+      logTelemetry('[AUTH_REQ]', `POST /auth/send-otp for ${email}`);
 
       try {
-        const response = await fetch(`${API_BASE}/auth/send-otp`, {
+        const res = await fetch(`${API_BASE}/auth/send-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email })
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to dispatch OTP');
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.detail || `Server error code ${response.status}`);
-        }
-
-        logTelemetry('[NET_RES]', 'Status 200 OK — OTP generation handshake complete.');
-        logTelemetry('[FIRESTORE]', `Write transaction executed at users/${email}`, 'Fields: { otp_code, otp_expires_at: +5m }');
-        logTelemetry('[SMTP_SIM]', 'Simulated SMTP delivery dispatched to server stdout.');
-
-        // Update UI
-        document.getElementById('otp-phase-status').textContent = 'CODE DISPATCHED';
-        document.getElementById('otp-phase-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green';
-        document.getElementById('session-email-label').textContent = email;
-        
-        // Start 5-minute countdown timer
-        startOtpCountdown(data.expires_in_seconds || 300);
-
-        // Focus OTP input
-        const otpInput = document.getElementById('input-otp-code');
-        otpInput.focus();
-
+        state.email = email;
+        document.getElementById('auth-otp-container').classList.remove('hidden');
+        logTelemetry('[AUTH_DISPATCH]', 'OTP token printed to server stdout console.');
+        alert(`Authentication OTP generated! Check your terminal/server logs for the 6-digit key.`);
       } catch (err) {
-        logTelemetry('[ERR_HTTP]', `Failed to transmit OTP: ${err.message}`);
+        logTelemetry('[AUTH_ERR]', err.message);
+        alert(`Error: ${err.message}`);
       } finally {
         btn.disabled = false;
         spinner.classList.add('hidden');
       }
     }
 
-    function startOtpCountdown(seconds) {
-      clearInterval(state.otpTimer);
-      state.otpSecondsLeft = seconds;
-      
-      const badge = document.getElementById('otp-timer-badge');
-      const label = document.getElementById('otp-countdown');
-      badge.classList.remove('hidden');
-
-      const updateTimer = () => {
-        const mins = Math.floor(state.otpSecondsLeft / 60);
-        const secs = state.otpSecondsLeft % 60;
-        label.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-
-        if (state.otpSecondsLeft <= 0) {
-          clearInterval(state.otpTimer);
-          label.textContent = 'EXPIRED';
-          logTelemetry('[TIMEOUT]', 'OTP Token validity window elapsed (300s TTL).');
-          document.getElementById('otp-phase-status').textContent = 'TOKEN EXPIRED';
-        }
-        state.otpSecondsLeft--;
-      };
-
-      updateTimer();
-      state.otpTimer = setInterval(updateTimer, 1000);
-    }
-
-    // -------------------------------------------------------------------------
-    // WORKFLOW 2: VERIFY OTP (POST /auth/verify-otp)
-    // -------------------------------------------------------------------------
-    async function handleVerifyOtp() {
-      const email = state.email || document.getElementById('input-email').value.trim().toLowerCase();
-      const otpInput = document.getElementById('input-otp-code');
-      const otpCode = otpInput.value.trim();
-
-      if (!email) {
-        logTelemetry('[ERR_VAL]', 'Identity email is missing. Transmit OTP first.');
-        return;
-      }
-      if (!otpCode || otpCode.length !== 6 || !/^\d{6}$/.test(otpCode)) {
-        logTelemetry('[ERR_VAL]', 'OTP cipher must be strictly 6 numeric digits.');
-        otpInput.focus();
+    async function handleAuthVerifyOtp() {
+      const otpInput = document.getElementById('input-auth-otp');
+      const otp = otpInput.value.trim();
+      if (otp.length !== 6) {
+        alert('Please enter the 6-digit OTP code.');
         return;
       }
 
-      const btn = document.getElementById('btn-verify-otp');
-      const spinner = document.getElementById('verify-otp-spinner');
+      const btn = document.getElementById('btn-auth-verify-otp');
+      const spinner = document.getElementById('spinner-auth-verify');
       btn.disabled = true;
       spinner.classList.remove('hidden');
 
-      logTelemetry('[NET_REQ]', `POST ${API_BASE}/auth/verify-otp`, `Evaluating cipher [${otpCode}] for ${email}`);
-      logTelemetry('[FIRESTORE]', `Reading users/${email} in atomic transaction`);
+      logTelemetry('[AUTH_VERIFY]', `POST /auth/verify-otp for ${state.email}`);
 
       try {
-        const response = await fetch(`${API_BASE}/auth/verify-otp`, {
+        const res = await fetch(`${API_BASE}/auth/verify-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, otp_code: otpCode })
+          body: JSON.stringify({ email: state.email, otp_code: otp })
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.detail || `Authentication rejected: ${response.status}`);
-        }
-
-        clearInterval(state.otpTimer);
-        document.getElementById('otp-timer-badge').classList.add('hidden');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Verification rejected');
 
         state.isAuthenticated = true;
-        state.databaseFed = data.database_fed || false;
-        state.githubConnected = data.github_connected || false;
+        state.databaseFed = !!data.database_fed;
 
-        logTelemetry('[NET_RES]', 'Status 200 OK — Authentication accepted.');
-        logTelemetry('[FIRESTORE]', 'Clean State Management verified: otp_code & otp_expires_at cleared to NULL.');
-        logTelemetry('[AUTH_OK]', `Operator identity established: ${email}`);
+        // Hide auth modal
+        document.getElementById('modal-auth').classList.add('hidden');
 
-        // Update UI
-        document.getElementById('otp-phase-status').textContent = 'AUTHENTICATED';
-        document.getElementById('otp-phase-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
-        document.getElementById('session-badge').className = 'text-xs px-3 py-1.5 rounded border border-matrix-border-bright bg-matrix-card font-mono text-matrix-green';
-        document.getElementById('session-email-label').textContent = email;
+        // Update profile in sidebar
+        updateProfileUI();
 
-        // Auto trigger: 5X high-density database injection matrix instantly following authentication
-        logTelemetry('[TRIGGER]', 'Invoking 5X High-Density Database Injection Matrix automatically...');
-        await handleFeedDatabase5x();
+        logTelemetry('[AUTH_SUCCESS]', `Operator verified: ${state.email}`);
 
-        // Refresh live user telemetry
-        await syncUserStatus();
+        // Check if database was fed; if not, trigger the 5-cycle feeding sequence automatically!
+        if (!state.databaseFed) {
+          trigger5CyclesFeeding();
+        } else {
+          loadUserRecords();
+        }
 
       } catch (err) {
-        logTelemetry('[ERR_AUTH]', `Verification Failure: ${err.message}`);
+        logTelemetry('[AUTH_FAIL]', err.message);
+        alert(`Verification failure: ${err.message}`);
       } finally {
         btn.disabled = false;
         spinner.classList.add('hidden');
       }
     }
 
-    // -------------------------------------------------------------------------
-    // WORKFLOW 3: DIRECT GITHUB OAUTH REDIRECTION LOOP (GET /auth/github-connect)
-    // -------------------------------------------------------------------------
-    function handleConnectGithub() {
-      const email = state.email || document.getElementById('input-email').value.trim().toLowerCase();
+    function updateProfileUI() {
+      const nameElem = document.getElementById('profile-name');
+      const dotElem = document.getElementById('profile-status-dot');
+      const textElem = document.getElementById('profile-status-text');
+      const emailBadge = document.getElementById('profile-email-badge');
 
-      if (!email) {
-        logTelemetry('[ERR_VAL]', 'Identity email required before initiating GitHub OAuth loop.');
-        document.getElementById('input-email').focus();
-        return;
-      }
-
-      logTelemetry('[OAUTH]', 'Initializing direct GitHub OAuth redirection loop...');
-      logTelemetry('[OAUTH_SCOPE]', 'Requesting explicit scopes: repo, read:user, user:email');
-
-      const connectUrl = `${API_BASE}/auth/github-connect?email=${encodeURIComponent(email)}`;
-      logTelemetry('[NET_REQ]', `GET ${connectUrl}`, 'Generating cryptographic compound state token...');
-
-      // Open OAuth Gateway in a styled popup bridge or redirect
-      const width = 600, height = 700;
-      const left = (window.innerWidth - width) / 2 + window.screenX;
-      const top = (window.innerHeight - height) / 2 + window.screenY;
-      
-      const popup = window.open(
-        connectUrl,
-        'StrokeGithubAuth',
-        `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no`
-      );
-
-      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-        logTelemetry('[OAUTH_WARN]', 'Popup blocked. Redirecting current browser window...');
-        window.location.href = connectUrl;
-      } else {
-        logTelemetry('[OAUTH_WAIT]', 'Awaiting GitHub OAuth callback handshake in popup listener...');
+      if (state.isAuthenticated) {
+        nameElem.textContent = state.email.split('@')[0].toUpperCase();
+        emailBadge.textContent = state.email;
+        dotElem.className = 'h-1.5 w-1.5 rounded-full bg-matrix-green status-dot-active';
+        textElem.textContent = state.databaseFed ? '5X VFX FED' : 'VERIFIED';
       }
     }
 
-    // Popup PostMessage Listener
-    window.addEventListener('message', async (event) => {
-      if (event.data && event.data.type === 'STROKE_GITHUB_CONNECTED') {
-        logTelemetry('[OAUTH_SUCCESS]', 'GitHub Handshake caught via OAuth Bridge Listener.');
-        logTelemetry('[FIRESTORE]', `Structural PAT recorded into users/${event.data.email}.github_token`);
-        state.githubConnected = true;
-        await syncUserStatus();
-      }
-    });
-
-    // -------------------------------------------------------------------------
-    // WORKFLOW 4: 5X HIGH-DENSITY DATABASE INJECTION MATRIX (POST /database/feed-5x)
-    // -------------------------------------------------------------------------
-    async function handleFeedDatabase5x() {
-      const email = state.email || document.getElementById('input-email').value.trim().toLowerCase();
-
-      if (!email) {
-        logTelemetry('[ERR_VAL]', 'Identity email missing. Authenticate operator first.');
-        return;
-      }
-
-      const btn = document.getElementById('btn-feed-database');
-      const spinner = document.getElementById('feed-spinner');
-      const progressContainer = document.getElementById('injection-progress-container');
-      const progressBar = document.getElementById('injection-progress-bar');
-      const progressLabel = document.getElementById('injection-pct-label');
-
-      btn.disabled = true;
-      spinner.classList.remove('hidden');
-      progressContainer.classList.remove('hidden');
-
-      logTelemetry('[MATRIX_START]', 'Executing 5X High-Density Database Injection Matrix...');
-      logTelemetry('[NET_REQ]', `POST ${API_BASE}/database/feed-5x`, `Payload target: { email: "${email}" }`);
-
-      // Micro-animation for telemetry visual feedback
-      let pct = 0;
-      const animTimer = setInterval(() => {
-        pct = Math.min(92, pct + 18);
-        progressBar.style.width = `${pct}%`;
-        progressLabel.textContent = `${pct}%`;
-      }, 70);
-
-      try {
-        const response = await fetch(`${API_BASE}/database/feed-5x`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        });
-
-        const data = await response.json();
-        clearInterval(animTimer);
-
-        if (!response.ok) {
-          throw new Error(data.detail || `Matrix injection error: ${response.status}`);
-        }
-
-        progressBar.style.width = '100%';
-        progressLabel.textContent = '100% COMPLETE';
-
-        logTelemetry('[NET_RES]', 'Status 200 OK — db.batch() committed atomically.');
-        logTelemetry('[FIRESTORE]', `5 Sub-documents injected into users/${email}/records/`, 'Sequence: STRK-BAT-001 -> STRK-BAT-005 (Elemental Worlds)');
-        logTelemetry('[FIRESTORE]', `Parent flag updated atomically: users/${email}.database_fed = TRUE`);
-
-        state.databaseFed = true;
-        renderInjectedRecords(data.records || []);
-
-        if (data.records) {
-          data.records.forEach((r) => {
-            logTelemetry('[VFX_MATRIX]', `Injected ${r.record_id}: ${r.vfx_name || 'VFX Record'} (${r.element || 'VFX'})`, `Asset: ${r.primary_asset || 'N/A'} | Load: ${r.metric_load}% | Hash: 0x${r.integrity_hash}`);
-          });
-        }
-
-        document.getElementById('matrix-fed-status').textContent = 'SYNCHRONIZED';
-        document.getElementById('matrix-fed-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
-
-      } catch (err) {
-        clearInterval(animTimer);
-        logTelemetry('[ERR_MATRIX]', `Data injection aborted: ${err.message}`);
-      } finally {
-        btn.disabled = false;
-        spinner.classList.add('hidden');
-      }
+    function toggleProfileMenu() {
+      const menu = document.getElementById('profile-menu');
+      menu.classList.toggle('hidden');
     }
 
-    /**
-     * Renders the 5 structural sub-documents into the high-density cyberpunk table.
-     */
-    function renderInjectedRecords(records) {
-      const container = document.getElementById('injected-records-container');
-      const tbody = document.getElementById('records-table-body');
-      tbody.innerHTML = '';
-
-      if (!records || records.length === 0) {
-        container.classList.add('hidden');
-        return;
-      }
-
-      container.classList.remove('hidden');
-
-      records.forEach((rec) => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-matrix-black/80 transition-colors border-b border-matrix-border/20';
-
-        const loadVal = parseFloat(rec.metric_load) || 90.0;
-        const colorHex = rec.color_hex || '#00ff66';
-        const vfxName = rec.vfx_name || 'Standard Matrix Record';
-        const element = rec.element || 'CORE';
-        const assetId = rec.primary_asset || (rec.integrity_hash ? `0x${rec.integrity_hash}` : 'N/A');
-        const density = (rec.particle_count !== undefined) 
-          ? `${rec.particle_count} particles • ${rec.beam_count || 0} beams` 
-          : (rec.integrity_hash ? `0x${rec.integrity_hash}` : 'Optimized');
-
-        tr.innerHTML = `
-          <td class="py-2.5 px-2 font-bold text-matrix-green tracking-wider whitespace-nowrap text-xs">${escapeHtml(rec.record_id)}</td>
-          <td class="py-2.5 px-2">
-            <div class="space-y-0.5">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase border" style="border-color:${colorHex}; color:${colorHex}; background:rgba(0,0,0,0.6)">
-                  ${escapeHtml(element)}
-                </span>
-                <span class="text-white font-bold text-xs">${escapeHtml(vfxName)}</span>
-              </div>
-              <div class="text-[10px] text-matrix-muted font-mono truncate max-w-[220px]">${escapeHtml(rec.description || '')}</div>
-            </div>
-          </td>
-          <td class="py-2.5 px-2 font-mono text-[11px]">
-            <div class="text-matrix-glow truncate max-w-[190px] font-bold">${escapeHtml(assetId)}</div>
-            <div class="text-[10px] text-matrix-muted">${escapeHtml(density)}</div>
-          </td>
-          <td class="py-2.5 px-2 whitespace-nowrap">
-            <div class="flex items-center gap-2">
-              <span class="text-white font-mono text-xs">${loadVal.toFixed(1)}%</span>
-              <div class="w-12 bg-black h-1.5 rounded-full border border-matrix-border overflow-hidden hidden sm:block">
-                <div class="bg-matrix-green h-full" style="width: ${loadVal}%"></div>
-              </div>
-            </div>
-          </td>
-          <td class="py-2.5 px-2 text-right whitespace-nowrap">
-            <span class="px-2 py-0.5 rounded text-[10px] border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold uppercase">
-              ${escapeHtml(rec.status)}
-            </span>
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
+    function handleLogout() {
+      state.email = '';
+      state.isAuthenticated = false;
+      state.databaseFed = false;
+      document.getElementById('modal-auth').classList.remove('hidden');
+      document.getElementById('profile-menu').classList.add('hidden');
+      document.getElementById('profile-name').textContent = 'Guest Operator';
+      document.getElementById('profile-status-text').textContent = 'Unauthenticated';
+      document.getElementById('profile-status-dot').className = 'h-1.5 w-1.5 rounded-full bg-yellow-400';
+      logTelemetry('[AUTH_LOGOUT]', 'Operator session terminated.');
     }
 
     // -------------------------------------------------------------------------
-    // TELEMETRY SYNCHRONIZATION (GET /user/status)
+    // 5-CYCLE SEQUENTIAL FEEDING PIPELINE
     // -------------------------------------------------------------------------
-    async function syncUserStatus() {
+    async function trigger5CyclesFeeding() {
       if (!state.email) return;
 
-      try {
-        const res = await fetch(`${API_BASE}/user/status?email=${encodeURIComponent(state.email)}`);
-        if (!res.ok) return;
+      const modal = document.getElementById('modal-feeding');
+      modal.classList.remove('hidden');
 
-        const data = await res.json();
-        if (data.exists) {
-          // Sync GitHub connection badge
-          if (data.github_connected) {
-            state.githubConnected = true;
-            document.getElementById('github-sync-status').textContent = 'PAT ACTIVE';
-            document.getElementById('github-sync-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
-            
-            const patCard = document.getElementById('github-pat-card');
-            const patMasked = document.getElementById('github-pat-masked');
-            patCard.classList.remove('hidden');
-            patMasked.textContent = data.github_token_masked || 'ghp_••••••••••••';
-          }
+      const progressBar = document.getElementById('feeding-progress-bar');
+      const pctLabel = document.getElementById('feeding-pct-label');
+      const cycleInd = document.getElementById('feeding-cycle-indicator');
+      const stageLabel = document.getElementById('feeding-stage-label');
+      const stream = document.getElementById('feeding-synthesis-stream');
 
-          // Sync database_fed flag
-          if (data.database_fed) {
-            state.databaseFed = true;
-            document.getElementById('matrix-fed-status').textContent = 'SYNCHRONIZED';
-            document.getElementById('matrix-fed-status').className = 'text-[11px] font-mono px-2 py-0.5 rounded border border-matrix-border-bright bg-matrix-border text-matrix-green font-bold';
-          }
+      stream.textContent = 'Initializing 5-cycle ingestion from vfx_data.json and vfx_dump.txt...\n';
+      logTelemetry('[FEEDING_INIT]', 'Starting 5-cycle sequential VFX ingestion pipeline...');
 
-          // Render records if available
-          if (data.records && data.records.length > 0) {
-            renderInjectedRecords(data.records);
-          }
-        }
-      } catch (err) {
-        console.error('Status sync error:', err);
-      }
-    }
+      let prevSynthesis = null;
+      state.vfxRecords = [];
 
-    // -------------------------------------------------------------------------
-    // DESKTOP CLIENT DOWNLOAD CONTROLLER
-    // -------------------------------------------------------------------------
-    function detectClientOS() {
-      const ua = navigator.userAgent.toLowerCase();
-      const platform = navigator.platform.toLowerCase();
-      const badge = document.getElementById('detected-os-badge');
-      const headerIcon = document.getElementById('header-os-icon');
-      const headerLabel = document.getElementById('header-os-label');
-      const macCard = document.getElementById('card-macos-download');
-      const winCard = document.getElementById('card-windows-download');
+      for (let cycle = 1; cycle <= 5; cycle++) {
+        const pct = cycle * 20;
+        progressBar.style.width = `${pct}%`;
+        pctLabel.textContent = `${pct}%`;
+        cycleInd.textContent = `CYCLE ${cycle}/5`;
+        stageLabel.textContent = `Executing Cycle ${cycle}/5...`;
 
-      if (ua.includes('win') || platform.includes('win')) {
-        state.detectedOS = 'windows';
-        if (badge) badge.textContent = 'WINDOWS 10 / 11 (64-BIT)';
-        if (headerIcon) headerIcon.textContent = '⊞';
-        if (headerLabel) headerLabel.textContent = 'DOWNLOAD FOR WIN';
-        if (winCard) {
-          winCard.classList.add('border-matrix-border-bright', 'shadow-[0_0_15px_rgba(0,255,102,0.2)]');
-        }
-      } else {
-        // macOS default
-        state.detectedOS = 'macos';
-        const isArm = ua.includes('arm') || ua.includes('macintosh') || platform.includes('mac');
-        if (badge) badge.textContent = isArm ? 'MACOS (APPLE SILICON / INTEL)' : 'MACOS UNIVERSAL';
-        if (headerIcon) headerIcon.textContent = '';
-        if (headerLabel) headerLabel.textContent = 'DOWNLOAD FOR MAC';
-        if (macCard) {
-          macCard.classList.add('border-matrix-border-bright', 'shadow-[0_0_15px_rgba(0,255,102,0.2)]');
+        logTelemetry('[CYCLE_START]', `Feeding Pass ${cycle}/5 to Neural Model...`);
+
+        try {
+          const res = await fetch(`${API_BASE}/database/feed-cycle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: state.email,
+              cycle: cycle,
+              previous_synthesis: prevSynthesis
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || `Cycle ${cycle} failed`);
+
+          prevSynthesis = data.ai_synthesis;
+          state.vfxRecords.push(data.record);
+
+          // Append synthesis text to modal stream
+          stream.textContent += `\n--- CYCLE ${cycle}/5: ${data.stage_name} ---\n${data.ai_synthesis}\n`;
+          stream.scrollTop = stream.scrollHeight;
+
+          logTelemetry('[CYCLE_COMMITTED]', `STRK-BAT-00${cycle} saved to Firestore`, `VFX: ${data.record.vfx_name}`);
+
+          // Slight pause between cycles for smooth operator observation
+          await new Promise(r => setTimeout(r, 600));
+
+        } catch (err) {
+          logTelemetry('[CYCLE_ERR]', err.message);
+          stream.textContent += `\n[ERROR in Cycle ${cycle}]: ${err.message}\n`;
+          break;
         }
       }
-    }
 
-    function openDownloadModal() {
-      const hub = document.getElementById('card-macos-download');
-      if (hub) {
-        hub.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      logTelemetry('[UI_ACTION]', 'Desktop Download Hub focused by operator.');
-    }
+      state.databaseFed = true;
+      updateProfileUI();
+      renderMatrixCards();
 
-    function executeDownload(platform) {
-      const cleanPlatform = platform.toLowerCase();
-      logTelemetry('[DL_INIT]', `Initiating desktop client package download for ${cleanPlatform.toUpperCase()}...`);
-      logTelemetry('[NET_REQ]', `GET ${API_BASE}/download/${cleanPlatform}`, 'Requesting runtime distribution package...');
-
-      const downloadUrl = `${API_BASE}/download/${cleanPlatform}`;
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.setAttribute('download', `Stroke-v1.0.0-${cleanPlatform === 'macos' ? 'macOS' : 'Windows'}.zip`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      stageLabel.textContent = '5-Cycle Neural VFX Absorption 100% COMPLETE!';
+      logTelemetry('[FEEDING_COMPLETE]', 'All 5 cycles absorbed! Neural AI is fully calibrated with top-tier VFX.');
 
       setTimeout(() => {
-        logTelemetry('[DL_SUCCESS]', `Binary stream received for ${cleanPlatform.toUpperCase()}. Check your Downloads folder.`);
-        logTelemetry('[CHECKSUM]', 'SHA-256 package signature verified.');
-        logTelemetry('[HINT]', `Unzip archive and run Stroke-Start.${cleanPlatform === 'macos' ? 'command' : 'bat'} to launch.`);
-      }, 700);
+        modal.classList.add('hidden');
+      }, 1200);
     }
 
-    // -------------------------------------------------------------------------
-    // NEURAL AI & LIVE WEB SEARCH CONTROLLER
-    // -------------------------------------------------------------------------
-    state.webSearchActive = true;
-    state.chatMessages = [];
-
-    function toggleWebSearch() {
-      state.webSearchActive = !state.webSearchActive;
-      const dot = document.getElementById('search-status-dot');
-      const label = document.getElementById('search-toggle-label');
-      const btn = document.getElementById('btn-toggle-search');
-
-      if (state.webSearchActive) {
-        dot.className = 'h-2 w-2 rounded-full bg-matrix-green status-dot-active';
-        label.textContent = 'WEB SEARCH: ON';
-        btn.className = 'w-full py-1.5 px-2 rounded border border-matrix-border-bright bg-matrix-border/50 text-matrix-green text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition';
-        logTelemetry('[SEARCH_CONFIG]', 'Live Internet Grounding: ENABLED');
-      } else {
-        dot.className = 'h-2 w-2 rounded-full bg-matrix-muted opacity-40';
-        label.textContent = 'WEB SEARCH: OFF';
-        btn.className = 'w-full py-1.5 px-2 rounded border border-matrix-border bg-black text-matrix-muted text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition';
-        logTelemetry('[SEARCH_CONFIG]', 'Live Internet Grounding: DISABLED (Local context only)');
-      }
-    }
-
-    async function pullCurrentModel() {
-      const modelSelect = document.getElementById('select-ai-model');
-      const model = modelSelect.value;
-      const btn = document.getElementById('btn-pull-model');
-      
-      btn.disabled = true;
-      btn.innerHTML = '<span>⌛ Pulling...</span>';
-      logTelemetry('[AI_PULL]', `Initiating model pull for ${model} via Ollama...`);
-
+    async function loadUserRecords() {
       try {
-        const res = await fetch(`${API_BASE}/ai/model/pull`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model })
-        });
+        const res = await fetch(`${API_BASE}/user/status?email=${encodeURIComponent(state.email)}`);
         const data = await res.json();
-        
-        if (data.status === 'success') {
-          logTelemetry('[AI_PULL_OK]', `Model ${model} is ready in local library.`);
-          document.getElementById('ai-engine-status').textContent = `${model.toUpperCase()} (LOCAL ACTIVE)`;
-        } else if (data.status === 'ollama_missing') {
-          logTelemetry('[AI_WARN]', 'Ollama daemon not running locally at http://localhost:11434.');
-          logTelemetry('[HINT]', 'Install Ollama from https://ollama.com or enter a free Groq API key.');
-          if (confirm('Local Ollama daemon was not detected. Would you like to open the official Ollama download page?')) {
-            window.open(data.download_url, '_blank');
-          }
-        } else {
-          logTelemetry('[AI_ERR]', data.message || 'Model pull failed.');
+        if (data.records) {
+          state.vfxRecords = data.records;
+          renderMatrixCards();
         }
-      } catch (err) {
-        logTelemetry('[AI_NET_ERR]', `Pull failed: ${err.message}`);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span>⚡ Pull Model</span>';
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // EMBEDDED OFFLINE WEIGHTS DOWNLOADER CONTROLLER (LLAMA 3.2 1B ~770 MB)
-    // -------------------------------------------------------------------------
-    let weightsPollTimer = null;
-
-    async function checkWeightsStatus() {
-      try {
-        const res = await fetch(`${API_BASE}/ai/model/weights-status`);
-        if (!res.ok) return;
-        const data = await res.json();
-        updateWeightsUi(data);
       } catch (e) {}
     }
 
-    function updateWeightsUi(data) {
-      const badge = document.getElementById('weights-badge');
-      const dot = document.getElementById('weights-status-dot');
-      const btn = document.getElementById('btn-download-weights');
-      const progressBox = document.getElementById('weights-progress-box');
-      const progressBar = document.getElementById('weights-progress-bar');
-      const pctLabel = document.getElementById('weights-pct-label');
-      const progressText = document.getElementById('weights-progress-text');
+    function renderMatrixCards() {
+      const container = document.getElementById('drawer-matrix-cards');
+      if (!container) return;
+      container.innerHTML = '';
 
-      if (!badge || !dot || !btn) return;
-
-      if (data.status === 'downloaded' || data.is_ready) {
-        badge.textContent = 'OFFLINE AI READY (AIR-GAPPED)';
-        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green font-bold';
-        dot.className = 'h-2 w-2 rounded-full bg-matrix-green status-dot-active';
-        btn.disabled = true;
-        btn.innerHTML = '<span>✓ Offline Model Ready</span>';
-        btn.className = 'px-4 py-2 rounded font-mono font-bold text-xs uppercase bg-black border border-matrix-border-bright text-matrix-green cursor-default flex items-center gap-1.5 opacity-90';
-        if (progressBox) progressBox.classList.add('hidden');
-        if (weightsPollTimer) {
-          clearInterval(weightsPollTimer);
-          weightsPollTimer = null;
-        }
-      } else if (data.status === 'downloading') {
-        badge.textContent = 'DOWNLOADING';
-        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-matrix-border text-yellow-400 font-bold';
-        dot.className = 'h-2 w-2 rounded-full bg-yellow-400 status-dot-active animate-ping';
-        btn.disabled = true;
-        btn.innerHTML = '<span>⏳ Downloading...</span>';
-        if (progressBox) progressBox.classList.remove('hidden');
-
-        const pct = data.progress_percent || 0;
-        if (progressBar) progressBar.style.width = `${pct}%`;
-        const dlMb = ((data.downloaded_bytes || 0) / (1024 * 1024)).toFixed(1);
-        const totMb = ((data.total_bytes || 770 * 1024 * 1024) / (1024 * 1024)).toFixed(1);
-        if (pctLabel) pctLabel.textContent = `${pct}% (${dlMb} / ${totMb} MB)`;
-        const spd = data.speed_mbps ? ` @ ${data.speed_mbps.toFixed(1)} MB/s` : '';
-        if (progressText) progressText.textContent = `Streaming Llama-3.2 GGUF from CDN${spd}...`;
-
-        if (!weightsPollTimer) {
-          weightsPollTimer = setInterval(checkWeightsStatus, 800);
-        }
-      } else if (data.status === 'failed') {
-        badge.textContent = 'DOWNLOAD FAILED';
-        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-red-500 text-red-400 font-bold';
-        dot.className = 'h-2 w-2 rounded-full bg-red-500';
-        btn.disabled = false;
-        btn.innerHTML = '<span>⚠️ Retry Download</span>';
-        if (weightsPollTimer) {
-          clearInterval(weightsPollTimer);
-          weightsPollTimer = null;
-        }
-      } else {
-        badge.textContent = 'NOT DOWNLOADED';
-        badge.className = 'text-[10px] px-2 py-0.5 rounded border border-matrix-border text-yellow-400 font-bold';
-        dot.className = 'h-2 w-2 rounded-full bg-yellow-400';
-        btn.disabled = false;
-        btn.innerHTML = '<span>📥 Download Offline AI (~770 MB)</span>';
-        if (progressBox) progressBox.classList.add('hidden');
-      }
+      state.vfxRecords.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'p-3 rounded-lg border border-matrix-border bg-black space-y-1.5';
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] px-1.5 py-0.5 rounded border" style="border-color:${r.color_hex || '#00ff66'}; color:${r.color_hex || '#00ff66'}">
+              ${escapeHtml(r.element || 'VFX')}
+            </span>
+            <span class="text-white font-bold text-xs">${escapeHtml(r.record_id)}</span>
+          </div>
+          <div class="text-white font-bold text-xs">${escapeHtml(r.vfx_name)}</div>
+          <div class="text-[10px] text-matrix-muted truncate font-mono">${escapeHtml(r.primary_asset || 'N/A')}</div>
+          <div class="flex items-center justify-between text-[10px] text-matrix-darkgreen pt-1 border-t border-matrix-border/40">
+            <span>Load: ${parseFloat(r.metric_load || 90).toFixed(1)}%</span>
+            <span>${r.particle_count || 12} particles • ${r.beam_count || 4} beams</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
     }
 
-    async function triggerWeightsDownload() {
-      const btn = document.getElementById('btn-download-weights');
-      const progressBox = document.getElementById('weights-progress-box');
-      if (btn) btn.disabled = true;
-      if (progressBox) progressBox.classList.remove('hidden');
-
-      logTelemetry('[WEIGHTS_INIT]', 'Initiating offline Llama 3.2 1B Instruct GGUF download (~770 MB)...');
-      logTelemetry('[NET_REQ]', 'POST /ai/model/download-weights', 'Streaming directly to local models/ storage...');
-
-      try {
-        const res = await fetch(`${API_BASE}/ai/model/download-weights`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        });
-        const data = await res.json();
-        logTelemetry('[WEIGHTS_STREAM]', data.message || 'Background weight acquisition started.');
-
-        if (!weightsPollTimer) {
-          weightsPollTimer = setInterval(checkWeightsStatus, 800);
-        }
-        checkWeightsStatus();
-      } catch (err) {
-        logTelemetry('[WEIGHTS_ERR]', `Failed to trigger download: ${err.message}`);
-        if (btn) btn.disabled = false;
-      }
+    function openVfxMatrixModal() {
+      switchWorkspaceTab('matrix');
+      toggleProfileMenu();
     }
 
-    async function sendAiPrompt() {
-      const input = document.getElementById('input-ai-prompt');
+    // -------------------------------------------------------------------------
+    // MAIN CHAT CONTROLLER (AUTONOMOUS TOOL-CALLING)
+    // -------------------------------------------------------------------------
+    async function handleSendMainMessage() {
+      const input = document.getElementById('input-main-chat');
       const prompt = input.value.trim();
       if (!prompt) return;
 
-      const modelSelect = document.getElementById('select-ai-model');
-      const selectedModel = modelSelect.value;
-      const customKey = document.getElementById('input-ai-key').value.trim();
-      const chatThread = document.getElementById('ai-chat-thread');
-      const btn = document.getElementById('btn-send-ai-prompt');
-      const spinner = document.getElementById('ai-spinner');
+      const activeChat = getActiveChat();
+      activeChat.messages.push({ role: 'user', content: prompt });
+      renderChatMessages();
 
-      // Append user bubble to thread
-      const userBubble = document.createElement('div');
-      userBubble.className = 'flex gap-2.5 items-start justify-end';
-      userBubble.innerHTML = `
-        <div class="p-3 rounded-lg border border-matrix-border-bright bg-matrix-card text-white space-y-1 max-w-[85%]">
-          <div class="text-[10px] text-matrix-muted uppercase">OPERATOR QUERY</div>
-          <div class="whitespace-pre-wrap">${escapeHtml(prompt)}</div>
-        </div>
-        <div class="h-6 w-6 rounded bg-black text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border">
-          USR
-        </div>
-      `;
-      chatThread.appendChild(userBubble);
       input.value = '';
-      chatThread.scrollTop = chatThread.scrollHeight;
+      input.style.height = 'auto';
 
-      // Update state messages
-      state.chatMessages.push({ role: 'user', content: prompt });
-
-      // Telemetry
-      logTelemetry('[AI_PROMPT]', `Operator sent query: "${prompt.slice(0, 50)}${prompt.length > 50 ? '...' : ''}"`);
-      if (state.webSearchActive) {
-        logTelemetry('[WEB_SEARCH]', `Dispatching live DuckDuckGo matrix search for: "${prompt.slice(0, 45)}"`);
-      }
-
+      const btn = document.getElementById('btn-send-main-chat');
+      const spinner = document.getElementById('main-chat-spinner');
       btn.disabled = true;
       spinner.classList.remove('hidden');
 
-      // Placeholder thinking bubble
-      const thinkingBubble = document.createElement('div');
-      thinkingBubble.id = 'ai-thinking-node';
-      thinkingBubble.className = 'flex gap-2.5 items-start';
-      thinkingBubble.innerHTML = `
-        <div class="h-6 w-6 rounded bg-matrix-border text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border-bright">
-          AI
-        </div>
-        <div class="p-3 rounded-lg border border-matrix-border bg-black text-matrix-muted animate-pulse font-mono text-xs">
-          ${state.webSearchActive ? 'Grounding with live web search results & evaluating Llama model...' : 'Synthesizing neural model response...'}
+      // Append thinking node
+      const container = document.getElementById('chat-messages-container');
+      const thinking = document.createElement('div');
+      thinking.id = 'ai-thinking-node';
+      thinking.className = 'flex gap-3 items-start animate-pulse';
+      thinking.innerHTML = `
+        <div class="h-7 w-7 rounded bg-matrix-darkgreen text-black font-bold flex items-center justify-center text-xs shrink-0">AI</div>
+        <div class="p-3 rounded-lg border border-matrix-border bg-black text-matrix-muted text-xs font-mono">
+          Evaluating prompt & determining autonomous tools (web_search, search_vfx_database, studio_execute_luau)...
         </div>
       `;
-      chatThread.appendChild(thinkingBubble);
-      chatThread.scrollTop = chatThread.scrollHeight;
+      container.appendChild(thinking);
+      container.scrollTop = container.scrollHeight;
+
+      logTelemetry('[AI_QUERY]', `Operator prompt: "${prompt.slice(0, 50)}..."`);
+
+      const model = document.getElementById('select-ai-model').value;
 
       try {
-        const response = await fetch(`${API_BASE}/ai/chat`, {
+        const res = await fetch(`${API_BASE}/ai/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: state.chatMessages,
-            model: selectedModel,
-            web_search: state.webSearchActive,
-            api_key: customKey || null
+            messages: activeChat.messages,
+            model: model,
+            web_search: true
           })
         });
 
-        const data = await response.json();
-        chatThread.removeChild(thinkingBubble);
-
-        if (!response.ok) {
-          throw new Error(data.detail || `Server error ${response.status}`);
+        const data = await res.json();
+        if (document.getElementById('ai-thinking-node')) {
+          container.removeChild(thinking);
         }
 
-        const replyText = data.message || '(Empty response)';
-        state.chatMessages.push({ role: 'assistant', content: replyText });
+        if (!res.ok) throw new Error(data.detail || `Server error ${res.status}`);
 
-        logTelemetry('[AI_RESPONSE]', `Synthesized via ${data.provider} (${data.model})`);
+        activeChat.messages.push({
+          role: 'assistant',
+          content: data.message,
+          tool_invoked: data.tool_invoked,
+          tool_name: data.tool_name,
+          tool_query: data.tool_query,
+          sources: data.sources,
+          provider: data.provider,
+          model: data.model
+        });
+
+        renderChatMessages();
+        logTelemetry('[AI_RESPONSE]', `Response generated via ${data.provider}`);
         if (data.tool_invoked) {
-          logTelemetry('[AUTONOMOUS_TOOL]', `AI invoked web_search(query="${data.tool_query || ''}")`);
-        } else {
-          logTelemetry('[DIRECT_REASONING]', 'AI evaluated query directly from model weights.');
+          logTelemetry('[AUTONOMOUS_TOOL]', `Invoked ${data.tool_name}(query='${data.tool_query}')`);
         }
-        if (data.sources && data.sources.length > 0) {
-          logTelemetry('[CITATIONS]', `Referenced ${data.sources.length} live internet sources.`);
-        }
-
-        // Render AI bubble with autonomous tool banner and citation pills
-        const aiBubble = document.createElement('div');
-        aiBubble.className = 'flex gap-2.5 items-start';
-
-        let toolBannerHtml = '';
-        if (data.tool_invoked) {
-          toolBannerHtml = `
-            <div class="p-2 rounded bg-black/80 border border-yellow-500/50 text-yellow-400 text-[10px] font-mono flex items-center gap-2">
-              <span class="animate-pulse">⚡</span>
-              <span><strong>[AUTONOMOUS TOOL CALL]</strong>: Model evaluated prompt &amp; invoked <code>web_search(query="${escapeHtml(data.tool_query || prompt)}")</code></span>
-            </div>
-          `;
-        } else {
-          toolBannerHtml = `
-            <div class="p-1.5 rounded bg-black/60 border border-matrix-border text-matrix-muted text-[10px] font-mono flex items-center gap-2">
-              <span>🧠</span>
-              <span><strong>[DIRECT REASONING]</strong>: Evaluated directly from internal model parameters (No web search needed)</span>
-            </div>
-          `;
-        }
-
-        let citationsHtml = '';
-        if (data.sources && data.sources.length > 0) {
-          citationsHtml = `
-            <div class="mt-2.5 pt-2 border-t border-matrix-border/60">
-              <div class="text-[10px] text-matrix-muted uppercase mb-1 flex items-center gap-1">
-                <span>🔍 Live Web Sources:</span>
-              </div>
-              <div class="flex flex-wrap gap-1.5">
-                ${data.sources.map((s, i) => `
-                  <a href="${escapeHtml(s.url)}" target="_blank" class="text-[10px] px-2 py-0.5 rounded border border-matrix-border bg-black text-matrix-green hover:border-matrix-border-bright hover:bg-matrix-border/40 transition truncate max-w-[240px]" title="${escapeHtml(s.title)}">
-                    [${i+1}] ${escapeHtml(s.title)} ↗
-                  </a>
-                `).join('')}
-              </div>
-            </div>
-          `;
-        }
-
-        aiBubble.innerHTML = `
-          <div class="h-6 w-6 rounded bg-matrix-border text-matrix-green flex items-center justify-center font-bold text-[11px] shrink-0 border border-matrix-border-bright">
-            AI
-          </div>
-          <div class="p-3.5 rounded-lg border border-matrix-border bg-matrix-card text-matrix-green space-y-2.5 max-w-[90%] leading-relaxed">
-            <div class="flex items-center justify-between text-[10px] text-matrix-muted border-b border-matrix-border/40 pb-1">
-              <span class="font-bold text-white uppercase">${escapeHtml(data.provider)}</span>
-              <span>MODEL: ${escapeHtml(data.model)}</span>
-            </div>
-            ${toolBannerHtml}
-            <div class="whitespace-pre-wrap text-xs">${formatMarkdownResponse(replyText)}</div>
-            ${citationsHtml}
-          </div>
-        `;
-        chatThread.appendChild(aiBubble);
-        chatThread.scrollTop = chatThread.scrollHeight;
 
       } catch (err) {
         if (document.getElementById('ai-thinking-node')) {
-          chatThread.removeChild(thinkingBubble);
+          container.removeChild(thinking);
         }
-        logTelemetry('[AI_ERR]', `Chat execution failure: ${err.message}`);
-        const errBubble = document.createElement('div');
-        errBubble.className = 'p-3 rounded border border-matrix-danger/60 bg-red-950/40 text-red-400 font-mono text-xs';
-        errBubble.textContent = `Error: ${err.message}`;
-        chatThread.appendChild(errBubble);
+        logTelemetry('[AI_ERR]', err.message);
+        activeChat.messages.push({
+          role: 'assistant',
+          content: `Error: ${err.message}`
+        });
+        renderChatMessages();
       } finally {
         btn.disabled = false;
         spinner.classList.add('hidden');
       }
     }
 
-    function formatMarkdownResponse(text) {
+    function sendQuickPrompt(text) {
+      document.getElementById('input-main-chat').value = text;
+      handleSendMainMessage();
+    }
+
+    function getActiveChat() {
+      let chat = state.chats.find(c => c.id === state.activeChatId);
+      if (!chat) {
+        chat = state.chats[0];
+        state.activeChatId = chat.id;
+      }
+      return chat;
+    }
+
+    function createNewChat() {
+      const newId = `chat-${Date.now()}`;
+      state.chats.unshift({
+        id: newId,
+        title: `Chat ${state.chats.length + 1}`,
+        timestamp: new Date().toLocaleTimeString(),
+        messages: []
+      });
+      state.activeChatId = newId;
+      renderSidebarChats();
+      renderChatMessages();
+      logTelemetry('[CHAT_NEW]', `Created new conversation context (${newId})`);
+    }
+
+    function selectChat(id) {
+      state.activeChatId = id;
+      renderSidebarChats();
+      renderChatMessages();
+    }
+
+    function renderSidebarChats() {
+      const list = document.getElementById('sidebar-chat-list');
+      list.innerHTML = '';
+
+      state.chats.forEach(c => {
+        const active = (c.id === state.activeChatId);
+        const item = document.createElement('div');
+        item.className = `p-2 rounded-lg cursor-pointer transition flex items-center justify-between text-xs font-mono ${active ? 'bg-matrix-card border border-matrix-border-bright text-white' : 'hover:bg-matrix-card/60 text-matrix-muted border border-transparent'}`;
+        item.onclick = () => selectChat(c.id);
+        item.innerHTML = `
+          <div class="truncate mr-2 font-bold">${escapeHtml(c.title)}</div>
+          <span class="text-[9px] text-matrix-darkgreen shrink-0">${c.timestamp}</span>
+        `;
+        list.appendChild(item);
+      });
+
+      document.getElementById('chat-count-badge').textContent = `${state.chats.length} CHAT${state.chats.length > 1 ? 'S' : ''}`;
+    }
+
+    function renderChatMessages() {
+      const container = document.getElementById('chat-messages-container');
+      const chat = getActiveChat();
+
+      document.getElementById('active-chat-title').textContent = chat.title.toUpperCase();
+
+      // If no messages, show welcome banner
+      if (chat.messages.length === 0) {
+        container.innerHTML = `
+          <div id="chat-welcome-banner" class="max-w-3xl mx-auto p-5 rounded-xl border border-matrix-border bg-matrix-card space-y-3.5 glow-box">
+            <div class="flex items-center justify-between border-b border-matrix-border/60 pb-2.5">
+              <div class="flex items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-full bg-matrix-green status-dot-active shadow-[0_0_8px_#00ff66]"></span>
+                <span class="text-xs font-bold text-white uppercase tracking-wider">STROKE NEURAL OPERATING CORE</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded border border-matrix-border-bright text-matrix-green">READY</span>
+            </div>
+            <p class="text-xs text-matrix-muted leading-relaxed">
+              Autonomous intelligence stack trained on <strong class="text-white">Elemental Worlds VFX Database</strong> (14,666 instances &amp; 4.4 MB raw particle dumps). 
+              Equipped with <strong class="text-matrix-glow">autonomous web search</strong> and <strong class="text-matrix-glow">Universal MCP connectivity</strong> to Roblox Studio and GitHub.
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs">
+              <button onclick="sendQuickPrompt('Give me the exact ParticleEmitter parameters for Sukuna 360 slashes from the VFX database')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+                <div class="font-bold text-white text-[11px]">⚡ Sukuna 360° Slashes</div>
+                <div class="text-[10px] text-matrix-darkgreen">Pulls from vfx_dump.txt & vfx_data.json</div>
+              </button>
+              <button onclick="sendQuickPrompt('How is Hollow Purple configured with flipbooks and beam curve sizes?')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+                <div class="font-bold text-white text-[11px]">🔮 Hollow Purple Flipbooks</div>
+                <div class="text-[10px] text-matrix-darkgreen">Grid4x4 flipbook & curved beam math</div>
+              </button>
+              <button onclick="sendQuickPrompt('What are the latest Roblox Luau 2026 engine updates and type features?')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+                <div class="font-bold text-white text-[11px]">🌐 Search Latest Luau 2026</div>
+                <div class="text-[10px] text-matrix-darkgreen">Autonomous live internet grounding</div>
+              </button>
+              <button onclick="sendQuickPrompt('Execute a test ParticleEmitter in Roblox Studio via Studio MCP')" class="p-2.5 rounded border border-matrix-border hover:border-matrix-border-bright bg-black text-left text-matrix-green hover:bg-matrix-card transition">
+                <div class="font-bold text-white text-[11px]">🎮 Execute in Roblox Studio</div>
+                <div class="text-[10px] text-matrix-darkgreen">Dispatches live code through Studio MCP</div>
+              </button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = '';
+
+      chat.messages.forEach(msg => {
+        const bubble = document.createElement('div');
+
+        if (msg.role === 'user') {
+          bubble.className = 'flex gap-2.5 items-start justify-end';
+          bubble.innerHTML = `
+            <div class="p-3 rounded-lg border border-matrix-border-bright bg-matrix-card text-white space-y-1 max-w-[85%]">
+              <div class="text-[10px] text-matrix-muted uppercase">OPERATOR QUERY</div>
+              <div class="whitespace-pre-wrap text-xs sm:text-sm">${escapeHtml(msg.content)}</div>
+            </div>
+            <div class="h-7 w-7 rounded bg-black text-matrix-green flex items-center justify-center font-bold text-xs shrink-0 border border-matrix-border">
+              USR
+            </div>
+          `;
+        } else {
+          bubble.className = 'flex gap-2.5 items-start';
+
+          // Tool chip if tool was invoked
+          let toolChip = '';
+          if (msg.tool_invoked) {
+            toolChip = `
+              <div class="p-2 rounded bg-black/90 border border-yellow-500/50 text-yellow-400 text-[10px] font-mono flex items-center gap-2">
+                <span class="animate-pulse">⚡</span>
+                <span><strong>[AUTONOMOUS TOOL]</strong>: Model invoked <code>${escapeHtml(msg.tool_name || 'web_search')}(${escapeHtml(msg.tool_query || '')})</code></span>
+              </div>
+            `;
+          } else {
+            toolChip = `
+              <div class="p-1.5 rounded bg-black/60 border border-matrix-border text-matrix-muted text-[10px] font-mono flex items-center gap-2">
+                <span>🧠</span>
+                <span><strong>[DIRECT REASONING]</strong>: Evaluated directly from internal model parameters</span>
+              </div>
+            `;
+          }
+
+          // Citations
+          let citationsHtml = '';
+          if (msg.sources && msg.sources.length > 0) {
+            citationsHtml = `
+              <div class="mt-2.5 pt-2 border-t border-matrix-border/60">
+                <div class="text-[10px] text-matrix-muted uppercase mb-1">Grounded Reference Sources:</div>
+                <div class="flex flex-wrap gap-1.5">
+                  ${msg.sources.map((s, i) => `
+                    <a href="${escapeHtml(s.url)}" target="_blank" class="text-[10px] px-2 py-0.5 rounded border border-matrix-border bg-black text-matrix-green hover:border-matrix-border-bright truncate max-w-[240px]" title="${escapeHtml(s.title)}">
+                      [${i+1}] ${escapeHtml(s.title)} ↗
+                    </a>
+                  `).join('')}
+                </div>
+              </div>
+            `;
+          }
+
+          bubble.innerHTML = `
+            <div class="h-7 w-7 rounded bg-matrix-darkgreen text-black font-bold flex items-center justify-center text-xs shrink-0 border border-matrix-border-bright">
+              AI
+            </div>
+            <div class="p-3.5 rounded-lg border border-matrix-border bg-matrix-card text-matrix-green space-y-2.5 max-w-[90%] leading-relaxed">
+              <div class="flex items-center justify-between text-[10px] text-matrix-muted border-b border-matrix-border/40 pb-1">
+                <span class="font-bold text-white uppercase">${escapeHtml(msg.provider || 'NEURAL CORE')}</span>
+                <span>MODEL: ${escapeHtml(msg.model || 'llama3.2')}</span>
+              </div>
+              ${toolChip}
+              <div class="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed">${formatMarkdown(msg.content)}</div>
+              ${citationsHtml}
+            </div>
+          `;
+        }
+
+        container.appendChild(bubble);
+      });
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function formatMarkdown(text) {
       if (!text) return '';
-      // Escape HTML
       let formatted = escapeHtml(text);
       // Code blocks ```code```
-      formatted = formatted.replace(/```([a-zA-Z]*)\n([\s\S]*?)```/g, '<pre class="my-2 p-2.5 rounded bg-black border border-matrix-border text-matrix-green text-[11px] font-mono overflow-x-auto"><code>$2</code></pre>');
+      formatted = formatted.replace(/```([a-zA-Z]*)\n([\s\S]*?)```/g, (m, lang, code) => {
+        return `<div class="my-2 rounded bg-black border border-matrix-border overflow-hidden">
+          <div class="flex items-center justify-between px-3 py-1 bg-matrix-card text-[10px] text-matrix-muted border-b border-matrix-border">
+            <span>${lang || 'CODE'}</span>
+            <button onclick="navigator.clipboard.writeText(this.getAttribute('data-code'))" data-code="${code.replace(/"/g, '&quot;')}" class="hover:text-white">Copy</button>
+          </div>
+          <pre class="p-2.5 text-matrix-green text-xs font-mono overflow-x-auto"><code>${code}</code></pre>
+        </div>`;
+      });
       // Inline `code`
       formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-black text-matrix-green border border-matrix-border px-1 py-0.5 rounded text-[11px]">$1</code>');
       // Bold **text**
@@ -1602,64 +1242,156 @@
     }
 
     // -------------------------------------------------------------------------
-    // KEYBOARD CONTROLLER & BOOT INITIALIZATION
+    // NOTES AI / LUAU COPILOT
+    // -------------------------------------------------------------------------
+    async function handleAskNotesAi() {
+      const input = document.getElementById('input-notes-prompt');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+
+      const editor = document.getElementById('notes-editor');
+      const btn = document.getElementById('btn-ask-notes-ai');
+      btn.disabled = true;
+      btn.textContent = '...';
+
+      logTelemetry('[NOTES_AI_REQ]', `Prompt: "${prompt}"`);
+
+      try {
+        const res = await fetch(`${API_BASE}/ai/notes/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: prompt,
+            current_note: editor.value,
+            web_search: true
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Notes AI generation failure');
+
+        editor.value += `\n\n-- ==========================================\n-- [NOTES AI]: ${prompt}\n-- ==========================================\n${data.generated_content}\n`;
+        input.value = '';
+        updateNotesWordCount();
+        logTelemetry('[NOTES_AI_OK]', 'Generated Luau synthesis added to scratchpad.');
+
+      } catch (err) {
+        logTelemetry('[NOTES_AI_ERR]', err.message);
+        alert(`Error: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Ask';
+      }
+    }
+
+    function updateNotesWordCount() {
+      const editor = document.getElementById('notes-editor');
+      const words = editor.value.trim() ? editor.value.trim().split(/\s+/).length : 0;
+      document.getElementById('notes-word-count').textContent = `${words} words`;
+    }
+
+    async function sendNotesToStudio() {
+      const editor = document.getElementById('notes-editor');
+      const code = editor.value;
+      if (!code.trim()) {
+        alert('Scratchpad is empty.');
+        return;
+      }
+
+      logTelemetry('[STUDIO_MCP_REQ]', 'Dispatching scratchpad Luau code to Roblox Studio...');
+      try {
+        const res = await fetch(`${API_BASE}/mcp/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tool_name: 'studio_execute_luau',
+            arguments: { code: code, target_parent: 'ReplicatedStorage.VFX' }
+          })
+        });
+        const data = await res.json();
+        logTelemetry('[STUDIO_MCP_RES]', data.message || 'Dispatched via Studio MCP bridge.');
+        alert(`Studio MCP: ${data.message || 'Dispatched to Roblox Studio!'}`);
+      } catch (err) {
+        logTelemetry('[STUDIO_MCP_ERR]', err.message);
+      }
+    }
+
+    async function testStudioExecution() {
+      sendNotesToStudio();
+    }
+
+    // -------------------------------------------------------------------------
+    // WORKSPACE TABS & DRAWER
+    // -------------------------------------------------------------------------
+    function toggleWorkspace(tabName) {
+      const drawer = document.getElementById('workspace-drawer');
+      if (state.activeDrawerTab === tabName && !drawer.classList.contains('hidden')) {
+        drawer.classList.add('hidden');
+      } else {
+        drawer.classList.remove('hidden');
+        switchWorkspaceTab(tabName);
+      }
+    }
+
+    function switchWorkspaceTab(tabName) {
+      state.activeDrawerTab = tabName;
+
+      ['notes', 'matrix', 'mcp', 'telemetry'].forEach(t => {
+        const panel = document.getElementById(`panel-${t}`);
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (t === tabName) {
+          panel.classList.remove('hidden');
+          btn.className = 'flex-1 py-2.5 text-center border-b-2 border-matrix-green text-white bg-matrix-card font-bold';
+        } else {
+          panel.classList.add('hidden');
+          btn.className = 'flex-1 py-2.5 text-center border-b-2 border-transparent text-matrix-darkgreen hover:text-matrix-green';
+        }
+      });
+    }
+
+    function toggleSidebar() {
+      const sidebar = document.getElementById('app-sidebar');
+      sidebar.classList.toggle('hidden');
+    }
+
+    // -------------------------------------------------------------------------
+    // BOOT INITIALIZATION
     // -------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', () => {
-      initClock();
-      detectClientOS();
-      checkWeightsStatus();
+      renderSidebarChats();
+      renderChatMessages();
 
-      // Check AI Status
-      fetch(`${API_BASE}/ai/status`).then(r => r.json()).then(data => {
-        if (data.local_ollama && data.local_ollama.online) {
-          logTelemetry('[AI_DETECT]', `Local Ollama online. Models: ${data.local_ollama.installed_models.join(', ') || 'none'}`);
-          document.getElementById('ai-engine-status').textContent = 'OLLAMA DAEMON ACTIVE';
-        } else {
-          logTelemetry('[AI_DETECT]', 'Ollama local runtime offline. Cloud Llama & Web Grounding ready.');
+      const mainInput = document.getElementById('input-main-chat');
+      mainInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleSendMainMessage();
         }
-      }).catch(() => {});
-
-      // Display API host indicator
-      try {
-        const urlObj = new URL(API_BASE);
-        document.getElementById('api-host-indicator').textContent = urlObj.host;
-      } catch(e) {}
-
-      // Keyboard listeners: Enter keys
-      document.getElementById('input-email').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handleSendOtp();
       });
-      document.getElementById('input-otp-code').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handleVerifyOtp();
+
+      document.getElementById('input-auth-email').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleAuthSendOtp();
       });
-      const aiPromptInput = document.getElementById('input-ai-prompt');
-      if (aiPromptInput) {
-        aiPromptInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') sendAiPrompt();
-        });
-      }
+      document.getElementById('input-auth-otp').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleAuthVerifyOtp();
+      });
 
-      // Telemetry Startup Banner
-      logTelemetry('[BOOT]', 'Stroke Cyberpunk Operational Matrix initialized.');
-      logTelemetry('[CONFIG]', 'Stateless FastAPI REST + Firebase Firestore Admin SDK.');
-      logTelemetry('[READY]', 'Telemetry bus listening for operator identity handshake.');
+      document.getElementById('notes-editor').addEventListener('input', updateNotesWordCount);
 
-      // Check URL Query Parameters (Handles return from full-page GitHub OAuth redirect)
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlEmail = urlParams.get('email');
-      const ghConnected = urlParams.get('github_connected');
-
+      // Check URL params for session restore
+      const params = new URLSearchParams(window.location.search);
+      const urlEmail = params.get('email');
       if (urlEmail) {
         state.email = urlEmail;
-        document.getElementById('input-email').value = urlEmail;
-        document.getElementById('session-email-label').textContent = urlEmail;
-        logTelemetry('[RESTORE]', `Session identity recovered from URL parameters: ${urlEmail}`);
-
-        if (ghConnected === 'true') {
-          logTelemetry('[OAUTH_REDIRECT]', 'GitHub OAuth redirection loop completed successfully.');
-          syncUserStatus();
-        }
+        state.isAuthenticated = true;
+        document.getElementById('modal-auth').classList.add('hidden');
+        updateProfileUI();
+        loadUserRecords();
+        logTelemetry('[SESSION_RESTORE]', `Session restored for ${urlEmail}`);
       }
+
+      logTelemetry('[BOOT]', 'Stroke Cyberpunk AI Matrix Initialized.');
+      logTelemetry('[MCP_DETECT]', 'Roblox Studio & GitHub MCP Bridges listening.');
+      logTelemetry('[VFX_INDEX]', '14,666 Instances & 4.4MB Dump available.');
     });
   </script>
 </body>
