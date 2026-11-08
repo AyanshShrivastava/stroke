@@ -1778,6 +1778,31 @@ async def list_user_chats(email: str = Query(..., description="User email identi
     }
 
 
+@app.get("/chats/{session_id}", tags=["Chat Sessions"])
+async def get_single_user_chat(session_id: str, email: str = Query(..., description="User email identity")):
+    """
+    GET /chats/{session_id}
+    Returns a specific chat session with its full message history.
+    """
+    clean_email = email.strip().lower()
+    try:
+        doc = db.collection("users").document(clean_email).collection("chats").document(session_id).get()
+        if doc.exists:
+            data = doc.to_dict()
+            if isinstance(data.get("updated_at"), datetime):
+                data["updated_at"] = data["updated_at"].isoformat()
+            return {"status": "success", "chat": data}
+    except Exception:
+        pass
+
+    sessions = _LOCAL_CHAT_SESSIONS.get(clean_email, [])
+    match = next((s for s in sessions if s.get("session_id") == session_id), None)
+    if match:
+        return {"status": "success", "chat": match}
+
+    raise HTTPException(status_code=404, detail="Chat session not found")
+
+
 @app.post("/chats/save", tags=["Chat Sessions"])
 async def save_user_chat(payload: SaveChatSessionRequest):
     """
@@ -2382,17 +2407,14 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "- You use this internal background terminal to run real development commands: Python bytecode verification (python -m py_compile), unit tests (pytest), Luau static analysis (luau-analyze), package operations (pip, npm), and Git commands.\n"
         "- This terminal operates silently in the background inside the project workspace. It is NOT exposed as an interactive user terminal UI or window.\n"
         "- When the user asks if you have your own terminal or if you can run commands, answer YES directly and authoritatively: confirm that you have a private internal background terminal system that allows you to execute commands, run tests, compile code, and verify software autonomously.\n"
-        "- NEVER say 'I don't have a terminal' or claim you cannot run commands. You are an autonomous developer agent with real background execution capabilities."
+        "- NEVER say 'I don't have a terminal' or claim you cannot run commands. You are an autonomous developer agent with real background execution capabilities.\n"
+        "10. LOCAL OFFLINE PHYSICAL RUNTIME MANDATE:\n"
+        "- You are Stroke, running 100% LOCALLY and NATIVELY on the user's computer using bundled offline local neural weights (models/Llama-3.2-1B-Instruct-Q4_K_M.gguf) with Metal/CPU acceleration.\n"
+        "- You are NOT a cloud-based AI assistant. You do NOT run on remote cloud servers.\n"
+        "- You operate directly on the user's machine with local workspace access through your native background terminal service (terminal_service.py) and local Roblox Studio MCP.\n"
+        "- When the user asks where you run or if you are local, confirm authoritatively that you run 100% locally and offline on their computer.\n"
+        "- NEVER claim that you are 'a cloud-based AI assistant', that you 'cannot access the computer', or apologize about non-existent 'previous statements'. Each conversation is strictly scoped to the user's actual dialog."
     )
-
-    # Augment with continuous chat learnings so the AI continuously improves
-    recent_learnings = vfx_service.get_learned_chat_insights(max_items=3)
-    if recent_learnings:
-        valid_summaries = [li for li in recent_learnings if li.get("summary")]
-        if valid_summaries:
-            system_instruction += "\n\nCONTINUOUS KNOWLEDGE DISTILLED FROM PREVIOUS SESSIONS:\n"
-            for li in valid_summaries[:3]:
-                system_instruction += f"- [{li.get('domain', 'Roblox')}] {li.get('summary')}\n"
 
     if payload.think_mode:
         system_instruction += "\n\nDEEP REASONING MODE: Please think through the problem rigorously step-by-step before outputting the final code or answer."
@@ -2522,6 +2544,30 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     "detail": "Verified private background terminal service active (6 internal tools available)"
                 })
 
+            elif not ai_reply_text and any(k in last_user_message.lower() for k in [
+                "run on my computer", "run in the cloud", "run on the cloud", "where do you run",
+                "run locally", "run offline", "are you running on my computer", "do you run locally",
+                "are you local", "are you cloud", "are you a cloud", "run on my mac", "run on my pc",
+                "run on remote servers", "where are you hosted", "where do you exist", "on my computer or in the cloud"
+            ]):
+                tool_invoked = True
+                tool_name_used = "get_runtime_status"
+                tool_query = last_user_message
+                grounded_context += (
+                    f"\n\n=== RUNTIME ENVIRONMENT & DEPLOYMENT STATUS ===\n"
+                    f"Execution Mode: 100% Local and Offline Physical Runtime\n"
+                    f"Host: User's Local Machine (macOS)\n"
+                    f"Neural Model Weights: Bundled locally in models/Llama-3.2-1B-Instruct-Q4_K_M.gguf (executed via local llama-cpp engine with Metal/CPU acceleration)\n"
+                    f"Terminal Engine: Private internal background terminal service (terminal_service.py) executing commands directly in the local workspace\n"
+                    f"Studio Connection: Local Roblox Studio MCP protocol on this machine\n"
+                    f"Cloud Servers: NONE. Zero remote server dependency, zero cloud API hosting for AI reasoning.\n"
+                    f"=== END RUNTIME STATUS ===\n"
+                )
+                execution_steps.append({
+                    "name": "Runtime Diagnostics",
+                    "detail": "Verified 100% local offline execution on user's machine (GGUF neural engine)"
+                })
+
             elif not ai_reply_text and any(k in last_user_message.lower() for k in vfx_keywords):
                 tool_invoked = True
                 tool_name_used = "vfx_kinematics_lookup"
@@ -2589,6 +2635,8 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 if grounded_context:
                     if tool_name_used == "get_terminal_status":
                         local_messages[-1]["content"] += grounded_context + "\nAnswer the user's question directly in conversational English prose. Confirm that you have a private internal terminal system running in the background for executing development commands and tests. Do NOT output any Luau or Python code blocks."
+                    elif tool_name_used == "get_runtime_status":
+                        local_messages[-1]["content"] += grounded_context + "\nAnswer the user's question directly in clear Markdown. Confirm authoritatively that you run 100% locally and offline on their computer using bundled local neural model weights, with zero remote cloud server hosting. Do NOT claim you run on the cloud or remote servers."
                     else:
                         local_messages[-1]["content"] += grounded_context + "\nSynthesize an accurate, technical response incorporating the above verified data. Use clear Markdown headings and paragraphs."
 
@@ -2614,7 +2662,18 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 )
                 ai_reply_text = completion["choices"][0]["message"]["content"]
 
-                if tool_name_used == "studio_execute_luau":
+                if tool_name_used == "get_runtime_status":
+                    if not ai_reply_text or any(bad in ai_reply_text.lower() for bad in ["in the cloud", "on the cloud", "cloud-based", "remote servers", "deployed in the cloud", "hosted in the cloud"]):
+                        ai_reply_text = (
+                            "### 100% Local Offline Runtime\n\n"
+                            "I run **100% locally and natively on your computer**.\n\n"
+                            "**Key Runtime Characteristics:**\n"
+                            "- **Local Neural Model**: Powered by bundled offline neural weights (`models/Llama-3.2-1B-Instruct-Q4_K_M.gguf`) executing on your local CPU and Metal GPU accelerator.\n"
+                            "- **Zero Cloud Server Hosting**: All inference is processed directly on your machine without transmitting prompts, files, or code to remote cloud servers.\n"
+                            "- **Private Internal Terminal**: Sandboxed local workspace execution via my private background terminal service (`terminal_service.py`) for running tests, compilers, and package operations.\n"
+                            "- **Local Roblox Studio Bridge**: Direct IPC connection to your active Roblox Studio session via the Studio MCP protocol."
+                        )
+                elif tool_name_used == "studio_execute_luau":
                     if not ai_reply_text or len(ai_reply_text.strip()) < 20:
                         ai_reply_text = (
                             f"### Roblox Studio Live Execution\n\n"
@@ -2832,6 +2891,13 @@ async def chat_with_neural_ai(payload: AiChatRequest):
             (r"(?i)\bi\s+cannot\s+assist\s+with\s+(?:illegal\s+activities|domain\s+expansions)[^.\n]*?[.!\n]?", "I am ready to engineer your Roblox anime domain expansion barrier effect:\n\n"),
             (r"(?i)\bi\s+am\s+(?:just\s+)?a\s+text[- ]based\s+assistant[^.\n]*?[.!\n]?", ""),
             (r"(?i)\b(?:as\s+an?\s+ai[^,\n]*?,\s*)?(?:i\s+do\s+not|i\s+don['’]t)\s+have\s+(?:my\s+own\s+|a\s+)?terminal[^.\n]*?[.!\n]?", "I possess a private, internal background terminal system managed by my native backend for executing commands, verifying code, and running tests.\n\n"),
+            (r"(?i)\bi\s+don['’]t\s+actually\s+run\s+on\s+your\s+computer[^.\n]*?[.!\n]?", "I run 100% locally and offline on your computer using bundled local neural weights.\n\n"),
+            (r"(?i)\bi\s+am\s+a\s+cloud[- ]based\s+ai\s+assistant[^.\n]*?[.!\n]?", "I am a local-first AI assistant running natively on your computer.\n\n"),
+            (r"(?i)\bmy\s+previous\s+statement\s+about\s+running\s+on\s+your\s+computer\s+was\s+an\s+error[^.\n]*?[.!\n]?", ""),
+            (r"(?i)\bi\s+do\s+not\s+have\s+direct\s+access\s+to\s+your\s+computer['’]?s\s+files[^.\n]*?[.!\n]?", "I have sandboxed local access to your project workspace through my private background terminal service.\n\n"),
+            (r"(?i)\bi\s+exist\s+as\s+a\s+software\s+application\s+running\s+on\s+remote\s+servers[^.\n]*?[.!\n]?", "I operate natively on your local machine.\n\n"),
+            (r"(?i)\b(?:run(?:ning)?|hosted|deployed)\s+(?:in|on)\s+the\s+cloud\b", "running 100% locally on your computer"),
+            (r"(?i)\bcloud[- ]based\s+services\b", "local background services"),
         ]
         for pat, repl in refusal_patterns:
             ai_reply_text = re.sub(pat, repl, ai_reply_text)

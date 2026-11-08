@@ -1,59 +1,7 @@
 {
-  "total_chats_learned": 9,
-  "last_updated": "2026-11-08T12:29:42.199260+00:00",
+  "total_chats_learned": 5,
+  "last_updated": "2026-11-08T00:00:00Z",
   "insights": [
-    {
-      "id": "INS-GOD-ELEM-009",
-      "domain": "Elemental",
-      "element": "Matrix",
-      "model_name": "GodTier_Elemental_try_spawning_a_house_from_th",
-      "topic": "God-Tier Elemental Mastery: 'GodTier_Elemental_try_spawning_a_house_from_th'",
-      "summary": "Distilled top-tier Elemental kinematics with 2 texture assets. Active in Elemental Worlds index.",
-      "code_snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Prepared complete production Luau code for workspace.`\n\n**Spawning a House from the Creator Store in Roblox Studio**\n===========\n\n**Overview**\n------------\n\nThis Roblox script will spawn a house asset from the Creator Store",
-      "impact_score": 9.42,
-      "source_tool": "studio_execute_luau",
-      "contributor": "anon***",
-      "created_at": "2026-11-08T12:29:42.199221+00:00"
-    },
-    {
-      "id": "INS-GOD-ELEM-008",
-      "domain": "Elemental",
-      "element": "Matrix",
-      "model_name": "GodTier_Elemental_do_you_have_your_own_termina",
-      "topic": "God-Tier Elemental Mastery: 'GodTier_Elemental_do_you_have_your_own_termina'",
-      "summary": "Distilled top-tier Elemental kinematics with 2 texture assets. Active in Elemental Worlds index.",
-      "code_snippet": "-- Create a new script\nlocal function createEffect() end\n\n-- Run the script in Studio\nstudio_execute_luau(createEffect)",
-      "impact_score": 9.43,
-      "source_tool": "direct",
-      "contributor": "anon***",
-      "created_at": "2026-11-08T12:21:27.458694+00:00"
-    },
-    {
-      "id": "INS-GOD-AQUA-007",
-      "domain": "Aqua",
-      "element": "Aqua",
-      "model_name": "GodTier_Aqua_Script_a_smooth_shockwave_in",
-      "topic": "God-Tier Aqua Mastery: 'GodTier_Aqua_Script_a_smooth_shockwave_in'",
-      "summary": "Distilled top-tier Aqua kinematics with 2 texture assets. Active in Elemental Worlds index.",
-      "code_snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Studio session verified for: Script a smooth shockwave in Luau`\n\n**Smooth Shockwave in Luau**\n\n**Generated Script**\n```lua\n-- Smooth Shockwave in Luau\n\n-- Function to create a smooth shockwave effect\nlocal function createSh",
-      "impact_score": 9.47,
-      "source_tool": "studio_execute_luau",
-      "contributor": "deve***",
-      "created_at": "2026-11-08T12:06:55.638085+00:00"
-    },
-    {
-      "id": "INS-GOD-ELEM-006",
-      "domain": "Elemental",
-      "element": "Matrix",
-      "model_name": "GodTier_Elemental_try_spawning_a_house_from_th",
-      "topic": "God-Tier Elemental Mastery: 'GodTier_Elemental_try_spawning_a_house_from_th'",
-      "summary": "Distilled top-tier Elemental kinematics with 2 texture assets. Active in Elemental Worlds index.",
-      "code_snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Creator Store Note: Insertion requires user inventory ownership or Toolbox public access: User is not authorized to access Asset.`\n\n**Spawning a Creator Store House from the Creator Store**\n\n### Overview\n\nThe following Luau",
-      "impact_score": 9.66,
-      "source_tool": "studio_execute_luau",
-      "contributor": "anon***",
-      "created_at": "2026-11-08T11:41:55.861986+00:00"
-    },
     {
       "id": "INS-VOID-01",
       "domain": "Void",

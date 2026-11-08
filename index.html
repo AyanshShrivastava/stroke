@@ -1259,6 +1259,7 @@
       messagesList.innerHTML = '';
       messagesList.classList.add('hidden');
       emptyStateHero.classList.remove('hidden');
+      document.querySelectorAll('.chat-session-item').forEach(b => b.classList.remove('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent'));
       promptInput.value = '';
       promptInput.focus();
     }
@@ -1986,6 +1987,23 @@
             document.querySelectorAll('.chat-session-item').forEach(b => b.classList.remove('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent'));
             btn.classList.add('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent');
             state.activeSessionId = chat.session_id;
+
+            // Load and isolate this chat session's messages
+            state.chatMessages = Array.isArray(chat.messages) ? JSON.parse(JSON.stringify(chat.messages)) : [];
+            state.pendingAttachments = [];
+            renderAttachmentPreviews();
+            messagesList.innerHTML = '';
+
+            if (state.chatMessages.length === 0) {
+              emptyStateHero.classList.remove('hidden');
+              messagesList.classList.add('hidden');
+            } else {
+              emptyStateHero.classList.add('hidden');
+              messagesList.classList.remove('hidden');
+              state.chatMessages.forEach((msg, idx) => {
+                appendMessage(msg.role, msg.content, { turnIndex: idx });
+              });
+            }
           });
           list.appendChild(btn);
         });

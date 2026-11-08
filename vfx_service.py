@@ -258,6 +258,15 @@ def is_god_tier_vfx(prompt: str, reply: str) -> bool:
     r_low = reply.lower()
     combined = p_low + " " + r_low
 
+    # 0. Conversational, Identity, or Architecture Query Filter (Strict Non-VFX rejection)
+    conversational_words = [
+        "who are you", "what are you", "how were you", "were you built", "your own terminal",
+        "do you have", "are you an ai", "what is this", "hi", "hello", "hey", "can you",
+        "thank", "thanks", "spawn a house", "modularhouse", "creator store"
+    ]
+    if any(cw in p_low for cw in conversational_words):
+        return False
+
     # 1. Refusal & Non-Answer Rejection Filter
     refusal_indicators = [
         "can't assist", "cannot assist", "illegal", "as an ai", "i am unable", "sorry, but",
