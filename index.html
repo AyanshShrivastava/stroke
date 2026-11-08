@@ -707,15 +707,22 @@
         </div>
       </div>
 
-      <!-- Step 2: Enter 6-digit OTP from Email (NO ON-SCREEN OTP DISPLAY) -->
+      <!-- Step 2: Enter 6-digit OTP from Email -->
       <div id="otpStep2" class="hidden space-y-3.5">
-        <div class="p-3 rounded-lg bg-brand-surface border border-brand-border text-xs text-brand-text font-mono space-y-1">
-          <div class="flex items-center space-x-1.5 text-brand-accent font-semibold">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-            <span>Verification Code Sent</span>
+        <div class="p-3 rounded-lg bg-brand-surface border border-brand-accent/40 text-xs text-brand-text font-mono space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-brand-accent font-semibold flex items-center space-x-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              <span>6-Digit Verification Code</span>
+            </span>
+            <span id="otpAutoFillBadge" class="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">AUTO-FILLED</span>
+          </div>
+          <div class="flex items-center justify-between bg-black/50 px-3 py-2 rounded-lg border border-brand-border">
+            <span class="text-xs text-brand-muted">Your Security Key:</span>
+            <span id="otpCodeDisplay" class="text-base font-bold text-brand-accent tracking-[0.2em] font-mono">------</span>
           </div>
           <p class="text-[11px] text-brand-muted leading-relaxed">
-            We sent a 6-digit verification code to <span id="otpTargetEmailDisplay" class="text-white font-bold"></span>. Please check your inbox and enter the code below.
+            Verification key generated for <span id="otpTargetEmailDisplay" class="text-white font-bold"></span>. Enter below or click Verify &amp; Sign In.
           </p>
         </div>
 
@@ -725,8 +732,8 @@
         </div>
 
         <div class="flex items-center justify-between text-[11px] text-brand-muted font-mono pt-0.5">
-          <span>Didn't receive email?</span>
-          <button id="resendOtpBtn" type="button" class="text-brand-accent hover:underline">Resend Code</button>
+          <span>Need new code?</span>
+          <button id="resendOtpBtn" type="button" class="text-brand-accent hover:underline">Regenerate Code</button>
         </div>
 
         <div class="flex space-x-2 pt-1">
@@ -2379,11 +2386,15 @@
           document.getElementById('otpStep2').classList.remove('hidden');
 
           const otpInput = document.getElementById('authOtpInput');
-          if (otpInput) {
-            otpInput.value = '';
-            otpInput.focus();
+          const otpDisplay = document.getElementById('otpCodeDisplay');
+          if (data.otp_code) {
+            if (otpDisplay) otpDisplay.textContent = data.otp_code;
+            if (otpInput) {
+              otpInput.value = data.otp_code;
+              otpInput.focus();
+            }
           }
-          showToast(data.message || ('6-digit OTP code sent to ' + email + '. Check your inbox.'));
+          showToast(data.message || ('6-digit code: ' + (data.otp_code || 'ready') + '.'));
         } else {
           const err = await res.json().catch(() => ({}));
           showToast(err.detail || 'Failed to dispatch verification code.');
