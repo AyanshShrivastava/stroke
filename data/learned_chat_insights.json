@@ -1,7 +1,31 @@
 {
-  "total_chats_learned": 9,
-  "last_updated": "2026-11-08T05:37:49.237755+00:00",
+  "total_chats_learned": 11,
+  "last_updated": "2026-11-08T06:21:24.131443+00:00",
   "insights": [
+    {
+      "id": "INS-LUAU-011",
+      "domain": "Luau",
+      "element": "Scripting",
+      "topic": "Optimized Luau Architecture for 'What are the latest features of Roblox Luau in 2026?'",
+      "summary": "Distilled from session: Addressed Luau interaction with tool 'web_search'. Validated Luau kinematics and emitter parameters.",
+      "code_snippet": "-- Refined pattern for What are the latest features o\nprint('[Stroke Learned] Pattern optimized')",
+      "impact_score": 9.6,
+      "source_tool": "web_search",
+      "contributor": "anon***",
+      "created_at": "2026-11-08T06:21:24.131273+00:00"
+    },
+    {
+      "id": "INS-GENE-010",
+      "domain": "General",
+      "element": "Matrix",
+      "topic": "Optimized General Architecture for 'What are particle emitters in Roblox? Answer in 2 short sent'",
+      "summary": "Distilled from session: Addressed General interaction with tool 'search_vfx_database'. Validated Luau kinematics and emitter parameters.",
+      "code_snippet": "-- Refined pattern for What are particle emitters in \nprint('[Stroke Learned] Pattern optimized')",
+      "impact_score": 9.8,
+      "source_tool": "search_vfx_database",
+      "contributor": "anon***",
+      "created_at": "2026-11-08T06:21:06.236506+00:00"
+    },
     {
       "id": "INS-LUAU-009",
       "domain": "Luau",

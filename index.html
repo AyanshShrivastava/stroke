@@ -262,28 +262,22 @@
         <!-- Model Selector Pill -->
         <div class="relative">
           <button id="modelDropdownBtn" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-sans font-semibold text-xs transition-colors border border-brand-border">
-            <span id="selectedModelLabel">Stroke 2.5 Neural</span>
+            <span id="selectedModelLabel">Local Llama 3.2 1B</span>
             <svg class="w-3.5 h-3.5 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
           
           <div id="modelDropdownMenu" class="hidden absolute top-10 left-0 w-64 bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1 z-50">
-            <button class="model-option w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 flex items-center justify-between" data-model="stroke-neural">
+            <button class="model-option w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 flex items-center justify-between" data-model="llama3.2-local">
               <div>
-                <div class="font-semibold text-brand-accent">Stroke 2.5 Neural</div>
-                <div class="text-[10px] text-brand-muted">Autonomous Agent + Tools + MCP</div>
+                <div class="font-semibold text-brand-accent">Local Llama 3.2 1B</div>
+                <div class="text-[10px] text-brand-muted">100% Offline GGUF engine on device</div>
               </div>
               <span class="text-brand-accent text-xs font-bold">[active]</span>
             </button>
-            <button class="model-option w-full text-left px-3 py-2 text-xs text-brand-text hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama-3.3-70b-versatile">
+            <button class="model-option w-full text-left px-3 py-2 text-xs text-brand-text hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="stroke-neural">
               <div>
-                <div class="font-semibold">Groq Llama 3.3 70B</div>
-                <div class="text-[10px] text-brand-muted">High-speed cloud tool calling</div>
-              </div>
-            </button>
-            <button class="model-option w-full text-left px-3 py-2 text-xs text-brand-text hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama3.2">
-              <div>
-                <div class="font-semibold">Local Llama 3.2 1B</div>
-                <div class="text-[10px] text-brand-muted">Offline weights on device</div>
+                <div class="font-semibold">Stroke Neural Agent</div>
+                <div class="text-[10px] text-brand-muted">Live web search + MCP Studio bridge</div>
               </div>
             </button>
           </div>
@@ -629,7 +623,7 @@
       isTemporaryMode: false,
       thinkMode: false,
       activeSessionId: 'session-' + Date.now(),
-      selectedModel: 'stroke-neural',
+      selectedModel: 'llama3.2-local',
       isVoiceActive: false,
       isVoiceMuted: false,
       chatMessages: [],

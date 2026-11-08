@@ -25,7 +25,7 @@ def run_build():
         import PyInstaller
     except ImportError:
         print("[STROKE BUILD] PyInstaller not detected. Installing via pip...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "pywebview"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "pywebview", "llama-cpp-python"])
 
     # Separator for PyInstaller --add-data (; on Windows, : on Unix)
     sep = ";" if system == "Windows" else ":"
@@ -79,7 +79,8 @@ def run_build():
         "firebase_admin",
         "google.cloud.firestore",
         "google.cloud.firestore_v1",
-        "webview"
+        "webview",
+        "llama_cpp"
     ]
 
     for imp in hidden_imports:
