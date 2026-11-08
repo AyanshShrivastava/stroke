@@ -122,6 +122,21 @@
     ::-webkit-scrollbar-thumb:hover {
       background: #00ff66;
     }
+    .grid-bg {
+      background-size: 36px 36px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    }
+    .shadow-key {
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    }
+    .shadow-glow-lime {
+      box-shadow: 0 0 25px rgba(163, 230, 53, 0.4);
+    }
+    .shadow-glow-lime:hover {
+      box-shadow: 0 0 35px rgba(163, 230, 53, 0.65);
+    }
   </style>
 </head>
 <body class="bg-brand-black text-brand-text flex h-screen w-screen overflow-hidden font-sans select-text">
@@ -129,6 +144,33 @@
   <!-- Hidden File Input for Attachment Button (+) - Supports all file types: .py, .csv, .luau, .lua, .json, images, etc. -->
   <input type="file" id="fileAttachmentInput" multiple class="hidden">
 
+  <!-- ========================================================================= -->
+  <!-- GREETING / LANDING PAGE: Displayed when user is NOT signed in             -->
+  <!-- ========================================================================= -->
+  <div id="greetingView" class="fixed inset-0 z-40 bg-[#080808] flex flex-col items-center justify-center px-6 text-center select-none grid-bg">
+    <!-- Centered Key Logo Squircle -->
+    <div class="w-20 h-20 rounded-2xl border border-white/10 bg-[#121212] shadow-key flex items-center justify-center font-mono font-bold text-3xl text-[#a3e635]">
+      S
+    </div>
+
+    <!-- Title -->
+    <h1 class="mt-8 text-5xl md:text-7xl font-bold tracking-tight text-white">Stroke</h1>
+
+    <!-- Subtitle -->
+    <p class="mt-4 max-w-md text-sm md:text-base text-neutral-400 font-sans leading-relaxed">
+      The all-in-one AI coding agent. Built for AAA Roblox Studio work — no placeholder assets.
+    </p>
+
+    <!-- Launch Button -->
+    <button id="greetingLaunchBtn" class="mt-10 px-8 py-3 rounded-xl bg-[#a3e635] hover:bg-[#bef264] text-black font-semibold text-sm transition-all duration-200 shadow-glow-lime font-mono flex items-center space-x-2">
+      <span>Launch Stroke →</span>
+    </button>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- APP WORKSPACE (SIDEBAR + MAIN + VOICE OVERLAY)                            -->
+  <!-- ========================================================================= -->
+  <div id="appWorkspace" class="hidden flex w-full h-full overflow-hidden relative">
 
   <!-- ========================================================================= -->
   <!-- LEFT SIDEBAR: Clean, Modern AI Layout (Collapsible)                       -->
@@ -522,6 +564,7 @@
       </button>
     </div>
   </div>
+  </div> <!-- /#appWorkspace -->
 
   <!-- ========================================================================= -->
   <!-- MODAL: SETTINGS                                                           -->
@@ -641,22 +684,15 @@
         </button>
       </div>
 
-      <div id="otpStep1" class="space-y-3.5">
+      <div id="otpStep1" class="space-y-4">
         <div>
-          <label class="block text-[11px] text-brand-muted uppercase mb-1">Switch or Sign In to Account</label>
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Developer Email</label>
           <input id="authEmailInput" type="email" placeholder="you@domain.com" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
         </div>
 
-        <div class="space-y-2">
-          <!-- Instant Switch Button (Direct Local Switch) -->
-          <button id="instantSwitchBtn" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button flex items-center justify-center space-x-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-            <span>Instant Switch / Sign In</span>
-          </button>
-          
-          <!-- Optional OTP Button -->
-          <button id="sendOtpBtn" class="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-brand-muted hover:text-white font-mono text-xs transition-colors">
-            Or Verify with 6-Digit Email OTP
+        <div>
+          <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button flex items-center justify-center space-x-2 font-mono">
+            <span>Send OTP Verification Code →</span>
           </button>
         </div>
       </div>
@@ -802,15 +838,26 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let voiceRecognition = null;
     let dictationRecognition = null;
+    function syncViewAuthState() {
+      const greetingView = document.getElementById('greetingView');
+      const appWorkspace = document.getElementById('appWorkspace');
+      if (!state.userEmail) {
+        if (greetingView) greetingView.classList.remove('hidden');
+        if (appWorkspace) appWorkspace.classList.add('hidden');
+      } else {
+        if (greetingView) greetingView.classList.add('hidden');
+        if (appWorkspace) appWorkspace.classList.remove('hidden');
+      }
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
+      syncViewAuthState();
       updateUserIdentityUI();
-      loadUserChats();
+      if (state.userEmail) {
+        loadUserChats();
+      }
       setupSpeechEngines();
       loadMcpConfigJson();
-      if (!state.userEmail) {
-        openAuthModal();
-      }
     });
 
     // 1. Identity
@@ -1389,6 +1436,9 @@
           execution_steps: data.execution_steps,
           coding_loop: data.coding_loop
         });
+
+        // Persist conversation to chat history
+        await saveCurrentChatSession();
 
       } catch (err) {
         removeTypingIndicator(typingId);
@@ -1992,7 +2042,59 @@
       }
     });
 
-    // 13. Chats Loader
+    // 13. Chats Loader & Persistence
+    async function saveCurrentChatSession() {
+      if (!state.userEmail || state.isTemporaryMode || state.chatMessages.length === 0) return;
+
+      // Determine chat title from the first user message
+      let title = 'New Conversation';
+      const firstUserMsg = state.chatMessages.find(m => m.role === 'user');
+      if (firstUserMsg && firstUserMsg.content) {
+        const cleanContent = firstUserMsg.content.trim();
+        title = cleanContent.slice(0, 36) + (cleanContent.length > 36 ? '...' : '');
+      }
+
+      const payload = {
+        email: state.userEmail,
+        session_id: state.activeSessionId,
+        title: title,
+        messages: state.chatMessages,
+        is_temporary: false
+      };
+
+      try {
+        await fetch('/chats/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch(e) {
+        console.warn('Backend /chats/save note:', e);
+      }
+
+      // Also persist to localStorage for instant local backup
+      try {
+        const localKey = 'stroke_chats_' + state.userEmail;
+        const stored = JSON.parse(localStorage.getItem(localKey) || '[]');
+        const existingIdx = stored.findIndex(s => s.session_id === state.activeSessionId);
+        const sessionRecord = {
+          session_id: state.activeSessionId,
+          title: title,
+          messages: state.chatMessages,
+          updated_at: new Date().toISOString()
+        };
+        if (existingIdx >= 0) {
+          stored[existingIdx] = sessionRecord;
+        } else {
+          stored.unshift(sessionRecord);
+        }
+        localStorage.setItem(localKey, JSON.stringify(stored));
+      } catch(e){}
+
+      // Refresh sidebar recent chats list
+      await loadUserChats();
+    }
+
     async function loadUserChats() {
       const list = document.getElementById('recentChatsList');
       if (!state.userEmail) {
@@ -2001,22 +2103,38 @@
         return;
       }
       try {
-        const res = await fetch(`/chats?email=${encodeURIComponent(state.userEmail)}`);
-        if (!res.ok) return;
-        const data = await res.json();
+        let loadedChats = [];
+        try {
+          const res = await fetch(`/chats?email=${encodeURIComponent(state.userEmail)}`);
+          if (res.ok) {
+            const data = await res.json();
+            loadedChats = data.chats || [];
+          }
+        } catch(e){}
+
+        // Fallback to local storage if backend returned empty list or had error
+        if (loadedChats.length === 0) {
+          try {
+            const localKey = 'stroke_chats_' + state.userEmail;
+            loadedChats = JSON.parse(localStorage.getItem(localKey) || '[]');
+          } catch(e){}
+        }
+
         if (list) list.innerHTML = '';
-        state.allChats = data.chats || [];
+        state.allChats = loadedChats;
         if (state.allChats.length === 0) {
           if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">No chats yet.</div>';
           return;
         }
         state.allChats.forEach(chat => {
           const btn = document.createElement('button');
-          btn.className = 'chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group';
+          const isActive = chat.session_id === state.activeSessionId;
+          btn.className = 'chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors flex items-center justify-between group ' +
+            (isActive ? 'active text-white bg-white/5 border-l-2 border-brand-accent' : 'text-brand-muted hover:text-white hover:bg-white/5');
           btn.setAttribute('data-title', chat.title || '');
           btn.setAttribute('data-session-id', chat.session_id || '');
           btn.innerHTML = `
-            <span class="truncate pr-2">${escapeHtml(chat.title)}</span>
+            <span class="truncate pr-2">${escapeHtml(chat.title || 'Conversation')}</span>
             <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Select</span>
           `;
           btn.addEventListener('click', () => {
@@ -2052,7 +2170,7 @@
       } catch(e){}
     }
 
-    // 14. Auth Modal, Instant Switch, Sign Out, & OTP Gateway
+    // 14. Auth Modal, Sign Out, & OTP Gateway
     function openAuthModal() {
       const email = state.userEmail;
       const curEmailEl = document.getElementById('authModalCurrentEmail');
@@ -2086,59 +2204,23 @@
       emptyStateHero.classList.remove('hidden');
       profilePopover.classList.add('hidden');
       authModal.classList.add('hidden');
+      syncViewAuthState();
       updateUserIdentityUI();
-      openAuthModal();
-      showToast('Signed out of Stroke account.');
+      showToast('Signed out of Stroke.');
     }
 
-    async function switchUserAccount(email) {
-      const cleanEmail = (email || '').trim().toLowerCase();
-      if (!cleanEmail || !cleanEmail.includes('@')) {
-        showToast('Please enter a valid email address.');
-        return;
-      }
-      try {
-        await fetch('/auth/switch-account', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail })
-        });
-      } catch(e) {
-        console.warn('Backend switch-account endpoint note:', e);
-      }
-      state.userEmail = cleanEmail;
-      localStorage.setItem('stroke_user_email', cleanEmail);
-      updateUserIdentityUI();
-      authModal.classList.add('hidden');
-      profilePopover.classList.add('hidden');
-      await checkOrRunMandatoryMemorySetup();
-      await fetchMemoryStats();
-      await loadUserChats();
-      showToast('Signed in as ' + cleanEmail);
+    const greetingLaunchBtn = document.getElementById('greetingLaunchBtn');
+    if (greetingLaunchBtn) {
+      greetingLaunchBtn.addEventListener('click', openAuthModal);
     }
 
     document.getElementById('closeAuthModalBtn').addEventListener('click', () => authModal.classList.add('hidden'));
     document.getElementById('authModalSignOutBtn').addEventListener('click', signOutUser);
 
-    document.getElementById('instantSwitchBtn').addEventListener('click', () => {
-      const email = document.getElementById('authEmailInput').value.trim();
-      switchUserAccount(email);
-    });
-
-    const authEmailInputEl = document.getElementById('authEmailInput');
-    if (authEmailInputEl) {
-      authEmailInputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          switchUserAccount(authEmailInputEl.value.trim());
-        }
-      });
-    }
-
-    document.getElementById('sendOtpBtn').addEventListener('click', async () => {
-      const email = document.getElementById('authEmailInput').value.trim();
+    async function handleSendOtp() {
+      const email = document.getElementById('authEmailInput').value.trim().toLowerCase();
       if (!email || !email.includes('@')) {
-        showToast('Enter a valid email address.');
+        showToast('Please enter a valid email address.');
         return;
       }
       try {
@@ -2155,15 +2237,41 @@
           }
           document.getElementById('otpStep1').classList.add('hidden');
           document.getElementById('otpStep2').classList.remove('hidden');
-          document.getElementById('authOtpInput').focus();
-          showToast('Verification code generated.');
+          const otpInput = document.getElementById('authOtpInput');
+          if (otpInput) {
+            otpInput.value = '';
+            otpInput.focus();
+          }
+          showToast('Verification code generated for ' + email);
         } else {
           showToast('Failed to send verification code.');
         }
       } catch(e){
         showToast('Network error during verification dispatch.');
       }
-    });
+    }
+
+    document.getElementById('sendOtpBtn').addEventListener('click', handleSendOtp);
+
+    const authEmailInputEl = document.getElementById('authEmailInput');
+    if (authEmailInputEl) {
+      authEmailInputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleSendOtp();
+        }
+      });
+    }
+
+    const authOtpInputEl = document.getElementById('authOtpInput');
+    if (authOtpInputEl) {
+      authOtpInputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.getElementById('verifyOtpBtn').click();
+        }
+      });
+    }
 
     document.getElementById('backToStep1Btn').addEventListener('click', () => {
       document.getElementById('otpStep2').classList.add('hidden');
@@ -2332,6 +2440,7 @@
           state.userEmail = email;
           localStorage.setItem('stroke_user_email', email);
           updateUserIdentityUI();
+          syncViewAuthState();
           authModal.classList.add('hidden');
 
           // Checks for local cache; if absent, shows loading bar while 5X loop executes

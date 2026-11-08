@@ -24,10 +24,45 @@ import time
 from typing import Dict, List, Any, Optional, Tuple
 
 try:
+    from luaparser import ast as lua_ast
+except Exception:
+    lua_ast = None
+
+try:
     import terminal_service
     from terminal_service import TerminalManager
 except Exception:
     TerminalManager = None
+
+
+# ==============================================================================
+# VALID ROBLOX DATA MODEL INSTANCES & FAKE API RULE ENGINE
+# ==============================================================================
+
+VALID_ROBLOX_INSTANCES = {
+    "Part", "MeshPart", "Model", "Folder", "Script", "LocalScript", "ModuleScript",
+    "ParticleEmitter", "Beam", "Trail", "Attachment", "Highlight", "PointLight", "SpotLight", "SurfaceLight",
+    "Sound", "Animation", "AnimationTrack", "Humanoid", "HumanoidDescription", "Motor6D", "Weld", "WeldConstraint",
+    "BodyPosition", "BodyGyro", "BodyVelocity", "LinearVelocity", "AlignPosition", "AlignOrientation",
+    "ScreenGui", "Frame", "TextLabel", "TextButton", "ImageLabel", "ImageButton", "ScrollingFrame", "UIListLayout",
+    "BillboardGui", "SurfaceGui", "ProximityPrompt", "ClickDetector", "RemoteEvent", "RemoteFunction", "BindableEvent", "BindableFunction",
+    "Configuration", "StringValue", "IntValue", "NumberValue", "BoolValue", "Vector3Value", "CFrameValue", "Color3Value", "ObjectValue",
+    "Decal", "Texture", "SpecialMesh", "BlockMesh", "CylinderMesh", "FileMesh",
+    "Smoke", "Fire", "Sparkles", "Explosion", "ForceField", "CornerWedgePart", "WedgePart", "TrussPart",
+    "SpawnLocation", "Seat", "VehicleSeat", "Camera", "Tool", "Accessory", "Shirt", "Pants", "ShirtGraphic",
+    "Sky", "Atmosphere", "Clouds", "BloomEffect", "BlurEffect", "ColorCorrectionEffect", "SunRaysEffect", "DepthOfFieldEffect"
+}
+
+FAKE_ROBLOX_API_RULES = [
+    (r"\bSpawnParticleEmitter\b", "ParticleEmitter:SpawnParticleEmitter() does not exist in Roblox. Use 'ParticleEmitter:Emit(count)' to emit particles."),
+    (r"\bParticle\.new\b", "Particle.new() is not a standard Roblox API. Particles are not separate instances; configure ParticleEmitter properties (Rate, Lifetime, Speed, SpreadAngle) and call ':Emit(count)'."),
+    (r"\bColor3\.from_rgb\b", "Color3.from_rgb() is invalid. Roblox Luau uses 'Color3.fromRGB(r, g, b)' or 'Color3.new(r, g, b)'."),
+    (r":Spawn\s*\(", "':Spawn()' is not a valid method on Roblox particle or DataModel instances. Use ':Emit(count)' or task.spawn()."),
+    (r"\b(\d+x\d+)\b", "Invalid Luau syntax '{match}'. Dimension literals like '{match}' are invalid; use 'Vector2.new(width, height)' or arithmetic operators."),
+    (r"\bparticleType\s*=\s*[\"'](?:Sphere|Mesh)[\"']", "ParticleEmitter does not have a 'particleType' setting. ParticleEmitter emits 2D billboard textures. For 3D meshes, use BasePart or MeshPart with TweenService."),
+    (r"particleEmitter\.(?:Spread|Density|Radius|Velocity)\s*=", "Invalid ParticleEmitter property assignment. Legitimate ParticleEmitter properties are: 'Rate', 'Lifetime', 'Speed', 'SpreadAngle', 'Color', 'Size', 'Texture', 'Acceleration', and 'Drag'."),
+    (r"\b([a-zA-Z0-9_]+)\.Parent\s*=\s*\1\b", "Cyclic instance parenting error: '{match}' cannot be parented to itself."),
+]
 
 
 # ==============================================================================
@@ -38,7 +73,7 @@ class LuauSyntaxValidator:
     """
     Robust static AST and syntax analyzer for Luau (Roblox Lua).
     Detects mismatched blocks, unbalanced delimiters, illegal operators,
-    and deprecated Roblox/Lua API calls without requiring external binaries.
+    non-existent Roblox APIs, and deprecated calls without requiring external binaries.
     """
 
     LUAU_BLOCK_OPENERS = {"function", "if", "for", "while", "do", "repeat"}
@@ -284,6 +319,53 @@ class LuauSyntaxValidator:
                     "suggestion": "Replace ':connect()' with standard uppercase ':Connect()'."
                 })
 
+        # 4. Non-Existent & Hallucinated Roblox APIs (Errors)
+        for pat, msg_template in FAKE_ROBLOX_API_RULES:
+            for match in re.finditer(pat, code):
+                matched_text = match.group(1) if match.groups() else match.group(0)
+                line_no = code[:match.start()].count("\n") + 1
+                msg = msg_template.format(match=matched_text)
+                issues.append({
+                    "type": "error",
+                    "line": line_no,
+                    "message": msg,
+                    "suggestion": "Replace with authentic Roblox Luau APIs."
+                })
+
+        # 5. Invalid DataModel Class Names in Instance.new(...)
+        for inst_match in re.finditer(r'Instance\.new\(["\']([a-zA-Z0-9_]+)["\']\)', code):
+            class_name = inst_match.group(1)
+            line_no = code[:inst_match.start()].count("\n") + 1
+            if class_name not in VALID_ROBLOX_INSTANCES:
+                issues.append({
+                    "type": "error",
+                    "line": line_no,
+                    "message": f"Invalid Roblox class '{class_name}' in Instance.new(). '{class_name}' is not a valid Roblox DataModel class.",
+                    "suggestion": "Use legitimate Roblox classes: Part, ParticleEmitter, Beam, Attachment, Model, Folder, etc."
+                })
+
+        # 6. Real AST Syntax Parser via luaparser
+        if lua_ast:
+            try:
+                # Strip Luau-specific type annotations (e.g. : number, : string) before parsing
+                code_no_types = re.sub(r':\s*[a-zA-Z0-9_<>|?]+(?=\s*[=,\)\n])', '', code)
+                lua_ast.parse(code_no_types)
+            except Exception as ast_exc:
+                err_str = str(ast_exc)
+                line_no = 1
+                line_match = re.search(r'line (\d+):(\d+):\s*(.*)', err_str)
+                if line_match:
+                    line_no = int(line_match.group(1))
+                    detail = line_match.group(3)
+                else:
+                    detail = err_str.replace("syntax errors: ", "").strip()
+                issues.append({
+                    "type": "error",
+                    "line": line_no,
+                    "message": f"Luau Syntax Error: {detail}",
+                    "suggestion": "Fix the expression, literal, or token syntax on this line."
+                })
+
         return issues
 
 
@@ -437,7 +519,9 @@ class RobloxDomainTestRunner:
             ])
 
         # 4. Domain Check: VFX & Particle Effects
-        is_vfx_request = any(k in p_lower for k in ["vfx", "particle", "beam", "domain expansion", "cleave", "aura"])
+        is_vfx_request = any(k in p_lower for k in ["vfx", "particle", "beam", "domain expansion", "cleave", "aura", "fireball", "shockwave"])
+        is_optimization_request = any(k in p_lower for k in ["optimize", "optimization", "mobile", "performance", "fps", "budget", "lag"])
+
         if is_vfx_request and not is_hitbox_request:
             has_particles = "ParticleEmitter" in code or "Beam" in code or "Highlight" in code
             has_attachments = "Attachment" in code
@@ -445,6 +529,30 @@ class RobloxDomainTestRunner:
                 passed_checks.append("Visual Effect Emitter Architecture (Configures ParticleEmitters, Beams, or Highlights)")
             if has_attachments:
                 passed_checks.append("Attachment Anchoring (Emitters parented to valid Attachment points)")
+
+            if is_optimization_request:
+                has_rate_control = any(k in code for k in [".Rate", "Rate =", "math.clamp", "TouchEnabled"])
+                has_lifetime_budget = any(k in code for k in [".Lifetime", "Lifetime =", "NumberRange.new"])
+                has_burst_or_toggle = any(k in code for k in [":Emit", ".Enabled = false", "Enabled = false", ":Clear"])
+                has_mobile_branch = any(k in code for k in ["TouchEnabled", "UserInputService", "isMobile", "mobile"])
+
+                if has_rate_control:
+                    passed_checks.append("Mobile Emission Rate Budgeting (Throttles particles per second to prevent mobile fill-rate drops)")
+                else:
+                    failed_checks.append({
+                        "type": "warning",
+                        "line": 1,
+                        "message": "Particle emitter optimization should explicitly throttle emitter.Rate for mobile clients.",
+                        "suggestion": "Set 'emitter.Rate = isMobile and 15 or 50' or use math.clamp to restrict emission."
+                    })
+
+                if has_lifetime_budget:
+                    passed_checks.append("Particle Lifetime Constriction (Reduces active on-screen particle lifetime to minimize overdraw)")
+                if has_burst_or_toggle:
+                    passed_checks.append("Demand-Driven Emission (Uses :Emit(count) or toggles .Enabled to prevent continuous background draw calls)")
+                if has_mobile_branch:
+                    passed_checks.append("Platform Capability Detection (Uses UserInputService.TouchEnabled to adapt VFX for mobile)")
+
             untested_limitations.append("GPU rendering framerate impact under 100+ simultaneous particle emitters.")
 
         # 5. Domain Check: Creator Store & Architecture (House, Buildings, Models)
@@ -470,6 +578,7 @@ class RobloxDomainTestRunner:
             ])
 
         # Background Terminal Execution Check for Luau
+        has_compiler_verified = False
         if TerminalManager:
             try:
                 term_session = TerminalManager.create_terminal()
@@ -485,9 +594,10 @@ class RobloxDomainTestRunner:
                 res = TerminalManager.run_command(session_id, "luau-analyze", [scratch_file], timeout_sec=10)
                 if res.get("exit_code") == 0:
                     passed_checks.append("Luau Static Type & Semantic Analysis (luau-analyze verified cleanly via private background terminal)")
+                    has_compiler_verified = True
                 elif res.get("exit_code") == 127:
                     # luau-analyze binary not installed on host, AST analysis was used
-                    untested_limitations.append("External luau-analyze compiler binary not in workspace path; AST and semantic rules validated via internal engine.")
+                    untested_limitations.append("External luau-analyze compiler binary not in host PATH; verified via AST parser and static Roblox DataModel rules only. Live Luau runtime execution is unverified.")
                 else:
                     err_msg = res.get("stderr") or res.get("stdout") or "Semantic warning in Luau script"
                     failed_checks.append({
@@ -508,13 +618,15 @@ class RobloxDomainTestRunner:
 
         # Final Verification Status
         # Passed if zero blocking errors (warnings are permitted but reported)
-        is_verified = (len([f for f in failed_checks if f["type"] == "error"]) == 0)
+        blocking_errors = [f for f in failed_checks if f.get("type") == "error"]
+        is_verified = (len(blocking_errors) == 0)
 
         return {
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
             "untested_limitations": untested_limitations,
-            "is_verified": is_verified
+            "is_verified": is_verified,
+            "has_compiler_verified": has_compiler_verified
         }
 
     @classmethod
@@ -546,6 +658,7 @@ class RobloxDomainTestRunner:
             })
 
         # Real background terminal compiler check for Python
+        has_compiler_verified = False
         if TerminalManager:
             try:
                 term_session = TerminalManager.create_terminal()
@@ -560,6 +673,7 @@ class RobloxDomainTestRunner:
                 res = TerminalManager.run_command(session_id, "python", ["-m", "py_compile", scratch_file], timeout_sec=10)
                 if res.get("exit_code") == 0:
                     passed_checks.append("Python Bytecode Compilation Check (python -m py_compile verified cleanly via private background terminal)")
+                    has_compiler_verified = True
                 else:
                     err_output = res.get("stderr") or res.get("stdout") or "Bytecode compilation error"
                     failed_checks.append({
@@ -585,7 +699,8 @@ class RobloxDomainTestRunner:
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
             "untested_limitations": untested_limitations,
-            "is_verified": is_verified
+            "is_verified": is_verified,
+            "has_compiler_verified": has_compiler_verified
         }
 
 
@@ -689,28 +804,51 @@ class StrokeCodingLoop:
 
     @classmethod
     def extract_code_block(cls, text: str, default_lang: str = "luau") -> Tuple[str, str]:
-        """Extracts code and language tag from markdown code fences (closed or unclosed)."""
-        pattern = r"```([a-zA-Z0-9_]*)\n([\s\S]*?)```"
-        matches = re.findall(pattern, text)
-        if matches:
-            lang, code = matches[0]
-            clean_code = cls._clean_code_artifacts(code)
-            return clean_code.strip(), (lang.lower() if lang else default_lang)
-        
-        # Check unclosed code fence at end of text
-        unclosed_match = re.search(r"```([a-zA-Z0-9_]*)\n([\s\S]+)$", text)
-        if unclosed_match:
-            lang, code = unclosed_match.groups()
-            clean_code = cls._clean_code_artifacts(code)
-            return clean_code.strip(), (lang.lower() if lang else default_lang)
-
-        # If no code fence, return full text if it looks like code
-        lines = text.splitlines()
-        code_indicators = ["local ", "function ", "import ", "def ", "class ", "game:GetService", "task.wait"]
-        if any(any(ind in line for ind in code_indicators) for line in lines[:10]):
-            clean_code = cls._clean_code_artifacts(text)
-            return clean_code.strip(), default_lang
+        """Extracts primary code block and language tag from markdown code fences."""
+        blocks = cls.extract_all_code_blocks(text, default_lang=default_lang)
+        if blocks:
+            return blocks[0]["code"], blocks[0]["language"]
         return "", default_lang
+
+    @classmethod
+    def extract_all_code_blocks(cls, text: str, default_lang: str = "luau") -> List[Dict[str, str]]:
+        """Extracts all code blocks and language tags from markdown code fences."""
+        pattern = r"```([a-zA-Z0-9_]*)\n([\s\S]*?)```"
+        blocks = []
+        for match in re.finditer(pattern, text):
+            lang, code = match.groups()
+            clean_code = cls._clean_code_artifacts(code).strip()
+            if clean_code:
+                blocks.append({
+                    "language": (lang.lower() if lang else default_lang),
+                    "code": clean_code
+                })
+
+        # If no closed fences, check unclosed fence
+        if not blocks:
+            unclosed_match = re.search(r"```([a-zA-Z0-9_]*)\n([\s\S]+)$", text)
+            if unclosed_match:
+                lang, code = unclosed_match.groups()
+                clean_code = cls._clean_code_artifacts(code).strip()
+                if clean_code:
+                    blocks.append({
+                        "language": (lang.lower() if lang else default_lang),
+                        "code": clean_code
+                    })
+
+        # If still no fences, check if raw text looks like code
+        if not blocks:
+            lines = text.splitlines()
+            code_indicators = ["local ", "function ", "import ", "def ", "class ", "game:GetService", "task.wait"]
+            if any(any(ind in line for ind in code_indicators) for line in lines[:10]):
+                clean_code = cls._clean_code_artifacts(text).strip()
+                if clean_code:
+                    blocks.append({
+                        "language": default_lang,
+                        "code": clean_code
+                    })
+
+        return blocks
 
     @staticmethod
     def _clean_code_artifacts(code: str) -> str:
@@ -742,8 +880,19 @@ class StrokeCodingLoop:
         failed = report.get("failed_checks", [])
         untested = report.get("untested_limitations", [])
         is_verified = report.get("is_verified", False)
+        has_compiler_verified = report.get("has_compiler_verified", False)
 
-        badge = f"VERIFIED ({iterations} PASS{'ES' if iterations > 1 else ''})" if is_verified else "COMPLETED WITH WARNINGS"
+        errors = [f for f in failed if f.get("type") == "error"]
+        warnings = [f for f in failed if f.get("type") == "warning"]
+
+        if errors:
+            badge = "FAILED (SYNTAX OR API ERRORS DETECTED)"
+        elif is_verified and has_compiler_verified:
+            badge = f"VERIFIED ({iterations} PASS{'ES' if iterations > 1 else ''})"
+        elif is_verified and not has_compiler_verified:
+            badge = "STATIC CHECKS PASSED (COMPILER UNVERIFIED)"
+        else:
+            badge = "COMPLETED WITH WARNINGS"
 
         md = f"\n\n---\n\n### Stroke Verification & Quality Report\n"
         md += f"> **Status**: `{badge}` | **Engine**: Stroke Autonomous Coding Loop | **Iterations**: `{iterations}`\n\n"
@@ -755,10 +904,15 @@ class StrokeCodingLoop:
         else:
             md += "- None registered.\n"
 
-        if failed:
+        if errors:
+            md += "\n#### Blocking Errors Detected\n"
+            for e in errors:
+                md += f"- **[ERROR]** Line {e.get('line', '?')}: {e.get('message')}\n"
+
+        if warnings:
             md += "\n#### Active Diagnostic Warnings\n"
-            for f in failed:
-                md += f"- **[{f.get('type', 'warning').upper()}]** Line {f.get('line', '?')}: {f.get('message')}\n"
+            for w in warnings:
+                md += f"- **[WARNING]** Line {w.get('line', '?')}: {w.get('message')}\n"
 
         md += "\n#### Untested Runtime Limitations (Transparency Mandate)\n"
         md += "> *Passing static tests does not guarantee flawless live runtime execution. Stroke transparently identifies the following unverified parameters:*\n"
@@ -780,58 +934,85 @@ class StrokeCodingLoop:
         max_iterations: int = 2
     ) -> Tuple[str, Dict[str, Any], List[Dict[str, str]]]:
         """
-        Executes the Write -> Test -> Diagnose -> Fix -> Retest coding loop.
-        
-        Args:
-          prompt: User prompt
-          initial_reply: Initial LLM response containing the first code draft
-          llm_generate_fn: Callable(messages: list) -> str, for asking the model to fix issues
-          user_email: User identity for archivist
-          max_iterations: Max correction passes (default 2)
-          
-        Returns:
-          (final_markdown_reply, test_report, loop_steps)
+        Executes the Write -> Test -> Diagnose -> Fix -> Retest coding loop across ALL code blocks.
         """
         loop_steps = []
-        code, lang = cls.extract_code_block(initial_reply, default_lang="luau")
+        blocks = cls.extract_all_code_blocks(initial_reply, default_lang="luau")
+
+        if not blocks:
+            # Not a code generation response
+            return initial_reply, {"is_verified": False, "passed_checks": [], "failed_checks": [], "untested_limitations": []}, loop_steps
+
+        primary_lang = blocks[0]["language"]
+        total_lines = sum(len(b["code"].splitlines()) for b in blocks)
 
         # Step 1: Understand Request
         loop_steps.append({
             "name": "Coding Loop // Step 1: Understand Request",
-            "detail": f"Target: {lang.title()} | Analyzing physics, syntax, and API requirements"
+            "detail": f"Target: {primary_lang.title()} | Identified {len(blocks)} code block(s) to verify"
         })
-
-        if not code:
-            # Not a code generation response
-            return initial_reply, {"is_verified": False, "passed_checks": [], "failed_checks": [], "untested_limitations": []}, loop_steps
 
         # Step 2: Generated Code
         loop_steps.append({
             "name": "Coding Loop // Step 2: Initial Draft Synthesized",
-            "detail": f"Extracted {len(code.splitlines())} lines of {lang.title()} code for testing"
+            "detail": f"Extracted {total_lines} lines across {len(blocks)} block(s) for verification"
         })
 
-        current_code = code
         current_reply = initial_reply
         iteration = 1
         final_report = {}
 
         while iteration <= max_iterations:
+            current_blocks = cls.extract_all_code_blocks(current_reply, default_lang=primary_lang)
+            if not current_blocks:
+                break
+
             # Step 3: Run Checks
             loop_steps.append({
                 "name": f"Coding Loop // Step 3: Run Checks (Pass {iteration})",
-                "detail": f"Executing AST syntax parser, Roblox DataModel checks & domain tests"
+                "detail": f"Executing AST syntax parser, Roblox DataModel checks & domain tests across {len(current_blocks)} block(s)"
             })
 
-            if lang in ("lua", "luau"):
-                report = RobloxDomainTestRunner.test_luau_code(current_code, prompt)
-            elif lang == "python":
-                report = RobloxDomainTestRunner.test_python_code(current_code)
-            else:
-                # Generic fallback syntax check
-                report = {"passed_checks": ["Standard Code Block Extracted"], "failed_checks": [], "untested_limitations": ["Domain-specific static runner unavailable for this language."], "is_verified": True}
+            combined_passed = []
+            combined_failed = []
+            combined_untested = []
+            all_compiler_verified = True
 
-            report["iteration_count"] = iteration
+            for b_idx, blk in enumerate(current_blocks, start=1):
+                b_code = blk["code"]
+                b_lang = blk["language"]
+                if b_lang in ("lua", "luau"):
+                    b_rep = RobloxDomainTestRunner.test_luau_code(b_code, prompt)
+                elif b_lang == "python":
+                    b_rep = RobloxDomainTestRunner.test_python_code(b_code)
+                else:
+                    b_rep = {"passed_checks": [f"Block {b_idx}: Generic Syntax Extracted"], "failed_checks": [], "untested_limitations": [], "is_verified": True, "has_compiler_verified": False}
+
+                if not b_rep.get("has_compiler_verified", False):
+                    all_compiler_verified = False
+
+                for p in b_rep.get("passed_checks", []):
+                    prefix = f"Block {b_idx}: " if len(current_blocks) > 1 else ""
+                    combined_passed.append(f"{prefix}{p}")
+
+                for f in b_rep.get("failed_checks", []):
+                    f_copy = dict(f)
+                    if len(current_blocks) > 1:
+                        f_copy["message"] = f"[Block {b_idx}] {f_copy.get('message', '')}"
+                    combined_failed.append(f_copy)
+
+                for u in b_rep.get("untested_limitations", []):
+                    if u not in combined_untested:
+                        combined_untested.append(u)
+
+            report = {
+                "passed_checks": combined_passed,
+                "failed_checks": combined_failed,
+                "untested_limitations": combined_untested,
+                "is_verified": (len([f for f in combined_failed if f.get("type") == "error"]) == 0),
+                "has_compiler_verified": all_compiler_verified,
+                "iteration_count": iteration
+            }
             final_report = report
 
             blocking_errors = [c for c in report.get("failed_checks", []) if c.get("type") == "error"]
@@ -852,7 +1033,8 @@ class StrokeCodingLoop:
                     "detail": f"Detected {len(blocking_errors)} blocking issue(s). Compiling diagnostic prompt"
                 })
 
-                correction_prompt = ErrorAnalyser.build_correction_prompt(current_code, report["failed_checks"], language=lang)
+                first_code = current_blocks[0]["code"]
+                correction_prompt = ErrorAnalyser.build_correction_prompt(first_code, report["failed_checks"], language=primary_lang)
 
                 # Step 5: Fix the code
                 loop_steps.append({
@@ -869,12 +1051,7 @@ class StrokeCodingLoop:
                 try:
                     fixed_reply = llm_generate_fn(fix_messages)
                     if fixed_reply and len(fixed_reply.strip()) > 30:
-                        new_code, new_lang = cls.extract_code_block(fixed_reply, default_lang=lang)
-                        if new_code:
-                            current_code = new_code
-                            current_reply = fixed_reply
-                            if new_lang:
-                                lang = new_lang
+                        current_reply = fixed_reply
                 except Exception as exc:
                     print(f"[STROKE CODING LOOP NOTICE] Correction generation failed: {exc}", flush=True)
                     break
@@ -897,13 +1074,15 @@ class StrokeCodingLoop:
         report_md = cls.format_verification_report_markdown(final_report, iterations=min(iteration, max_iterations))
         final_reply = current_reply + report_md
 
-        # Archivist retains project context
-        CodingArchivist.record_verified_artifact(
-            prompt=prompt,
-            code=current_code,
-            language=lang,
-            test_report=final_report,
-            user_email=user_email
-        )
+        # Archivist retains project context only if is_verified is True
+        if final_report.get("is_verified", False):
+            first_valid_code = current_blocks[0]["code"] if 'current_blocks' in locals() and current_blocks else ""
+            CodingArchivist.record_verified_artifact(
+                prompt=prompt,
+                code=first_valid_code,
+                language=primary_lang,
+                test_report=final_report,
+                user_email=user_email
+            )
 
         return final_reply, final_report, loop_steps

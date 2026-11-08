@@ -275,6 +275,15 @@ def is_god_tier_vfx(prompt: str, reply: str) -> bool:
     if any(r in reply.lower() for r in refusal_indicators):
         return False
 
+    # 1.5. Fake API & Broken Syntax Rejection Filter
+    fake_api_indicators = [
+        "spawnparticleemitter", "particle.new", "128x128", "1024x1024", "color3.from_rgb",
+        "instance.new(\"domain\"", "instance.new(\"cleave\"", "instance.new(\"hollow\"",
+        "instance.new(\"particle\"", "instance.new(\"assets\"", "instance.new(\"kinematics\""
+    ]
+    if any(f in combined for f in fake_api_indicators):
+        return False
+
     # 2. Negative Filter: Reject basic primitive shapes with plain colors
     trivial_ball_patterns = [
         r"\b(?:simple|basic|plain|normal)?\s*(?:ball|sphere|cube|part|block|cylinder)\s*(?:with|of)?\s*(?:color|brickcolor|red|blue|green|yellow|purple)\b",

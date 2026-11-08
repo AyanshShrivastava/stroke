@@ -1,5 +1,29 @@
 [
   {
+    "id": "CTX-1794144134",
+    "timestamp": 1794144134.6988869,
+    "prompt": "Optimize particle emitters for mobile",
+    "language": "lua",
+    "passed_checks_count": 40,
+    "untested_count": 2,
+    "verified": true,
+    "iterations": 1,
+    "user_email": "anonymous",
+    "summary": "Verified lua solution with 40 passing checks."
+  },
+  {
+    "id": "CTX-1794144114",
+    "timestamp": 1794144114.746638,
+    "prompt": "Optimize particle emitters for mobile",
+    "language": "lua",
+    "passed_checks_count": 29,
+    "untested_count": 2,
+    "verified": true,
+    "iterations": 1,
+    "user_email": "anonymous",
+    "summary": "Verified lua solution with 29 passing checks."
+  },
+  {
     "id": "CTX-1794142991",
     "timestamp": 1794142991.663529,
     "prompt": "write a luau script for a fireball particle emitter",
@@ -12,30 +36,6 @@
     "summary": "Verified luau solution with 3 passing checks."
   },
   {
-    "id": "CTX-1794142741",
-    "timestamp": 1794142741.353531,
-    "prompt": "Optimize particle emitters for mobile",
-    "language": "lua",
-    "passed_checks_count": 3,
-    "untested_count": 2,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "nibisha.neha@gmail.com",
-    "summary": "Verified lua solution with 3 passing checks."
-  },
-  {
-    "id": "CTX-1794142709",
-    "timestamp": 1794142709.51649,
-    "prompt": "hi",
-    "language": "lua",
-    "passed_checks_count": 2,
-    "untested_count": 1,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "anonymous",
-    "summary": "Verified lua solution with 2 passing checks."
-  },
-  {
     "id": "CTX-1794142658",
     "timestamp": 1794142658.667895,
     "prompt": "Write a python script to calculate fibonacci numbers",
@@ -46,30 +46,6 @@
     "iterations": 1,
     "user_email": "anonymous",
     "summary": "Verified python solution with 3 passing checks."
-  },
-  {
-    "id": "CTX-1794142223",
-    "timestamp": 1794142223.506635,
-    "prompt": "hi",
-    "language": "luau",
-    "passed_checks_count": 2,
-    "untested_count": 1,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "nibisha.neha@gmail.com",
-    "summary": "Verified luau solution with 2 passing checks."
-  },
-  {
-    "id": "CTX-1794141509",
-    "timestamp": 1794141509.134165,
-    "prompt": "so can you do anything on it",
-    "language": "luau",
-    "passed_checks_count": 2,
-    "untested_count": 1,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "developer@cyber.matrix",
-    "summary": "Verified luau solution with 2 passing checks."
   },
   {
     "id": "CTX-1794140982",
@@ -94,18 +70,6 @@
     "iterations": 2,
     "user_email": "anonymous",
     "summary": "Verified luau solution with 1 passing checks."
-  },
-  {
-    "id": "CTX-1794140553",
-    "timestamp": 1794140553.49974,
-    "prompt": "hi",
-    "language": "luau",
-    "passed_checks_count": 2,
-    "untested_count": 1,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "developer@cyber.matrix",
-    "summary": "Verified luau solution with 2 passing checks."
   },
   {
     "id": "CTX-1794140505",
@@ -144,18 +108,6 @@
     "summary": "Verified luau solution with 2 passing checks."
   },
   {
-    "id": "CTX-1794140040",
-    "timestamp": 1794140040.0039601,
-    "prompt": "Add two windows, a chimney, stairs leading to the door, and a small garden. Keep the existing house structure intact.",
-    "language": "luau",
-    "passed_checks_count": 5,
-    "untested_count": 3,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "anonymous",
-    "summary": "Verified luau solution with 5 passing checks."
-  },
-  {
     "id": "CTX-1794139912",
     "timestamp": 1794139912.9383638,
     "prompt": "do you have your own terminal",
@@ -180,30 +132,6 @@
     "summary": "Verified luau solution with 2 passing checks."
   },
   {
-    "id": "CTX-1794139735",
-    "timestamp": 1794139735.831485,
-    "prompt": "Optimize particle emitters for mobile",
-    "language": "lua",
-    "passed_checks_count": 2,
-    "untested_count": 2,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "developer@cyber.matrix",
-    "summary": "Verified lua solution with 2 passing checks."
-  },
-  {
-    "id": "CTX-1794139721",
-    "timestamp": 1794139721.486644,
-    "prompt": "Optimize particle emitters for mobile",
-    "language": "luau",
-    "passed_checks_count": 2,
-    "untested_count": 2,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "developer@cyber.matrix",
-    "summary": "Verified luau solution with 2 passing checks."
-  },
-  {
     "id": "CTX-1794139615",
     "timestamp": 1794139615.6359391,
     "prompt": "Script a smooth shockwave in Luau",
@@ -214,18 +142,6 @@
     "iterations": 1,
     "user_email": "developer@cyber.matrix",
     "summary": "Verified lua solution with 2 passing checks."
-  },
-  {
-    "id": "CTX-1794138995",
-    "timestamp": 1794138995.469887,
-    "prompt": "Add two windows, a chimney, stairs leading to the door, and a small garden. Keep the existing house structure intact.",
-    "language": "luau",
-    "passed_checks_count": 2,
-    "untested_count": 3,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "anonymous",
-    "summary": "Verified luau solution with 2 passing checks."
   },
   {
     "id": "CTX-1794138164",
@@ -262,29 +178,5 @@
     "iterations": 1,
     "user_email": "developer@cyber.matrix",
     "summary": "Verified lua solution with 2 passing checks."
-  },
-  {
-    "id": "CTX-1794137536",
-    "timestamp": 1794137536.4180322,
-    "prompt": "Write a Roblox hitbox detection script",
-    "language": "luau",
-    "passed_checks_count": 5,
-    "untested_count": 4,
-    "verified": false,
-    "iterations": 2,
-    "user_email": "anonymous",
-    "summary": "Verified luau solution with 5 passing checks."
-  },
-  {
-    "id": "CTX-1794137306",
-    "timestamp": 1794137306.769909,
-    "prompt": "Roblox hitbox detection script",
-    "language": "luau",
-    "passed_checks_count": 9,
-    "untested_count": 3,
-    "verified": true,
-    "iterations": 2,
-    "user_email": "ayansh@stroke.ai",
-    "summary": "Verified luau solution with 9 passing checks."
   }
 ]
