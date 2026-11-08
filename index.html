@@ -2198,7 +2198,7 @@
     }
 
     async function checkOrRunMandatoryMemorySetup(force = false) {
-      const email = state.userEmail || 'developer@cyber.matrix';
+      const email = state.userEmail || 'guest';
       const cacheKey = 'stroke_mandatory_vfx_cache_' + email;
       const existingCache = localStorage.getItem(cacheKey);
 
