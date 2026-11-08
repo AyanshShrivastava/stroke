@@ -258,7 +258,15 @@ def is_god_tier_vfx(prompt: str, reply: str) -> bool:
     r_low = reply.lower()
     combined = p_low + " " + r_low
 
-    # 1. Negative Filter: Reject basic primitive shapes with plain colors
+    # 1. Refusal & Non-Answer Rejection Filter
+    refusal_indicators = [
+        "can't assist", "cannot assist", "illegal", "as an ai", "i am unable", "sorry, but",
+        "i cannot fulfill", "against policy", "against my safety", "harmful activities", "exploitation"
+    ]
+    if any(r in reply.lower() for r in refusal_indicators):
+        return False
+
+    # 2. Negative Filter: Reject basic primitive shapes with plain colors
     trivial_ball_patterns = [
         r"\b(?:simple|basic|plain|normal)?\s*(?:ball|sphere|cube|part|block|cylinder)\s*(?:with|of)?\s*(?:color|brickcolor|red|blue|green|yellow|purple)\b",
         r"\b(?:make|create|spawn)\s+(?:a|an)?\s*(?:red|blue|green|yellow|white|black|purple)?\s*(?:ball|sphere|part|block)\b",
@@ -275,7 +283,15 @@ def is_god_tier_vfx(prompt: str, reply: str) -> bool:
             if re.search(pat, combined):
                 return False
 
-    # 2. Positive Filter: Must contain top-tier VFX archetypes OR multi-parameter particle/beam specifications
+    # 3. Must contain actual Luau/VFX code structure in the reply
+    has_code_or_structure = any(s in reply.lower() for s in [
+        "instance.new", "local ", "particleemitter", "beam", "attachment",
+        "colorsequence", "numbersequence", "rbxassetid://", "tweenservice", "tweeninfo"
+    ])
+    if not has_code_or_structure:
+        return False
+
+    # 4. Positive Filter: Must contain top-tier VFX archetypes OR multi-parameter particle/beam specifications
     god_archetypes = [
         "sukuna", "cleave", "dismantle", "world cutting", "hollow purple", "reversal red", "lapse blue",
         "singularity", "domain expansion", "infinity", "black flash", "fireball", "blue explosion",
@@ -284,7 +300,7 @@ def is_god_tier_vfx(prompt: str, reply: str) -> bool:
     ]
     has_god_archetype = any(a in combined for a in god_archetypes)
 
-    # 3. Must contain technical parameter indicators
+    # 5. Must contain technical parameter indicators
     technical_indicators = [
         "particleemitter", "beam", "emitter.drag", "emitter.acceleration", "curvesize",
         "texturespeed", "velocityperpendicular", "facingcamera", "flipbook", "numbersequence.new",
@@ -293,7 +309,7 @@ def is_god_tier_vfx(prompt: str, reply: str) -> bool:
     has_technical_spec = any(t in combined for t in technical_indicators)
 
     # Must satisfy either top archetype with code, or technical multi-parameter specification
-    return has_god_archetype or (has_technical_spec and len(reply) > 150)
+    return (has_god_archetype and has_code_or_structure) or (has_technical_spec and len(reply) > 150)
 
 
 def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = "", user_email: str = "") -> Optional[Dict[str, Any]]:

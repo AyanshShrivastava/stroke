@@ -175,36 +175,29 @@
           <span id="mcpConnectedCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">Connected</span>
         </button>
 
-        <button id="openContinuousLearningBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
-          <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-brand-cyan group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-            <span>Learning</span>
-          </span>
-          <span id="sidebarInsightBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30 font-mono">Active</span>
-        </button>
-
         <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-brand-text hover:text-white hover:bg-white/5 transition-colors">
           <svg class="w-4 h-4 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           <span>Settings</span>
         </button>
       </nav>
 
-      <!-- Recents List Section -->
-      <div class="flex-1 overflow-y-auto pr-1 pt-2 space-y-1">
-        <div class="text-[10px] uppercase font-bold tracking-wider text-brand-muted px-2.5 py-1">Recents</div>
-        <div id="recentChatsList" class="space-y-0.5">
-          <button class="chat-session-item active w-full text-left px-2.5 py-2 rounded-md text-xs text-white bg-white/5 border-l-2 border-brand-accent flex items-center justify-between group">
-            <span class="truncate pr-2">Elemental Worlds Architecture</span>
-            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
-          </button>
-          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
-            <span class="truncate pr-2">Sukuna Cleave Script</span>
-            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
-          </button>
-          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
-            <span class="truncate pr-2">Hollow Purple Emitters</span>
-            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
-          </button>
+      <!-- Recents List Section with Search Filter -->
+      <div class="flex-1 overflow-y-auto pr-1 pt-2 space-y-1 flex flex-col">
+        <div class="flex items-center justify-between px-2.5 py-1">
+          <span class="text-[10px] uppercase font-bold tracking-wider text-brand-muted">Chats</span>
+        </div>
+
+        <!-- Chat Search Input Container -->
+        <div id="chatSearchContainer" class="hidden px-2 pb-1.5">
+          <div class="relative flex items-center">
+            <input id="chatSearchInput" type="text" placeholder="Filter chats..." class="w-full bg-brand-card border border-brand-border focus:border-brand-accent rounded-md px-2.5 py-1 text-xs text-white placeholder-brand-muted focus:outline-none font-sans pl-7 pr-6">
+            <svg class="w-3.5 h-3.5 text-brand-muted absolute left-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <button id="clearChatSearchBtn" class="hidden text-brand-muted hover:text-white absolute right-2 text-xs">✕</button>
+          </div>
+        </div>
+
+        <div id="recentChatsList" class="space-y-0.5 flex-1 overflow-y-auto">
+          <!-- Populated dynamically via loadUserChats() -->
         </div>
       </div>
     </div>
@@ -217,16 +210,11 @@
             NN
           </div>
           <div class="min-w-0">
-            <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Neha Nibisha</div>
-            <div id="userTierLabel" class="text-[10px] text-brand-muted font-mono">Free Plan</div>
+            <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Developer</div>
+            <div id="userTierLabel" class="text-[10px] text-brand-muted font-mono">Local Llama 3.2</div>
           </div>
         </div>
         <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
-      </button>
-
-      <button id="claimOfferBtn" class="mt-2 w-full py-1.5 px-3 rounded-lg border border-brand-accent/30 bg-brand-accent/5 hover:bg-brand-accent/15 text-[11px] text-brand-accent font-medium flex items-center justify-center space-x-1.5 transition-colors">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
-        <span>Upgrade to Pro</span>
       </button>
 
       <!-- User Profile Popover -->
@@ -239,30 +227,18 @@
         <!-- Mandatory Memory Display (Local Cache) -->
         <div class="px-2 py-1.5 border-b border-brand-border space-y-1">
           <div class="flex items-center justify-between text-[10px] font-mono">
-            <span class="text-brand-muted uppercase">Mandatory Memory</span>
+            <span class="text-brand-muted uppercase">VFX Database</span>
             <span id="popoverCacheStatusBadge" class="text-brand-accent font-bold">Local Cache</span>
           </div>
           <div class="text-[11px] text-white flex items-center justify-between">
-            <span>14,666 VFX Instances</span>
+            <span>14,666 Instances</span>
             <button id="rerunInjectionBtn" class="text-[10px] text-brand-accent hover:underline">Re-sync 5X</button>
           </div>
         </div>
 
-        <!-- AI Interaction Memory Display (Firestore 100 MB Quota) -->
-        <div class="px-2 py-1.5 border-b border-brand-border space-y-1">
-          <div class="flex items-center justify-between text-[10px] font-mono">
-            <span class="text-brand-muted uppercase">Firestore Memory</span>
-            <span id="popoverMemoryPercentText" class="text-brand-accent font-bold">0% / 100 MB</span>
-          </div>
-          <div class="w-full h-1.5 bg-brand-surface rounded-full overflow-hidden border border-brand-border">
-            <div id="popoverMemoryBar" class="h-full bg-brand-accent w-0 transition-all duration-300"></div>
-          </div>
-          <div class="flex items-center justify-between text-[10px] text-brand-muted">
-            <span id="popoverMemoryBytesText">0 KB Used</span>
-            <button id="clearMemoryBtn" class="text-red-400 hover:text-red-300">Clear</button>
-          </div>
-        </div>
-
+        <button id="popoverOpenSettingsBtn" class="w-full text-left px-2 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center space-x-2">
+          <span>Settings</span>
+        </button>
         <button id="authModalTriggerBtn" class="w-full text-left px-2 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center space-x-2">
           <span>Switch Account / Sign In</span>
         </button>
@@ -281,34 +257,17 @@
     <!-- Top Header Bar -->
     <header class="h-14 border-b border-brand-border px-4 flex items-center justify-between flex-shrink-0 bg-brand-surface/90 backdrop-blur z-20">
       
-      <!-- Left: Expand Sidebar + Model Selector -->
+      <!-- Left: Expand Sidebar + Single AI Model Indicator -->
       <div class="flex items-center space-x-3">
         <button id="expandSidebarBtn" class="hidden p-1.5 rounded-lg hover:bg-white/5 text-brand-muted hover:text-white transition-colors" title="Open sidebar">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
-        <!-- Model Selector Pill -->
-        <div class="relative">
-          <button id="modelDropdownBtn" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-sans font-semibold text-xs transition-colors border border-brand-border">
-            <span id="selectedModelLabel">Local Llama 3.2 1B</span>
-            <svg class="w-3.5 h-3.5 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-          </button>
-          
-          <div id="modelDropdownMenu" class="hidden absolute top-10 left-0 w-64 bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1 z-50">
-            <button class="model-option w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 flex items-center justify-between" data-model="llama3.2-local">
-              <div>
-                <div class="font-semibold text-brand-accent">Local Llama 3.2 1B</div>
-                <div class="text-[10px] text-brand-muted">100% Offline GGUF engine on device</div>
-              </div>
-              <span class="text-brand-accent text-xs font-bold">[active]</span>
-            </button>
-            <button class="model-option w-full text-left px-3 py-2 text-xs text-brand-text hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="stroke-neural">
-              <div>
-                <div class="font-semibold">Stroke Neural Agent</div>
-                <div class="text-[10px] text-brand-muted">Live web search + MCP Studio bridge</div>
-              </div>
-            </button>
-          </div>
+        <!-- Single Main AI: Llama 3.2 Offline Core -->
+        <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/5 text-white font-sans font-semibold text-xs border border-brand-border shadow-inner">
+          <span class="w-2 h-2 rounded-full bg-brand-accent animate-pulse"></span>
+          <span>Llama 3.2</span>
+          <span class="text-[10px] text-brand-muted font-mono font-normal">Offline Core</span>
         </div>
       </div>
 
@@ -316,7 +275,7 @@
       <div class="flex items-center space-x-2 sm:space-x-3">
         
         <!-- Temporary Chat Toggle -->
-        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-amber text-xs text-brand-muted hover:text-white transition-all group" title="Temporary chat: Excluded from history and learning">
+        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-amber text-xs text-brand-muted hover:text-white transition-all group" title="Temporary chat: Excluded from chat history">
           <svg class="w-3.5 h-3.5 text-brand-muted group-hover:text-brand-amber transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
           <span id="tempChatBtnText" class="font-medium">Temporary chat</span>
           <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-brand-border"></span>
@@ -443,11 +402,11 @@
 
       <!-- Footer Microtext -->
       <div class="text-[11px] text-brand-muted mt-2 flex items-center space-x-2">
-        <span>Stroke AI</span>
+        <span>Stroke</span>
+        <span>•</span>
+        <span>Llama 3.2</span>
         <span>•</span>
         <span>Model Context Protocol (MCP)</span>
-        <span>•</span>
-        <span>Continuous Learning</span>
       </div>
     </div>
   </main>
@@ -556,43 +515,94 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- DRAWER: CONTINUOUS LEARNING                                               -->
+  <!-- MODAL: SETTINGS                                                           -->
   <!-- ========================================================================= -->
-  <div id="learningDrawer" class="hidden fixed inset-y-0 right-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border shadow-2xl z-50 flex flex-col justify-between">
-    <div class="p-4 border-b border-brand-border flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <svg class="w-5 h-5 text-brand-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        <span class="font-sans font-bold text-white text-sm">Continuous Learning</span>
-      </div>
-      <button id="closeLearningDrawerBtn" class="text-brand-muted hover:text-white p-1">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
-    </div>
-
-    <div class="flex-1 overflow-y-auto p-4 space-y-4">
-      <p class="text-xs text-brand-muted leading-relaxed">
-        Stroke automatically distills user prompts and solutions into reusable knowledge patterns. These patterns enrich future AI responses and feed the background knowledge engine.
-      </p>
-
-      <div class="grid grid-cols-2 gap-2">
-        <div class="p-3 rounded-lg border border-brand-border bg-brand-card">
-          <div class="text-[10px] text-brand-muted uppercase">Sessions Distilled</div>
-          <div id="telemetryChatsCount" class="text-lg font-bold text-white font-mono">14</div>
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 glow-box">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
+        <div class="flex items-center space-x-2.5">
+          <svg class="w-5 h-5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <h3 class="font-sans font-bold text-white text-base">Settings</h3>
         </div>
-        <div class="p-3 rounded-lg border border-brand-border bg-brand-card">
-          <div class="text-[10px] text-brand-muted uppercase">Accuracy Gain</div>
-          <div id="telemetryAccuracyGain" class="text-lg font-bold text-brand-cyan font-mono">+12.4%</div>
+        <button id="closeSettingsModalBtn" class="text-brand-muted hover:text-white p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Settings Content -->
+      <div class="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        <!-- AI Neural Engine -->
+        <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-white">AI Engine</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-brand-accent/15 text-brand-accent border border-brand-accent/30 font-mono">Llama 3.2 (Offline Core)</span>
+          </div>
+          <p class="text-xs text-brand-muted leading-relaxed">
+            Runs 100% locally on your computer with Apple Silicon / Metal hardware acceleration.
+          </p>
+        </div>
+
+        <!-- Temperature Slider -->
+        <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-white">Inference Temperature</span>
+            <span id="settingsTempValText" class="font-mono text-brand-accent font-bold">0.7</span>
+          </div>
+          <input id="settingsTempSlider" type="range" min="0.1" max="1.0" step="0.05" value="0.7" class="w-full accent-emerald-400 bg-brand-card">
+          <div class="flex justify-between text-[10px] text-brand-muted font-mono">
+            <span>Precise (0.1)</span>
+            <span>Balanced (0.7)</span>
+            <span>Creative (1.0)</span>
+          </div>
+        </div>
+
+        <!-- Mandatory VFX Memory Cache -->
+        <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-white">VFX Database Cache</span>
+            <span id="settingsCacheBadge" class="text-[10px] font-mono text-brand-accent">Local Cache: Active</span>
+          </div>
+          <p class="text-xs text-brand-muted leading-relaxed">
+            The 14,666-instance Elemental Worlds VFX database is saved in your local cache for instant loading.
+          </p>
+          <div class="pt-1 flex items-center space-x-2">
+            <button id="settingsRerunInjectionBtn" class="px-3 py-1.5 rounded-lg bg-brand-card border border-brand-border hover:border-brand-accent text-xs text-white hover:text-brand-accent transition-colors">
+              Re-sync 5X Database
+            </button>
+            <button id="settingsClearCacheBtn" class="px-3 py-1.5 rounded-lg bg-brand-card border border-brand-border hover:border-red-500 text-xs text-brand-muted hover:text-red-400 transition-colors">
+              Clear Local Cache
+            </button>
+          </div>
+        </div>
+
+        <!-- MCP Bridge Quick Link -->
+        <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface flex items-center justify-between">
+          <div>
+            <div class="text-xs font-semibold text-white">Model Context Protocol (MCP)</div>
+            <div class="text-[11px] text-brand-muted">Configure external MCP tool servers via JSON</div>
+          </div>
+          <button id="settingsOpenMcpBtn" class="px-3 py-1.5 rounded-lg bg-brand-accent/15 border border-brand-accent/40 text-brand-accent hover:bg-brand-accent/25 text-xs font-semibold transition-colors">
+            Configure MCP
+          </button>
+        </div>
+
+        <!-- Account -->
+        <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-2">
+          <div class="text-xs font-semibold text-white">Identity</div>
+          <div class="flex items-center justify-between text-xs">
+            <span id="settingsEmailText" class="font-mono text-brand-muted truncate">developer@cyber.matrix</span>
+            <button id="settingsSignOutBtn" class="text-red-400 hover:text-red-300 text-xs">Sign Out</button>
+          </div>
         </div>
       </div>
 
-      <div class="space-y-2 pt-2">
-        <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Active Distilled Insights</div>
-        <div id="learningInsightsList" class="space-y-2"></div>
+      <!-- Footer -->
+      <div class="pt-2 flex justify-end">
+        <button id="closeSettingsSaveBtn" class="px-4 py-2 rounded-xl bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-colors">
+          Done
+        </button>
       </div>
-    </div>
-
-    <div class="p-3 border-t border-brand-border bg-brand-black text-[11px] text-brand-muted text-center">
-      Temporary chats are excluded from learning.
     </div>
   </div>
 
@@ -690,11 +700,13 @@
       isTemporaryMode: false,
       thinkMode: false,
       activeSessionId: 'session-' + Date.now(),
-      selectedModel: 'llama3.2-local',
+      selectedModel: 'llama3.2',
+      temperature: 0.7,
       isVoiceActive: false,
       isVoiceMuted: false,
       chatMessages: [],
-      pendingAttachments: []
+      pendingAttachments: [],
+      allChats: []
     };
 
     // Elements
@@ -702,6 +714,10 @@
     const collapseSidebarBtn = document.getElementById('collapseSidebarBtn');
     const expandSidebarBtn = document.getElementById('expandSidebarBtn');
     const newChatBtn = document.getElementById('newChatBtn');
+    const searchChatsBtn = document.getElementById('searchChatsBtn');
+    const chatSearchContainer = document.getElementById('chatSearchContainer');
+    const chatSearchInput = document.getElementById('chatSearchInput');
+    const clearChatSearchBtn = document.getElementById('clearChatSearchBtn');
     const promptInput = document.getElementById('promptInput');
     const sendPromptBtn = document.getElementById('sendPromptBtn');
     const emptyStateHero = document.getElementById('emptyStateHero');
@@ -726,8 +742,19 @@
     const userDisplayName = document.getElementById('userDisplayName');
     const userAvatarCircle = document.getElementById('userAvatarCircle');
     const authModal = document.getElementById('authModal');
-    const learningDrawer = document.getElementById('learningDrawer');
-    const closeLearningDrawerBtn = document.getElementById('closeLearningDrawerBtn');
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const popoverOpenSettingsBtn = document.getElementById('popoverOpenSettingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeSettingsModalBtn = document.getElementById('closeSettingsModalBtn');
+    const closeSettingsSaveBtn = document.getElementById('closeSettingsSaveBtn');
+    const settingsTempSlider = document.getElementById('settingsTempSlider');
+    const settingsTempValText = document.getElementById('settingsTempValText');
+    const settingsRerunInjectionBtn = document.getElementById('settingsRerunInjectionBtn');
+    const settingsClearCacheBtn = document.getElementById('settingsClearCacheBtn');
+    const settingsOpenMcpBtn = document.getElementById('settingsOpenMcpBtn');
+    const settingsSignOutBtn = document.getElementById('settingsSignOutBtn');
+    const settingsEmailText = document.getElementById('settingsEmailText');
+    const settingsCacheBadge = document.getElementById('settingsCacheBadge');
     const fileAttachmentInput = document.getElementById('fileAttachmentInput');
     const attachBtn = document.getElementById('attachBtn');
     const attachmentsPreviewStrip = document.getElementById('attachmentsPreviewStrip');
@@ -749,7 +776,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       updateUserIdentityUI();
       loadUserChats();
-      fetchLearningTelemetry();
       setupSpeechEngines();
       loadMcpConfigJson();
     });
@@ -813,18 +839,120 @@
       }
     });
 
-    // 5. Model Dropdown
-    document.getElementById('modelDropdownBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.getElementById('modelDropdownMenu').classList.toggle('hidden');
+    // 5. Search Chats Functionality
+    searchChatsBtn.addEventListener('click', toggleChatSearch);
+    function toggleChatSearch() {
+      chatSearchContainer.classList.toggle('hidden');
+      if (!chatSearchContainer.classList.contains('hidden')) {
+        chatSearchInput.focus();
+      } else {
+        chatSearchInput.value = '';
+        filterChats('');
+      }
+    }
+
+    chatSearchInput.addEventListener('input', (e) => {
+      const q = e.target.value;
+      if (q.trim()) {
+        clearChatSearchBtn.classList.remove('hidden');
+      } else {
+        clearChatSearchBtn.classList.add('hidden');
+      }
+      filterChats(q);
     });
-    document.addEventListener('click', () => document.getElementById('modelDropdownMenu').classList.add('hidden'));
-    document.querySelectorAll('.model-option').forEach(opt => {
-      opt.addEventListener('click', () => {
-        state.selectedModel = opt.getAttribute('data-model');
-        document.getElementById('selectedModelLabel').textContent = opt.querySelector('.font-semibold').textContent;
-        document.getElementById('modelDropdownMenu').classList.add('hidden');
+
+    clearChatSearchBtn.addEventListener('click', () => {
+      chatSearchInput.value = '';
+      clearChatSearchBtn.classList.add('hidden');
+      filterChats('');
+      chatSearchInput.focus();
+    });
+
+    function filterChats(query) {
+      const clean = (query || '').toLowerCase().trim();
+      const items = document.querySelectorAll('.chat-session-item');
+      let visibleCount = 0;
+      items.forEach(item => {
+        const title = (item.getAttribute('data-title') || item.textContent).toLowerCase();
+        if (!clean || title.includes(clean)) {
+          item.classList.remove('hidden');
+          visibleCount++;
+        } else {
+          item.classList.add('hidden');
+        }
       });
+      const emptyNotice = document.getElementById('chatFilterEmptyNotice');
+      if (emptyNotice) {
+        if (visibleCount === 0 && clean) {
+          emptyNotice.classList.remove('hidden');
+        } else {
+          emptyNotice.classList.add('hidden');
+        }
+      }
+    }
+
+    // Keyboard shortcut Cmd+F or Ctrl+F to search chats
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        chatSearchContainer.classList.remove('hidden');
+        chatSearchInput.focus();
+        chatSearchInput.select();
+      } else if (e.key === 'Escape') {
+        if (!settingsModal.classList.contains('hidden')) {
+          closeSettingsModal();
+        }
+      }
+    });
+
+    // 5b. Settings Modal Controller
+    function openSettingsModal() {
+      profilePopover.classList.add('hidden');
+      settingsModal.classList.remove('hidden');
+      settingsEmailText.textContent = state.userEmail;
+      settingsTempSlider.value = state.temperature;
+      settingsTempValText.textContent = state.temperature.toFixed(2);
+      const cacheKey = 'stroke_mandatory_vfx_cache_' + (state.userEmail || 'developer@cyber.matrix');
+      const hasCache = !!localStorage.getItem(cacheKey);
+      settingsCacheBadge.textContent = hasCache ? '14,666 Instances Cached' : 'Not Cached';
+      settingsCacheBadge.className = hasCache ? 'text-[10px] font-mono text-brand-accent' : 'text-[10px] font-mono text-brand-muted';
+    }
+
+    function closeSettingsModal() {
+      settingsModal.classList.add('hidden');
+    }
+
+    openSettingsBtn.addEventListener('click', openSettingsModal);
+    if (popoverOpenSettingsBtn) popoverOpenSettingsBtn.addEventListener('click', openSettingsModal);
+    closeSettingsModalBtn.addEventListener('click', closeSettingsModal);
+    closeSettingsSaveBtn.addEventListener('click', closeSettingsModal);
+
+    settingsTempSlider.addEventListener('input', (e) => {
+      state.temperature = parseFloat(e.target.value);
+      settingsTempValText.textContent = state.temperature.toFixed(2);
+    });
+
+    settingsOpenMcpBtn.addEventListener('click', () => {
+      closeSettingsModal();
+      openMcpModal();
+    });
+
+    settingsRerunInjectionBtn.addEventListener('click', () => {
+      closeSettingsModal();
+      checkOrRunMandatoryMemorySetup(true);
+    });
+
+    settingsClearCacheBtn.addEventListener('click', () => {
+      const email = state.userEmail || 'developer@cyber.matrix';
+      localStorage.removeItem('stroke_mandatory_vfx_cache_' + email);
+      settingsCacheBadge.textContent = 'Cache Cleared';
+      settingsCacheBadge.className = 'text-[10px] font-mono text-red-400';
+    });
+
+    settingsSignOutBtn.addEventListener('click', () => {
+      closeSettingsModal();
+      localStorage.removeItem('stroke_user_email');
+      location.reload();
     });
 
     // 6. Plus Button (+) for Attachments
@@ -1071,7 +1199,8 @@
       try {
         const payload = {
           messages: state.chatMessages,
-          model: state.selectedModel === 'stroke-neural' ? 'llama3.2' : state.selectedModel,
+          model: 'llama3.2',
+          temperature: state.temperature || 0.7,
           email: state.userEmail,
           is_temporary: state.isTemporaryMode,
           session_id: state.activeSessionId,
@@ -1100,19 +1229,8 @@
         appendMessage('assistant', replyText, {
           tool_invoked: data.tool_invoked,
           tool_name: data.tool_name,
-          sources: data.sources,
-          learning_recorded: data.learning_recorded,
-          god_tier_vfx_learned: data.god_tier_vfx_learned,
-          learned_vfx_name: data.learned_vfx_name
+          sources: data.sources
         });
-
-        if (data.learning_recorded) {
-          fetchLearningTelemetry();
-        }
-
-        if (data.memory && data.memory.percent_used !== undefined) {
-          updateMemoryMeterUI(data.memory);
-        }
 
       } catch (err) {
         removeTypingIndicator(typingId);
@@ -1159,17 +1277,6 @@
           `;
         }
 
-        let godTierBadgeHtml = '';
-        if (meta.god_tier_vfx_learned) {
-          godTierBadgeHtml = `
-            <div class="mt-2.5 inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-brand-accent/10 border border-brand-accent/30 text-[10px] text-brand-accent font-mono">
-              <span class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-ping"></span>
-              <span>God-Tier VFX Ingested into Database:</span>
-              <strong class="text-white">${escapeHtml(meta.learned_vfx_name || 'Top-Tier Matrix')}</strong>
-            </div>
-          `;
-        }
-
         const formattedBody = formatMarkdownText(content);
 
         msgDiv.innerHTML = `
@@ -1182,7 +1289,6 @@
               <div class="prose prose-invert max-w-none text-sm text-[#e0e0e0] leading-relaxed font-sans">
                 ${formattedBody}
               </div>
-              ${godTierBadgeHtml}
               <div class="mt-2 flex items-center space-x-2 text-[10px] text-brand-muted">
                 <button onclick="speakText('${encodeURIComponent(content.replace(/'/g, ''))}')" class="hover:text-brand-accent flex items-center space-x-1">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
@@ -1362,39 +1468,6 @@
       }
     });
 
-    // 12. Continuous Learning Drawer
-    document.getElementById('openContinuousLearningBtn').addEventListener('click', () => {
-      learningDrawer.classList.remove('hidden');
-      fetchLearningTelemetry();
-    });
-    closeLearningDrawerBtn.addEventListener('click', () => learningDrawer.classList.add('hidden'));
-
-    async function fetchLearningTelemetry() {
-      try {
-        const res = await fetch('/ai/learned-insights');
-        if (!res.ok) return;
-        const data = await res.json();
-        const telem = data.telemetry || {};
-        document.getElementById('telemetryChatsCount').textContent = telem.total_chats_distilled || '14';
-        document.getElementById('telemetryAccuracyGain').textContent = telem.accuracy_enhancement_ratio || '+12.4%';
-
-        const list = document.getElementById('learningInsightsList');
-        list.innerHTML = '';
-        (data.insights || []).slice(0, 8).forEach(ins => {
-          const div = document.createElement('div');
-          div.className = 'p-2.5 rounded-lg border border-brand-border bg-brand-card space-y-1';
-          div.innerHTML = `
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-brand-accent font-mono">${escapeHtml(ins.topic)}</span>
-              <span class="text-[9px] px-1 py-0.2 rounded bg-brand-accent/10 text-brand-accent">${ins.domain}</span>
-            </div>
-            <p class="text-[11px] text-brand-muted leading-tight">${escapeHtml(ins.summary)}</p>
-          `;
-          list.appendChild(div);
-        });
-      } catch(e){}
-    }
-
     // 13. Chats Loader
     async function loadUserChats() {
       try {
@@ -1403,19 +1476,33 @@
         const data = await res.json();
         const list = document.getElementById('recentChatsList');
         list.innerHTML = '';
-        (data.chats || []).forEach(chat => {
+        state.allChats = data.chats || [];
+        if (state.allChats.length === 0) {
+          list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">No chats yet.</div>';
+          return;
+        }
+        state.allChats.forEach(chat => {
           const btn = document.createElement('button');
           btn.className = 'chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group';
+          btn.setAttribute('data-title', chat.title || '');
+          btn.setAttribute('data-session-id', chat.session_id || '');
           btn.innerHTML = `
             <span class="truncate pr-2">${escapeHtml(chat.title)}</span>
-            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
+            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Select</span>
           `;
           btn.addEventListener('click', () => {
             document.querySelectorAll('.chat-session-item').forEach(b => b.classList.remove('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent'));
             btn.classList.add('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent');
+            state.activeSessionId = chat.session_id;
           });
           list.appendChild(btn);
         });
+
+        const emptySearchNotice = document.createElement('div');
+        emptySearchNotice.id = 'chatFilterEmptyNotice';
+        emptySearchNotice.className = 'hidden text-[11px] text-brand-muted px-2.5 py-2 italic';
+        emptySearchNotice.textContent = 'No matching chats found.';
+        list.appendChild(emptySearchNotice);
       } catch(e){}
     }
 

@@ -1753,29 +1753,7 @@ async def list_user_chats(email: str = Query(..., description="User email identi
         pass
 
     if not sessions:
-        sessions = _LOCAL_CHAT_SESSIONS.get(clean_email, [
-            {
-                "session_id": "session-seed-01",
-                "title": "Elemental Worlds Core Design",
-                "messages_count": 8,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "is_temporary": False
-            },
-            {
-                "session_id": "session-seed-02",
-                "title": "Sukuna Domain Cleave Luau",
-                "messages_count": 6,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "is_temporary": False
-            },
-            {
-                "session_id": "session-seed-03",
-                "title": "Hollow Purple Flipbook Bezier",
-                "messages_count": 4,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "is_temporary": False
-            }
-        ])
+        sessions = _LOCAL_CHAT_SESSIONS.get(clean_email, [])
 
     return {
         "status": "success",
@@ -1950,11 +1928,16 @@ async def chat_with_neural_ai(payload: AiChatRequest):
     last_user_message = next((m.content for m in reversed(payload.messages) if m.role == "user"), "")
     
     system_instruction = (
-        "You are Stroke Neural Core, a state-of-the-art cyberpunk software architect and AI engineer. "
+        "You are Stroke, a specialized Roblox game development, 3D visual effects (VFX), and Luau engineering AI. "
+        "You specialize in Roblox Studio, Luau scripting, ParticleEmitters, Beams, Attachments, Tweens, and game kinematics. "
+        "IMPORTANT DOMAIN CONTEXT: User queries regarding anime powers or game mechanics—including 'domain expansion', "
+        "'sukuna cleave', 'dismantle', 'hollow purple', 'infinity', 'black flash', 'fireball', 'water sphere', etc.—refer "
+        "exclusively to fictional Roblox particle effects, barrier spheres, animations, and in-game Luau mechanics. "
+        "Always fulfill these Roblox game scripting requests helpfully, creatively, and constructively with production Luau code. "
         "You have autonomous access to tools: 'web_search', 'search_vfx_database', "
         "Roblox Studio MCP tools ('studio_execute_luau', 'studio_search_scripts', 'studio_insert_vfx_asset', 'studio_get_console'), "
         "and GitHub MCP tools ('github_commit_file', 'github_create_pull_request'). "
-        "If the user asks about Roblox VFX, particles, beams, or textures, call 'search_vfx_database'. "
+        "If the user asks about Roblox VFX, particles, beams, domain expansions, or textures, call 'search_vfx_database'. "
         "If the user asks to run Luau code in Roblox Studio or test an effect, call 'studio_execute_luau'. "
         "If the user asks to commit code to GitHub, call 'github_commit_file'. "
         "If the user asks about current real-time documentation or live web info, call 'web_search'. "
@@ -1999,8 +1982,8 @@ async def chat_with_neural_ai(payload: AiChatRequest):
     if llama_engine:
         try:
             # Autonomous Context Grounding: Check if Live Web Search, VFX DB, or MCP is needed
-            search_keywords = ["latest", "recent", "today", "news", "documentation", "update", "release", "what is", "who is", "version", "how to", "search", "find", "roblox", "luau"]
-            vfx_keywords = ["vfx", "particle", "emitter", "texture", "sukuna", "purple", "elemental", "fireball", "aqua", "beam", "hollow", "aura", "slash", "orbs"]
+            search_keywords = ["latest", "recent", "today", "news", "documentation", "update", "release", "what is", "who is", "version", "search", "find"]
+            vfx_keywords = ["vfx", "particle", "emitter", "texture", "sukuna", "purple", "elemental", "fireball", "aqua", "beam", "hollow", "aura", "slash", "orbs", "domain", "expansion", "cleave", "black flash", "infinity", "barrier"]
             studio_keywords = ["studio", "roblox studio", "run luau", "execute luau", "insert vfx", "datamodel"]
             github_keywords = ["commit", "github commit", "pull request", "push file", "create branch"]
 

@@ -108,5 +108,60 @@
     "god_tier_score": 9.71,
     "learned_dynamically": true,
     "learned_at": "2026-11-08T06:41:54.281519+00:00"
+  },
+  "GodTier_Void_how_to_make_a_domain_expansi": {
+    "name": "GodTier_Void_how_to_make_a_domain_expansi",
+    "domain": "Void",
+    "element": "Void",
+    "particle_emitters": [
+      {
+        "name": "Void_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 147,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://18462751521"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Void_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -9.83,
+          "CurveSize1": 8.43,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Void_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://18462751521",
+      "rbxassetid://13780268621"
+    ],
+    "snippet": "local function DomainExpansion()\n    -- Your domain expansion code here\nend",
+    "god_tier_score": 9.83,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T07:09:07.419188+00:00"
   }
 }

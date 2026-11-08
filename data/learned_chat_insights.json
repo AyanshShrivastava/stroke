@@ -1,7 +1,20 @@
 {
-  "total_chats_learned": 13,
-  "last_updated": "2026-11-08T06:41:54.282368+00:00",
+  "total_chats_learned": 14,
+  "last_updated": "2026-11-08T07:09:07.419741+00:00",
   "insights": [
+    {
+      "id": "INS-GOD-VOID-014",
+      "domain": "Void",
+      "element": "Void",
+      "model_name": "GodTier_Void_how_to_make_a_domain_expansi",
+      "topic": "God-Tier Void Mastery: 'GodTier_Void_how_to_make_a_domain_expansi'",
+      "summary": "Distilled top-tier Void kinematics with 2 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "local function DomainExpansion()\n    -- Your domain expansion code here\nend",
+      "impact_score": 9.83,
+      "source_tool": "search_vfx_database",
+      "contributor": "deve***",
+      "created_at": "2026-11-08T07:09:07.419679+00:00"
+    },
     {
       "id": "INS-GOD-FIRE-013",
       "domain": "Fire",
