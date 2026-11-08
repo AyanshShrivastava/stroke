@@ -35,7 +35,7 @@ import secrets
 import random
 import urllib.parse
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import FastAPI, HTTPException, Query, status, Request, Response, BackgroundTasks
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse
@@ -287,15 +287,14 @@ async def serve_index_page():
 _LOCAL_OTP_STORE: Dict[str, Dict[str, Any]] = {}
 
 
-async def send_real_outbound_email(email: str, otp_code: str, password: Optional[str] = None) -> bool:
+async def send_real_outbound_email(email: str, otp_code: str, password: Optional[str] = None) -> Tuple[bool, str]:
     """
-    Dispatches genuine outbound verification emails via:
-    1. Supabase GoTrue Auth (Production email gateway configured in .env).
-    2. Local system mail transfer agent (/usr/sbin/sendmail).
-    3. Direct SMTP server (if SMTP_HOST is defined in environment).
+    Dispatches strictly ONE outbound verification email containing a 6-digit OTP code:
+    1. Supabase GoTrue Auth service (primary transactional mailer delivering directly to inboxes).
+    2. Direct SMTP server (if SMTP_HOST is defined in environment).
+    3. Host sendmail MTA (/usr/sbin/sendmail) fallback.
+    Returns (success: bool, provider: str).
     """
-    dispatched = False
-
     # 1. Supabase GoTrue Auth Outbound Dispatch
     supabase_url = os.environ.get("SUPABASE_URL", "https://c--6b30253a-f372-4d3d-b054-1ccccd110aba-prod.lovable.cloud")
     supabase_key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_24sApoL0yiZqI00Wbae7PQ_1LrwrVaV")
@@ -307,39 +306,45 @@ async def send_real_outbound_email(email: str, otp_code: str, password: Optional
         }
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
-                # First attempt: Try signup with email and password
-                user_pwd = password or f"StrokeSecure_{otp_code}!"
-                signup_res = await client.post(
-                    f"{supabase_url}/auth/v1/signup",
+                # Dispatch real 6-digit OTP email directly via Supabase GoTrue Auth
+                otp_res = await client.post(
+                    f"{supabase_url}/auth/v1/otp",
                     headers=headers,
-                    json={"email": email, "password": user_pwd}
+                    json={"email": email, "create_user": True}
                 )
-                if signup_res.status_code in (200, 201):
-                    dispatched = True
-                    print(f"[AUTH SUPABASE] Outbound confirmation email dispatched to {email}", flush=True)
-                elif signup_res.status_code == 422:
-                    # User already registered in GoTrue; dispatch OTP / resend token to email
-                    otp_res = await client.post(
-                        f"{supabase_url}/auth/v1/otp",
-                        headers=headers,
-                        json={"email": email, "create_user": False}
-                    )
-                    if otp_res.status_code in (200, 201):
-                        dispatched = True
-                        print(f"[AUTH SUPABASE] Outbound OTP email dispatched to existing user {email}", flush=True)
-                    else:
-                        resend_res = await client.post(
-                            f"{supabase_url}/auth/v1/resend",
-                            headers=headers,
-                            json={"type": "signup", "email": email}
-                        )
-                        if resend_res.status_code in (200, 201):
-                            dispatched = True
-                            print(f"[AUTH SUPABASE] Outbound resend email dispatched to {email}", flush=True)
+                if otp_res.status_code in (200, 201):
+                    print(f"[AUTH SUPABASE] Outbound 6-digit OTP dispatched to {email}", flush=True)
+                    return True, "supabase"
+                else:
+                    print(f"[AUTH SUPABASE NOTICE] GoTrue /otp status {otp_res.status_code}: {otp_res.text}", flush=True)
             except Exception as supa_err:
                 print(f"[AUTH SUPABASE NOTICE] GoTrue dispatch note: {supa_err}", flush=True)
 
-    # 2. Local Sendmail Binary Dispatch (/usr/sbin/sendmail)
+    # 2. Direct SMTP Delivery (if SMTP_HOST is configured in environment)
+    smtp_host = os.environ.get("SMTP_HOST")
+    if smtp_host:
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+            smtp_user = os.environ.get("SMTP_USER")
+            smtp_pass = os.environ.get("SMTP_PASSWORD")
+            msg = MIMEText(f"Your Stroke 6-digit verification code is: {otp_code}\nExpires in 5 minutes.")
+            msg["Subject"] = f"Stroke Verification Code: {otp_code}"
+            msg["From"] = smtp_user or "noreply@stroke.app"
+            msg["To"] = email
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+            server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.sendmail(msg["From"], [email], msg.as_string())
+            server.quit()
+            print(f"[AUTH SMTP] Direct SMTP delivered to {email}", flush=True)
+            return True, "smtp"
+        except Exception as smtp_err:
+            print(f"[AUTH SMTP NOTICE] {smtp_err}", flush=True)
+
+    # 3. Local Sendmail Binary Dispatch (/usr/sbin/sendmail) Fallback
     try:
         mail_msg = (
             f"To: {email}\n"
@@ -361,36 +366,12 @@ async def send_real_outbound_email(email: str, otp_code: str, password: Optional
         )
         proc.communicate(mail_msg.encode("utf-8"), timeout=5)
         if proc.returncode == 0:
-            dispatched = True
             print(f"[AUTH SENDMAIL] Local MTA queued delivery to {email}", flush=True)
+            return True, "sendmail"
     except Exception as sendmail_err:
         print(f"[AUTH SENDMAIL NOTICE] {sendmail_err}", flush=True)
 
-    # 3. Direct SMTP Delivery (if SMTP_HOST is configured in environment)
-    smtp_host = os.environ.get("SMTP_HOST")
-    if smtp_host:
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-            smtp_user = os.environ.get("SMTP_USER")
-            smtp_pass = os.environ.get("SMTP_PASSWORD")
-            msg = MIMEText(f"Your Stroke 6-digit verification code is: {otp_code}\nExpires in 5 minutes.")
-            msg["Subject"] = f"Stroke Verification Code: {otp_code}"
-            msg["From"] = smtp_user or "noreply@stroke.app"
-            msg["To"] = email
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-            server.starttls()
-            if smtp_user and smtp_pass:
-                server.login(smtp_user, smtp_pass)
-            server.sendmail(msg["From"], [email], msg.as_string())
-            server.quit()
-            dispatched = True
-            print(f"[AUTH SMTP] Direct SMTP delivered to {email}", flush=True)
-        except Exception as smtp_err:
-            print(f"[AUTH SMTP NOTICE] {smtp_err}", flush=True)
-
-    return dispatched
+    return False, "none"
 
 
 @app.post("/auth/send-otp", tags=["Authentication"])
@@ -398,22 +379,42 @@ async def send_otp(payload: SendOtpRequest):
     """
     POST /auth/send-otp
     1. Validates the email address and user password.
-    2. Generates a cryptographically secure 6-digit random token.
-    3. Performs an atomic write to Firestore and local store.
-    4. Dispatches real email to the user's email address via Supabase GoTrue Auth,
-       local MTA (/usr/sbin/sendmail), or SMTP.
+    2. Checks cooldown to ensure strictly ONE active OTP per email.
+    3. Generates and dispatches strictly ONE 6-digit verification code.
+    4. Performs an atomic write to Firestore and local store.
     5. Returns success status WITHOUT exposing the OTP code to the frontend.
     """
     email = payload.email
     password = payload.password or "StrokeAuth2026!"
 
+    # Ensure strictly ONE active OTP per email: enforce 30s cooldown before replacing
+    existing = _LOCAL_OTP_STORE.get(email)
+    if existing:
+        sent_at = existing.get("sent_at")
+        if sent_at:
+            elapsed = (datetime.now(timezone.utc) - sent_at).total_seconds()
+            if elapsed < 30:
+                expires_at = existing.get("otp_expires_at")
+                ttl = int(max(0, (expires_at - datetime.now(timezone.utc)).total_seconds())) if expires_at else 300
+                return {
+                    "status": "success",
+                    "message": f"A 6-digit verification code has already been dispatched to {email}. Please check your inbox and spam folder.",
+                    "email": email,
+                    "expires_in_seconds": ttl
+                }
+
     otp_code = f"{secrets.randbelow(1_000_000):06d}"
     otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+    # Dispatch strictly ONE outbound email
+    dispatched, provider = await send_real_outbound_email(email, otp_code, password)
 
     _LOCAL_OTP_STORE[email] = {
         "otp_code": otp_code,
         "otp_expires_at": otp_expires_at,
-        "password": password
+        "password": password,
+        "sent_at": datetime.now(timezone.utc),
+        "provider": provider
     }
 
     try:
@@ -422,17 +423,15 @@ async def send_otp(payload: SendOtpRequest):
             "email": email,
             "otp_code": otp_code,
             "otp_expires_at": otp_expires_at,
+            "provider": provider,
             "password_hash": hashlib.sha256(password.encode()).hexdigest(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }, merge=True)
     except Exception as exc:
         print(f"[AUTH NOTICE] Firestore OTP write note: {exc}", flush=True)
 
-    # Dispatch real outbound email to target user address
-    await send_real_outbound_email(email, otp_code, password)
-
     # Internal diagnostic audit log only (never returned to frontend)
-    print(f"[AUTH AUDIT] Dispatched 6-digit OTP to {email} (TTL: 5 Minutes)", flush=True)
+    print(f"[AUTH AUDIT] Dispatched single 6-digit OTP to {email} via {provider} (TTL: 5 Minutes)", flush=True)
 
     # Note: otp_code is intentionally omitted so the client must retrieve it from their email
     return {
@@ -543,6 +542,7 @@ async def verify_otp(payload: VerifyOtpRequest):
         )
 
     # Clean state management: clear single-use OTP and authenticate profile
+    _LOCAL_OTP_STORE.pop(email, None)
     try:
         user_ref = db.collection("users").document(email)
         user_ref.set({

@@ -1,5 +1,29 @@
 [
   {
+    "id": "CTX-1794146106",
+    "timestamp": 1794146106.3575099,
+    "prompt": "Write a function to calculate total",
+    "language": "python",
+    "passed_checks_count": 4,
+    "untested_count": 1,
+    "verified": true,
+    "iterations": 2,
+    "user_email": "anonymous",
+    "summary": "Verified python solution with 4 passing checks."
+  },
+  {
+    "id": "CTX-1794145812",
+    "timestamp": 1794145812.489471,
+    "prompt": "Write a function to calculate total",
+    "language": "python",
+    "passed_checks_count": 2,
+    "untested_count": 1,
+    "verified": true,
+    "iterations": 2,
+    "user_email": "anonymous",
+    "summary": "Verified python solution with 2 passing checks."
+  },
+  {
     "id": "CTX-1794144277",
     "timestamp": 1794144277.9104881,
     "prompt": "Optimize particle emitters for mobile",

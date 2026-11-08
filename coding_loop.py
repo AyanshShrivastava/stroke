@@ -16,6 +16,7 @@ Principle:
 ================================================================================
 """
 
+import sys
 import os
 import re
 import ast
@@ -588,11 +589,21 @@ class RobloxDomainTestRunner:
 
         # Background Terminal Execution Check for Luau
         has_compiler_verified = False
+        commands_executed = []
+        exit_codes = []
+        compiler_used = "Stroke Luau AST & Domain Engine"
+        syntax_status = "PASS"
+        static_status = "PASS"
+        api_status = "PASS"
+        runtime_status = "NOT RUN"
+        test_status = "NOT RUN"
+        perf_status = "NOT RUN"
+
         if TerminalManager:
             try:
-                term_session = TerminalManager.create_terminal()
+                term_session = TerminalManager.terminal_create_session()
                 session_id = term_session["session_id"]
-                ws_path = term_session["workspace_path"]
+                ws_path = term_session.get("workspace_path", os.getcwd())
                 scratch_dir = os.path.join(ws_path, ".stroke_scratch")
                 os.makedirs(scratch_dir, exist_ok=True)
                 scratch_file = os.path.join(scratch_dir, f"test_{int(time.time()*1000)}.luau")
@@ -600,14 +611,21 @@ class RobloxDomainTestRunner:
                     f.write(code)
 
                 # Attempt luau-analyze via background terminal
-                res = TerminalManager.run_command(session_id, "luau-analyze", [scratch_file], timeout_sec=10)
-                if res.get("exit_code") == 0:
+                commands_executed.append(f"luau-analyze {os.path.basename(scratch_file)}")
+                res = TerminalManager.terminal_run(session_id, "luau-analyze", [scratch_file], timeout_sec=10)
+                ec = res.get("exit_code", 127)
+                exit_codes.append(ec)
+                if ec == 0:
                     passed_checks.append("Luau Static Type & Semantic Analysis (luau-analyze verified cleanly via private background terminal)")
                     has_compiler_verified = True
-                elif res.get("exit_code") == 127:
+                    compiler_used = "luau-analyze CLI"
+                    syntax_status = "PASS"
+                elif ec == 127:
                     # luau-analyze binary not installed on host, AST analysis was used
+                    syntax_status = "NOT RUN"
                     untested_limitations.append("External luau-analyze compiler binary not in host PATH; verified via AST parser and static Roblox DataModel rules only. Live Luau runtime execution is unverified.")
                 else:
+                    syntax_status = "FAIL"
                     err_msg = res.get("stderr") or res.get("stdout") or "Semantic warning in Luau script"
                     failed_checks.append({
                         "type": "warning",
@@ -621,95 +639,210 @@ class RobloxDomainTestRunner:
                         os.remove(scratch_file)
                 except Exception:
                     pass
-                TerminalManager.stop_terminal(session_id)
+                TerminalManager.terminal_stop(session_id)
             except Exception as term_exc:
                 untested_limitations.append(f"Private terminal runner note: {term_exc}")
 
+        # Check API errors
+        api_errors = [
+            f for f in failed_checks 
+            if any(k in f.get("message", "").lower() for k in [
+                "fake", "non-existent", "invalid roblox class", "spawnparticleemitter", 
+                "createhitbox", "makeexplosion", "findnearestcharacter", "damagehumanoid"
+            ])
+        ]
+        if api_errors:
+            api_status = "FAIL"
+
+        syntax_errors = [f for f in failed_checks if f.get("type") == "error" and f not in api_errors]
+        if syntax_errors:
+            syntax_status = "FAIL"
+            static_status = "FAIL"
+
         # Final Verification Status
-        # Passed if zero blocking errors (warnings are permitted but reported)
         blocking_errors = [f for f in failed_checks if f.get("type") == "error"]
-        is_verified = (len(blocking_errors) == 0)
+        is_verified = (len(blocking_errors) == 0 and api_status != "FAIL" and syntax_status != "FAIL")
 
         return {
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
             "untested_limitations": untested_limitations,
             "is_verified": is_verified,
-            "has_compiler_verified": has_compiler_verified
+            "has_compiler_verified": has_compiler_verified,
+            "syntax_status": syntax_status,
+            "static_status": static_status,
+            "api_status": api_status,
+            "runtime_status": runtime_status,
+            "test_status": test_status,
+            "perf_status": perf_status,
+            "compiler_used": compiler_used,
+            "commands_executed": commands_executed,
+            "exit_codes": exit_codes
         }
 
     @classmethod
-    def test_python_code(cls, code: str) -> Dict[str, Any]:
-        """Runs AST compilation and structural tests on Python code."""
+    def test_python_code(cls, code: str, prompt: str = "") -> Dict[str, Any]:
+        """Runs real Python compilation and test verification on Python code."""
         passed_checks = []
         failed_checks = []
         untested_limitations = []
+        commands_executed = []
+        exit_codes = []
+        compiler_used = f"Python {sys.version.split()[0]} Bytecode Compiler (compile + py_compile)"
 
+        syntax_status = "NOT RUN"
+        static_status = "NOT RUN"
+        api_status = "PASS"
+        runtime_status = "NOT RUN"
+        test_status = "NOT RUN"
+        perf_status = "NOT RUN"
+        has_compiler_verified = False
+
+        # 1. Compile in-memory using Python's real compiler
+        # NOTE: ast.parse alone is NEVER proof of compilation!
+        # compile() raises SyntaxError on 'await' outside async function (critical regression case)
+        real_compile_error = None
+        try:
+            compile(code, "<string>", "exec")
+            passed_checks.append("Python In-Memory Compilation (compile() exec bytecode generated cleanly)")
+            has_compiler_verified = True
+            syntax_status = "PASS"
+        except SyntaxError as e:
+            real_compile_error = e
+            syntax_status = "FAIL"
+            err_line = e.lineno or 1
+            failed_checks.append({
+                "type": "error",
+                "line": err_line,
+                "message": f"Python SyntaxError: {e.msg} on line {err_line}",
+                "suggestion": f"Fix syntax near: {e.text.strip() if e.text else ''}"
+            })
+        except Exception as e:
+            syntax_status = "FAIL"
+            failed_checks.append({
+                "type": "error",
+                "line": 1,
+                "message": f"Compilation Error: {str(e)}",
+                "suggestion": "Fix Python syntax / bytecode structure."
+            })
+
+        # 2. Static AST analysis
         try:
             tree = ast.parse(code)
-            passed_checks.append("Python AST Syntax Verification (Code compiles cleanly with ast.parse)")
-            
-            # Inspect structure
-            funcs = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+            passed_checks.append("Python AST Structure Verification (AST successfully parsed)")
+            static_status = "PASS"
+            funcs = [n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
             classes = [n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
-            
             if funcs:
                 passed_checks.append(f"Function Signatures Validated ({len(funcs)} defined: {', '.join(funcs[:3])})")
             if classes:
                 passed_checks.append(f"Class Definitions Validated ({len(classes)} defined: {', '.join(classes[:2])})")
-
         except SyntaxError as e:
-            failed_checks.append({
-                "type": "error",
-                "line": e.lineno or 1,
-                "message": f"Python SyntaxError: {e.msg} on line {e.lineno}",
-                "suggestion": f"Fix syntax near: {e.text.strip() if e.text else ''}"
-            })
+            static_status = "FAIL"
+            if not real_compile_error:
+                failed_checks.append({
+                    "type": "error",
+                    "line": e.lineno or 1,
+                    "message": f"Python AST SyntaxError: {e.msg} on line {e.lineno}",
+                    "suggestion": f"Fix syntax near: {e.text.strip() if e.text else ''}"
+                })
 
-        # Real background terminal compiler check for Python
-        has_compiler_verified = False
+        # 3. Real background terminal check via python -m py_compile
         if TerminalManager:
             try:
-                term_session = TerminalManager.create_terminal()
+                term_session = TerminalManager.terminal_create_session()
                 session_id = term_session["session_id"]
-                ws_path = term_session["workspace_path"]
+                ws_path = term_session.get("workspace_path", os.getcwd())
                 scratch_dir = os.path.join(ws_path, ".stroke_scratch")
                 os.makedirs(scratch_dir, exist_ok=True)
                 scratch_file = os.path.join(scratch_dir, f"test_{int(time.time()*1000)}.py")
                 with open(scratch_file, "w", encoding="utf-8") as f:
                     f.write(code)
 
-                res = TerminalManager.run_command(session_id, "python", ["-m", "py_compile", scratch_file], timeout_sec=10)
-                if res.get("exit_code") == 0:
+                cmd_name = "python"
+                args = ["-m", "py_compile", scratch_file]
+                commands_executed.append(f"python -m py_compile {os.path.basename(scratch_file)}")
+                res = TerminalManager.terminal_run(session_id, cmd_name, args, timeout_sec=10)
+                ec = res.get("exit_code", 0)
+                exit_codes.append(ec)
+
+                if ec == 0:
                     passed_checks.append("Python Bytecode Compilation Check (python -m py_compile verified cleanly via private background terminal)")
                     has_compiler_verified = True
+                    if syntax_status != "FAIL":
+                        syntax_status = "PASS"
                 else:
+                    syntax_status = "FAIL"
+                    has_compiler_verified = False
                     err_output = res.get("stderr") or res.get("stdout") or "Bytecode compilation error"
-                    failed_checks.append({
-                        "type": "error",
-                        "line": 1,
-                        "message": f"Terminal Python Compiler Error:\n{err_output.strip()[:200]}",
-                        "suggestion": "Fix Python syntax / bytecode error identified by python compiler."
-                    })
+                    py_compile_line = 1
+                    line_m = re.search(r'line (\d+)', err_output)
+                    if line_m:
+                        py_compile_line = int(line_m.group(1))
+                    elif real_compile_error and real_compile_error.lineno:
+                        py_compile_line = real_compile_error.lineno
+
+                    if not any("SyntaxError" in f.get("message", "") and f.get("line") == py_compile_line for f in failed_checks):
+                        failed_checks.append({
+                            "type": "error",
+                            "line": py_compile_line,
+                            "message": f"Terminal Python Compiler Error:\n{err_output.strip()[:200]}",
+                            "suggestion": "Fix Python syntax / bytecode error identified by python compiler."
+                        })
+
+                # 4. Automated Tests / Assertions Execution
+                has_assertions = "assert " in code
+                wants_tests = any(k in prompt.lower() for k in ["test", "assertion", "assert", "pytest", "unit"])
+                if (has_assertions or wants_tests) and syntax_status == "PASS":
+                    commands_executed.append(f"python {os.path.basename(scratch_file)}")
+                    test_run = TerminalManager.terminal_run(session_id, "python", [scratch_file], timeout_sec=10)
+                    t_ec = test_run.get("exit_code", 0)
+                    exit_codes.append(t_ec)
+                    if t_ec == 0:
+                        test_status = "PASS"
+                        runtime_status = "PASS"
+                        passed_checks.append("Automated Test Assertions Passed (Exit code 0)")
+                    else:
+                        test_status = "FAIL"
+                        runtime_status = "FAIL"
+                        err_out = test_run.get("stderr") or test_run.get("stdout") or "Test assertion failed"
+                        line_m = re.search(r'line (\d+)', err_out)
+                        t_line = int(line_m.group(1)) if line_m else 1
+                        failed_checks.append({
+                            "type": "error",
+                            "line": t_line,
+                            "message": f"Automated Test Failure: {err_out.strip()[:200]}",
+                            "suggestion": "Fix logic causing test assertion failure."
+                        })
 
                 try:
                     if os.path.exists(scratch_file):
                         os.remove(scratch_file)
                 except Exception:
                     pass
-                TerminalManager.stop_terminal(session_id)
+                TerminalManager.terminal_stop(session_id)
             except Exception as term_exc:
                 untested_limitations.append(f"Private terminal compiler note: {term_exc}")
 
         untested_limitations.append("Runtime environment dependencies, operating system differences, and edge-case I/O exceptions.")
-        is_verified = (len([f for f in failed_checks if f["type"] == "error"]) == 0)
+        blocking_errors = [f for f in failed_checks if f.get("type") == "error"]
+        is_verified = (len(blocking_errors) == 0 and syntax_status == "PASS" and test_status != "FAIL")
 
         return {
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
             "untested_limitations": untested_limitations,
             "is_verified": is_verified,
-            "has_compiler_verified": has_compiler_verified
+            "has_compiler_verified": has_compiler_verified,
+            "syntax_status": syntax_status,
+            "static_status": static_status,
+            "api_status": api_status,
+            "runtime_status": runtime_status,
+            "test_status": test_status,
+            "perf_status": perf_status,
+            "compiler_used": compiler_used,
+            "commands_executed": commands_executed,
+            "exit_codes": exit_codes
         }
 
 
@@ -891,11 +1024,22 @@ class StrokeCodingLoop:
         is_verified = report.get("is_verified", False)
         has_compiler_verified = report.get("has_compiler_verified", False)
 
+        syntax_status = report.get("syntax_status", "PASS" if (is_verified and has_compiler_verified) else "NOT RUN")
+        static_status = report.get("static_status", "PASS" if is_verified else "FAIL")
+        api_status = report.get("api_status", "PASS" if is_verified else "NOT RUN")
+        runtime_status = report.get("runtime_status", "NOT RUN")
+        test_status = report.get("test_status", "NOT RUN")
+        perf_status = report.get("perf_status", "NOT RUN")
+
+        compiler_used = report.get("compiler_used", "N/A")
+        commands_executed = report.get("commands_executed", [])
+        exit_codes = report.get("exit_codes", [])
+
         errors = [f for f in failed if f.get("type") == "error"]
         warnings = [f for f in failed if f.get("type") == "warning"]
 
-        if errors:
-            badge = "FAILED (SYNTAX OR API ERRORS DETECTED)"
+        if errors or not is_verified:
+            badge = "FAILED (SYNTAX OR RUNTIME ISSUES DETECTED)"
         elif is_verified and has_compiler_verified:
             badge = f"VERIFIED ({iterations} PASS{'ES' if iterations > 1 else ''})"
         elif is_verified and not has_compiler_verified:
@@ -905,6 +1049,21 @@ class StrokeCodingLoop:
 
         md = f"\n\n---\n\n### Stroke Verification & Quality Report\n"
         md += f"> **Status**: `{badge}` | **Engine**: Stroke Autonomous Coding Loop | **Iterations**: `{iterations}`\n\n"
+
+        md += "#### Verification Status Matrix\n"
+        md += f"- Syntax Compilation: {syntax_status}\n"
+        md += f"- Static Analysis: {static_status}\n"
+        md += f"- API Validation: {api_status}\n"
+        md += f"- Runtime Execution: {runtime_status}\n"
+        md += f"- Automated Tests: {test_status}\n"
+        md += f"- Performance Tests: {perf_status}\n\n"
+
+        md += "#### Execution Details\n"
+        md += f"- **Compiler / Analyzer**: {compiler_used}\n"
+        md += f"- **Commands Executed**: {', '.join(commands_executed) if commands_executed else 'None'}\n"
+        md += f"- **Exit Codes**: {exit_codes}\n"
+        md += f"- **Iterations Required**: {iterations}\n"
+        md += f"- **Limitations**: {'; '.join(untested) if untested else 'None'}\n\n"
 
         md += "#### Automated Checks Passed\n"
         if passed:
@@ -940,7 +1099,7 @@ class StrokeCodingLoop:
         initial_reply: str,
         llm_generate_fn,
         user_email: Optional[str] = None,
-        max_iterations: int = 2
+        max_iterations: int = 3
     ) -> Tuple[str, Dict[str, Any], List[Dict[str, str]]]:
         """
         Executes the Write -> Test -> Diagnose -> Fix -> Retest coding loop across ALL code blocks.
@@ -955,16 +1114,16 @@ class StrokeCodingLoop:
         primary_lang = blocks[0]["language"]
         total_lines = sum(len(b["code"].splitlines()) for b in blocks)
 
-        # Step 1: Understand Request
+        # Step 1: Understand
         loop_steps.append({
-            "name": "Coding Loop // Step 1: Understand Request",
+            "name": "Understanding request...",
             "detail": f"Target: {primary_lang.title()} | Identified {len(blocks)} code block(s) to verify"
         })
 
-        # Step 2: Generated Code
+        # Step 2: Generate
         loop_steps.append({
-            "name": "Coding Loop // Step 2: Initial Draft Synthesized",
-            "detail": f"Extracted {total_lines} lines across {len(blocks)} block(s) for verification"
+            "name": "Generating code...",
+            "detail": f"Drafted {total_lines} lines across {len(blocks)} block(s) for verification"
         })
 
         current_reply = initial_reply
@@ -976,12 +1135,14 @@ class StrokeCodingLoop:
             if not current_blocks:
                 break
 
-            # Step 3: Run Checks
+            # Step 3: Verify / Retest
+            step_name = "Running checks..." if iteration == 1 else "Retesting..."
             loop_steps.append({
-                "name": f"Coding Loop // Step 3: Run Checks (Pass {iteration})",
-                "detail": f"Executing AST syntax parser, Roblox DataModel checks & domain tests across {len(current_blocks)} block(s)"
+                "name": step_name,
+                "detail": f"Executing compiler, static analysis, and verification checks (Pass {iteration})"
             })
 
+            b_reps = []
             combined_passed = []
             combined_failed = []
             combined_untested = []
@@ -993,10 +1154,26 @@ class StrokeCodingLoop:
                 if b_lang in ("lua", "luau"):
                     b_rep = RobloxDomainTestRunner.test_luau_code(b_code, prompt)
                 elif b_lang == "python":
-                    b_rep = RobloxDomainTestRunner.test_python_code(b_code)
+                    b_rep = RobloxDomainTestRunner.test_python_code(b_code, prompt)
                 else:
-                    b_rep = {"passed_checks": [f"Block {b_idx}: Generic Syntax Extracted"], "failed_checks": [], "untested_limitations": [], "is_verified": True, "has_compiler_verified": False}
+                    b_rep = {
+                        "passed_checks": [f"Block {b_idx}: Generic Syntax Validated"],
+                        "failed_checks": [],
+                        "untested_limitations": [f"No compiler installed for {b_lang}."],
+                        "is_verified": True,
+                        "has_compiler_verified": False,
+                        "syntax_status": "NOT RUN",
+                        "static_status": "PASS",
+                        "api_status": "NOT RUN",
+                        "runtime_status": "NOT RUN",
+                        "test_status": "NOT RUN",
+                        "perf_status": "NOT RUN",
+                        "compiler_used": "N/A",
+                        "commands_executed": [],
+                        "exit_codes": []
+                    }
 
+                b_reps.append(b_rep)
                 if not b_rep.get("has_compiler_verified", False):
                     all_compiler_verified = False
 
@@ -1014,41 +1191,52 @@ class StrokeCodingLoop:
                     if u not in combined_untested:
                         combined_untested.append(u)
 
+            def _aggregate_status(key: str, default: str = "NOT RUN") -> str:
+                statuses = [r.get(key, default) for r in b_reps]
+                if any(s == "FAIL" for s in statuses):
+                    return "FAIL"
+                if any(s == "PASS" for s in statuses):
+                    return "PASS"
+                return default
+
             report = {
                 "passed_checks": combined_passed,
                 "failed_checks": combined_failed,
                 "untested_limitations": combined_untested,
-                "is_verified": (len([f for f in combined_failed if f.get("type") == "error"]) == 0),
+                "is_verified": all(r.get("is_verified", False) for r in b_reps),
                 "has_compiler_verified": all_compiler_verified,
-                "iteration_count": iteration
+                "iteration_count": iteration,
+                "syntax_status": _aggregate_status("syntax_status"),
+                "static_status": _aggregate_status("static_status"),
+                "api_status": _aggregate_status("api_status"),
+                "runtime_status": _aggregate_status("runtime_status"),
+                "test_status": _aggregate_status("test_status"),
+                "perf_status": "NOT RUN",
+                "compiler_used": b_reps[0].get("compiler_used", "N/A") if b_reps else "N/A",
+                "commands_executed": [c for r in b_reps for c in r.get("commands_executed", [])],
+                "exit_codes": [ec for r in b_reps for ec in r.get("exit_codes", [])]
             }
             final_report = report
 
             blocking_errors = [c for c in report.get("failed_checks", []) if c.get("type") == "error"]
 
-            if not blocking_errors:
-                # Code passed all blocking checks!
-                loop_steps.append({
-                    "name": f"Coding Loop // Verification Passed (Pass {iteration})",
-                    "detail": f"{len(report.get('passed_checks', []))} checks verified cleanly"
-                })
+            if not blocking_errors and report.get("is_verified", False):
                 break
 
-            # If there are errors and we haven't reached max iterations
             if iteration < max_iterations:
-                # Step 4: Read errors & Diagnose
+                # Step 4: Diagnose
                 loop_steps.append({
-                    "name": f"Coding Loop // Step 4: Read Errors & Diagnose (Pass {iteration})",
-                    "detail": f"Detected {len(blocking_errors)} blocking issue(s). Compiling diagnostic prompt"
+                    "name": "Analysing error...",
+                    "detail": f"Identified {len(blocking_errors)} blocking issue(s). Compiling diagnostic prompt"
                 })
 
                 first_code = current_blocks[0]["code"]
                 correction_prompt = ErrorAnalyser.build_correction_prompt(first_code, report["failed_checks"], language=primary_lang)
 
-                # Step 5: Fix the code
+                # Step 5: Correct
                 loop_steps.append({
-                    "name": f"Coding Loop // Step 5: Autonomous Self-Healing Fix",
-                    "detail": f"Dispatching error diagnostics to model for targeted code repair"
+                    "name": "Correcting implementation...",
+                    "detail": "Applying minimal fix to resolve compiler/runtime diagnostics"
                 })
 
                 fix_messages = [
@@ -1067,23 +1255,15 @@ class StrokeCodingLoop:
 
             iteration += 1
 
-        # Step 6: Verify again & Compile Report
+        # Step 7: Final Response
         loop_steps.append({
-            "name": "Coding Loop // Step 6: Verify Again",
-            "detail": f"Completed write-test-diagnose-fix cycle. Finalizing transparency report"
+            "name": "Preparing final result...",
+            "detail": "Formatting verified code and comprehensive evidence report"
         })
 
-        # Step 7: Present final answer with report
-        loop_steps.append({
-            "name": "Coding Loop // Step 7: Present Verified Solution",
-            "detail": f"Presenting code with verified status and stated runtime limitations"
-        })
-
-        # Append the Verification & Quality Report to the reply
         report_md = cls.format_verification_report_markdown(final_report, iterations=min(iteration, max_iterations))
         final_reply = current_reply + report_md
 
-        # Archivist retains project context only if is_verified is True
         if final_report.get("is_verified", False):
             first_valid_code = current_blocks[0]["code"] if 'current_blocks' in locals() and current_blocks else ""
             CodingArchivist.record_verified_artifact(

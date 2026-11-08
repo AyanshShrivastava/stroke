@@ -506,17 +506,29 @@ class TerminalSession:
     def stop(self) -> Dict[str, Any]:
         """Terminates any active running process in this session."""
         killed = False
-        if self.current_process and self.current_process.poll() is None:
-            try:
-                self.current_process.terminate()
+        if self.current_process:
+            if self.current_process.poll() is None:
                 try:
-                    self.current_process.wait(timeout=1.5)
-                except subprocess.TimeoutExpired:
-                    self.current_process.kill()
-                    self.current_process.wait(timeout=1.0)
-                killed = True
+                    self.current_process.terminate()
+                    try:
+                        self.current_process.wait(timeout=1.5)
+                    except subprocess.TimeoutExpired:
+                        self.current_process.kill()
+                        self.current_process.wait(timeout=1.0)
+                    killed = True
+                except Exception:
+                    pass
+            try:
+                if self.current_process.stdout:
+                    self.current_process.stdout.close()
             except Exception:
                 pass
+            try:
+                if self.current_process.stderr:
+                    self.current_process.stderr.close()
+            except Exception:
+                pass
+            self.current_process = None
         self.state = "terminated"
         self._append_output("system", "Session process terminated.")
         return {
@@ -597,10 +609,21 @@ class TerminalManager:
             }
 
     @classmethod
-    def run_command(cls, session_id: str, command: str, args: Optional[List[str]] = None, timeout_sec: int = DEFAULT_TIMEOUT_SEC, is_background: bool = False, **kwargs) -> Dict[str, Any]:
+    def run_command(
+        cls,
+        session_id: str,
+        command: Optional[str] = None,
+        args: Optional[List[str]] = None,
+        timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+        is_background: bool = False,
+        executable: Optional[str] = None,
+        arguments: Optional[List[str]] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
         """
-        Tool: run_command(session_id, command, args)
+        Tool: run_command / terminal_run
         Executes an approved dev command inside the target session.
+        Accepts command/executable and args/arguments aliases.
         """
         session = cls._sessions.get(session_id)
         if not session:
@@ -609,13 +632,14 @@ class TerminalManager:
             session = cls._sessions[created["session_id"]]
             session_id = created["session_id"]
 
-        args_list = args or []
-        return session.execute_command(command, args_list, timeout_sec=timeout_sec)
+        cmd = command or executable or "python"
+        args_list = args if args is not None else (arguments or [])
+        return session.execute_command(cmd, args_list, timeout_sec=timeout_sec, is_background=is_background)
 
     @classmethod
     def read_terminal_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
         """
-        Tool: read_terminal_output(session_id)
+        Tool: read_terminal_output / terminal_read_output
         Reads the captured output of the session.
         """
         session = cls._sessions.get(session_id)
@@ -625,13 +649,14 @@ class TerminalManager:
         return {
             "session_id": session_id,
             "lines_count": len(lines),
-            "output": "\n".join(lines)
+            "output": "\n".join(lines),
+            "stdout": "\n".join(lines)
         }
 
     @classmethod
     def get_terminal_status(cls, session_id: str) -> Dict[str, Any]:
         """
-        Tool: get_terminal_status(session_id)
+        Tool: get_terminal_status / terminal_get_status
         Returns current state, active process, and exit code.
         """
         session = cls._sessions.get(session_id)
@@ -642,7 +667,7 @@ class TerminalManager:
     @classmethod
     def list_terminals(cls) -> List[Dict[str, Any]]:
         """
-        Tool: list_terminals()
+        Tool: list_terminals / terminal_list_sessions
         Lists all active background terminal sessions.
         """
         with cls._lock:
@@ -651,8 +676,8 @@ class TerminalManager:
     @classmethod
     def stop_terminal(cls, session_id: str) -> Dict[str, Any]:
         """
-        Tool: stop_terminal(session_id)
-        Terminates the background session.
+        Tool: stop_terminal / terminal_stop
+        Terminates the background session and reclaims resources.
         """
         with cls._lock:
             session = cls._sessions.get(session_id)
@@ -661,6 +686,52 @@ class TerminalManager:
             res = session.stop()
             del cls._sessions[session_id]
             return res
+
+    # ==========================================================================
+    # CANONICAL TOOL METHOD ALIASES (EXACT NAMES SPECIFIED IN AI SPECIFICATION)
+    # ==========================================================================
+    @classmethod
+    def terminal_create_session(cls, workspace_path: Optional[str] = None) -> Dict[str, Any]:
+        """Tool: terminal_create_session(workspace_path)"""
+        return cls.create_terminal(workspace_path=workspace_path)
+
+    @classmethod
+    def terminal_run(
+        cls,
+        session_id: str,
+        executable: str,
+        arguments: Optional[List[str]] = None,
+        timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+        is_background: bool = False
+    ) -> Dict[str, Any]:
+        """Tool: terminal_run(session_id, executable, arguments)"""
+        return cls.run_command(
+            session_id=session_id,
+            command=executable,
+            args=arguments,
+            timeout_sec=timeout_sec,
+            is_background=is_background
+        )
+
+    @classmethod
+    def terminal_read_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
+        """Tool: terminal_read_output(session_id)"""
+        return cls.read_terminal_output(session_id=session_id, tail_lines=tail_lines)
+
+    @classmethod
+    def terminal_get_status(cls, session_id: str) -> Dict[str, Any]:
+        """Tool: terminal_get_status(session_id)"""
+        return cls.get_terminal_status(session_id=session_id)
+
+    @classmethod
+    def terminal_stop(cls, session_id: str) -> Dict[str, Any]:
+        """Tool: terminal_stop(session_id)"""
+        return cls.stop_terminal(session_id=session_id)
+
+    @classmethod
+    def terminal_list_sessions(cls) -> List[Dict[str, Any]]:
+        """Tool: terminal_list_sessions()"""
+        return cls.list_terminals()
 
     @classmethod
     def respond_to_approval(cls, approval_id: str, approved: bool) -> Dict[str, Any]:
@@ -676,17 +747,345 @@ class TerminalManager:
                         return {"status": "denied", "message": f"User denied execution of '{pending['command']}'."}
                     
                     # Approved: execute directly
-                    return session.execute_command(pending["command"], pending["args"])
+                    is_bg = pending.get("is_background", False)
+                    return session.execute_command(pending["command"], pending["args"], is_background=is_bg)
             return {"status": "error", "message": f"No pending approval matching token '{approval_id}'."}
 
 
 # ==============================================================================
-# 5. AI TOOL CALLING INTERFACE FOR STROKE AGENT
+# 5. AI TOOL DISPATCHER & PARSER FOR LOCAL LLM REASONING
 # ==============================================================================
+
+class ToolDispatcher:
+    """
+    Validates, routes, and executes internal AI tool invocations.
+    Works seamlessly with native OpenAI function schemas, JSON markdown blocks,
+    XML <tool_call> tags, and structured pythonic calls emitted by local LLMs.
+    """
+    SUPPORTED_TOOLS = {
+        "terminal_create_session",
+        "terminal_run",
+        "terminal_read_output",
+        "terminal_get_status",
+        "terminal_stop",
+        "terminal_list_sessions",
+        "create_terminal",
+        "run_command",
+        "read_terminal_output",
+        "get_terminal_status",
+        "stop_terminal",
+        "list_terminals",
+    }
+
+    @classmethod
+    def dispatch(cls, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Routes a tool call to the native background implementation."""
+        args = arguments or {}
+        name = tool_name.strip()
+
+        if name in ("terminal_create_session", "create_terminal"):
+            ws = args.get("workspace_path")
+            return TerminalManager.terminal_create_session(workspace_path=ws)
+
+        elif name in ("terminal_run", "run_command"):
+            session_id = args.get("session_id", "")
+            cmd = args.get("executable") or args.get("command") or "python"
+            cmd_args = args.get("arguments") or args.get("args") or []
+            timeout_sec = args.get("timeout_sec", DEFAULT_TIMEOUT_SEC)
+            is_bg = args.get("is_background", False)
+            return TerminalManager.terminal_run(
+                session_id=session_id,
+                executable=cmd,
+                arguments=cmd_args,
+                timeout_sec=timeout_sec,
+                is_background=is_bg
+            )
+
+        elif name in ("terminal_read_output", "read_terminal_output"):
+            session_id = args.get("session_id", "")
+            tail = args.get("tail_lines")
+            return TerminalManager.terminal_read_output(session_id=session_id, tail_lines=tail)
+
+        elif name in ("terminal_get_status", "get_terminal_status"):
+            session_id = args.get("session_id", "")
+            return TerminalManager.terminal_get_status(session_id=session_id)
+
+        elif name in ("terminal_stop", "stop_terminal"):
+            session_id = args.get("session_id", "")
+            return TerminalManager.terminal_stop(session_id=session_id)
+
+        elif name in ("terminal_list_sessions", "list_terminals"):
+            return {"terminals": TerminalManager.terminal_list_sessions()}
+
+        return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
+
+    @classmethod
+    def parse_and_execute_calls(cls, text: str) -> List[Dict[str, Any]]:
+        """
+        Inspects raw LLM output for tool calling formats and executes them silently.
+        Supports JSON fences and <tool_call> XML blocks.
+        """
+        results = []
+        if not text:
+            return results
+
+        # 1. Parse JSON blocks with "tool" or "name"
+        json_pattern = r"```(?:json)?\s*(\{[\s\S]*?\})\s*```"
+        for match in re.finditer(json_pattern, text):
+            try:
+                data = json.loads(match.group(1))
+                tool_name = data.get("tool") or data.get("name") or data.get("function")
+                if tool_name in cls.SUPPORTED_TOOLS:
+                    args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
+                    res = cls.dispatch(tool_name, args)
+                    results.append({"tool": tool_name, "arguments": args, "result": res})
+            except Exception:
+                pass
+
+        # 2. Parse <tool_call> tags
+        tag_pattern = r"<tool_call>\s*(\{[\s\S]*?\})\s*</tool_call>"
+        for match in re.finditer(tag_pattern, text):
+            try:
+                data = json.loads(match.group(1))
+                tool_name = data.get("name") or data.get("tool")
+                if tool_name in cls.SUPPORTED_TOOLS:
+                    args = data.get("arguments") or data.get("parameters") or {}
+                    res = cls.dispatch(tool_name, args)
+                    results.append({"tool": tool_name, "arguments": args, "result": res})
+            except Exception:
+                pass
+
+        return results
+
+
+# ==============================================================================
+# 6. AI TOOL CALLING INTERFACE SCHEMAS (OPENAI & INTERNAL)
+# ==============================================================================
+
+def get_terminal_openai_tool_schemas() -> List[Dict[str, Any]]:
+    """Returns OpenAI function-calling format schemas for the 6 internal terminal tools."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_create_session",
+                "description": "Initializes a silent, private background terminal session in the project or scratch workspace.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "workspace_path": {
+                            "type": "string",
+                            "description": "Optional project root path. Defaults to active workspace."
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_run",
+                "description": "Executes a development check, compiler (e.g. py_compile), linter, test runner, or background process in the background terminal session.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "The unique terminal session ID."
+                        },
+                        "executable": {
+                            "type": "string",
+                            "description": "Executable name or command (e.g. 'python', 'git', 'luau-analyze', 'pytest')."
+                        },
+                        "arguments": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of structured command arguments (e.g. ['-m', 'py_compile', 'test.py'])."
+                        },
+                        "timeout_sec": {
+                            "type": "integer",
+                            "description": "Timeout in seconds (default 20, max 60)."
+                        },
+                        "is_background": {
+                            "type": "boolean",
+                            "description": "Set to True to start a long-running background process (e.g. local test server) without blocking."
+                        }
+                    },
+                    "required": ["session_id", "executable"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_read_output",
+                "description": "Reads captured stdout/stderr lines from the private background terminal session.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "The terminal session ID."
+                        },
+                        "tail_lines": {
+                            "type": "integer",
+                            "description": "Number of recent lines to retrieve."
+                        }
+                    },
+                    "required": ["session_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_get_status",
+                "description": "Checks the process state, working directory, and exit code of a terminal session.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "The terminal session ID."
+                        }
+                    },
+                    "required": ["session_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_stop",
+                "description": "Terminates any active running background process in the session and frees resources.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "The terminal session ID."
+                        }
+                    },
+                    "required": ["session_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_list_sessions",
+                "description": "Lists all active private background terminal sessions.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        }
+    ]
+
 
 def get_terminal_tools_schema() -> List[Dict[str, Any]]:
     """Returns the internal tool schemas exposed to Stroke's AI agent."""
     return [
+        {
+            "name": "terminal_create_session",
+            "description": "Initializes a silent, private background terminal session in the project workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "workspace_path": {
+                        "type": "string",
+                        "description": "Optional project root path. Defaults to active workspace."
+                    }
+                }
+            }
+        },
+        {
+            "name": "terminal_run",
+            "description": "Executes a development check, compiler, test runner, or background process in the background terminal.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The unique terminal session ID."
+                    },
+                    "executable": {
+                        "type": "string",
+                        "description": "Executable name or command (e.g. 'python', 'git', 'luau-analyze', 'pytest')."
+                    },
+                    "arguments": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of structured command arguments (e.g. ['-m', 'py_compile', 'main.py'])."
+                    },
+                    "timeout_sec": {
+                        "type": "integer",
+                        "description": "Timeout in seconds (default 20, max 60)."
+                    },
+                    "is_background": {
+                        "type": "boolean",
+                        "description": "Set to True to start a background process without blocking."
+                    }
+                },
+                "required": ["session_id", "executable"]
+            }
+        },
+        {
+            "name": "terminal_read_output",
+            "description": "Reads the captured stdout/stderr output lines from a background terminal session.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The terminal session ID."
+                    },
+                    "tail_lines": {
+                        "type": "integer",
+                        "description": "Number of recent lines to retrieve (default all)."
+                    }
+                },
+                "required": ["session_id"]
+            }
+        },
+        {
+            "name": "terminal_get_status",
+            "description": "Checks the process state, working directory, and exit code of a terminal session.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The terminal session ID."
+                    }
+                },
+                "required": ["session_id"]
+            }
+        },
+        {
+            "name": "terminal_list_sessions",
+            "description": "Lists all active background terminal sessions.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        },
+        {
+            "name": "terminal_stop",
+            "description": "Terminates any running processes in the session and reclaims resources.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The terminal session ID."
+                    }
+                },
+                "required": ["session_id"]
+            }
+        },
+        # Legacy aliases
         {
             "name": "create_terminal",
             "description": "Initializes a silent, private background terminal session in the project workspace.",
@@ -706,41 +1105,22 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "session_id": {
-                        "type": "string",
-                        "description": "The unique terminal session ID."
-                    },
-                    "command": {
-                        "type": "string",
-                        "description": "Executable name or command (e.g. 'python', 'git', 'luau-analyze', 'pytest')."
-                    },
-                    "args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of structured command arguments (e.g. ['-m', 'py_compile', 'main.py'])."
-                    },
-                    "timeout_sec": {
-                        "type": "integer",
-                        "description": "Timeout in seconds (default 20, max 60)."
-                    }
+                    "session_id": {"type": "string"},
+                    "command": {"type": "string"},
+                    "args": {"type": "array", "items": {"type": "string"}},
+                    "timeout_sec": {"type": "integer"}
                 },
                 "required": ["session_id", "command"]
             }
         },
         {
             "name": "read_terminal_output",
-            "description": "Reads the captured stdout/stderr output lines from a background terminal session.",
+            "description": "Reads captured stdout/stderr output lines from a background terminal session.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "session_id": {
-                        "type": "string",
-                        "description": "The terminal session ID."
-                    },
-                    "tail_lines": {
-                        "type": "integer",
-                        "description": "Number of recent lines to retrieve (default all)."
-                    }
+                    "session_id": {"type": "string"},
+                    "tail_lines": {"type": "integer"}
                 },
                 "required": ["session_id"]
             }
@@ -750,68 +1130,22 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             "description": "Checks the process state, working directory, and exit code of a terminal session.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "session_id": {
-                        "type": "string",
-                        "description": "The terminal session ID."
-                    }
-                },
+                "properties": {"session_id": {"type": "string"}},
                 "required": ["session_id"]
             }
         },
         {
             "name": "list_terminals",
             "description": "Lists all active background terminal sessions.",
-            "parameters": {
-                "type": "object",
-                "properties": {}
-            }
+            "parameters": {"type": "object", "properties": {}}
         },
         {
             "name": "stop_terminal",
             "description": "Terminates any running processes in the session and reclaims resources.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "session_id": {
-                        "type": "string",
-                        "description": "The terminal session ID."
-                    }
-                },
+                "properties": {"session_id": {"type": "string"}},
                 "required": ["session_id"]
             }
         }
     ]
-
-
-def get_terminal_openai_tool_schemas() -> List[Dict[str, Any]]:
-    """Returns terminal tools formatted for OpenAI / Llama function calling."""
-    tools = get_terminal_tools_schema()
-    return [{"type": "function", "function": t} for t in tools]
-
-
-class ToolDispatcher:
-    """Dispatches autonomous model tool calls extracted from model output."""
-
-    @classmethod
-    def parse_and_execute_calls(cls, text: str) -> List[Dict[str, Any]]:
-        results = []
-        matches = re.finditer(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", text, re.DOTALL)
-        for m in matches:
-            try:
-                call_data = json.loads(m.group(1))
-                tool_name = call_data.get("name") or call_data.get("tool")
-                arguments = call_data.get("arguments") or call_data.get("parameters") or {}
-                if tool_name == "run_command":
-                    sid = arguments.get("session_id") or TerminalManager.create_terminal()["session_id"]
-                    res = TerminalManager.run_command(sid, arguments.get("command", ""), arguments.get("args", []))
-                    results.append({"tool": tool_name, "result": res})
-                elif tool_name == "create_terminal":
-                    res = TerminalManager.create_terminal(arguments.get("workspace_path"))
-                    results.append({"tool": tool_name, "result": res})
-                elif tool_name == "list_terminals":
-                    res = {"terminals": TerminalManager.list_terminals()}
-                    results.append({"tool": tool_name, "result": res})
-            except Exception as e:
-                print(f"[TOOL DISPATCH NOTICE] parse note: {e}", flush=True)
-        return results

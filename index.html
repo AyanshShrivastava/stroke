@@ -779,6 +779,34 @@
   </div>
 
   <!-- ========================================================================= -->
+  <!-- MODAL: CONFIRMATION PROMPT DIALOG                                         -->
+  <!-- ========================================================================= -->
+  <div id="confirmationModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center space-x-3">
+        <div id="confirmModalIconBox" class="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <div class="min-w-0">
+          <h4 id="confirmModalTitle" class="font-sans font-bold text-white text-sm truncate">Confirmation Required</h4>
+          <span class="text-[10px] text-brand-muted font-mono uppercase tracking-wider">Action Verification</span>
+        </div>
+      </div>
+      <p id="confirmModalMessage" class="text-xs text-brand-text leading-relaxed">
+        Are you sure you want to proceed?
+      </p>
+      <div class="pt-2 flex items-center justify-end space-x-2">
+        <button id="confirmModalCancelBtn" type="button" class="px-3.5 py-1.5 rounded-xl border border-brand-border text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors font-mono">
+          Cancel
+        </button>
+        <button id="confirmModalActionBtn" type="button" class="px-4 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold font-mono transition-colors shadow-sm">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
   <!-- JAVASCRIPT CONTROLLER                                                     -->
   <!-- ========================================================================= -->
   <script>
