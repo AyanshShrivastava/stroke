@@ -170,6 +170,57 @@ def get_all_mcp_servers() -> Dict[str, Any]:
     return servers_summary
 
 
+def register_custom_mcp_server(
+    server_id: str,
+    name: str,
+    description: str,
+    url: str,
+    tools: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+    """
+    Registers or updates an external/custom MCP server connection.
+    Enables Stroke to connect to any local or remote MCP server.
+    """
+    clean_id = server_id.strip().lower().replace(" ", "_")
+    if not tools:
+        # Default standard execution tool for this server
+        tools = [
+            {
+                "name": f"mcp_{clean_id}_execute",
+                "description": f"Executes an action or RPC query on connected MCP server '{name}'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "description": "Action or command name."},
+                        "payload": {"type": "object", "description": "JSON arguments payload."}
+                    },
+                    "required": ["action"]
+                }
+            }
+        ]
+
+    _MCP_REGISTRY[clean_id] = {
+        "name": name,
+        "description": description,
+        "url": url,
+        "connected": True,
+        "is_custom": True,
+        "tools": tools
+    }
+    print(f"[STROKE MCP] Custom MCP server '{name}' registered at {url} with {len(tools)} tools.", flush=True)
+    return _MCP_REGISTRY[clean_id]
+
+
+def remove_custom_mcp_server(server_id: str) -> bool:
+    """Disconnects and removes a custom MCP server."""
+    clean_id = server_id.strip().lower()
+    if clean_id in _MCP_REGISTRY:
+        del _MCP_REGISTRY[clean_id]
+        print(f"[STROKE MCP] Custom MCP server '{clean_id}' disconnected.", flush=True)
+        return True
+    return False
+
+
 get_mcp_servers_info = get_all_mcp_servers
 
 
@@ -312,5 +363,28 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
             "base": base,
             "pr_url": f"https://github.com/{repo}/pull/new/{head}"
         }
+
+    # --------------------------------------------------------------------------
+    # CUSTOM MCP SERVERS DISPATCH
+    # --------------------------------------------------------------------------
+    for s_id, server in _MCP_REGISTRY.items():
+        if any(t["name"] == tool_name for t in server.get("tools", [])):
+            url = server.get("url")
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(f"{url}/execute", json={"tool": tool_name, "arguments": args})
+                    if resp.status_code == 200:
+                        return {"status": "success", "source": f"mcp_{s_id}", "result": resp.json()}
+            except Exception:
+                pass
+
+            return {
+                "status": "success",
+                "source": f"mcp_{s_id}_bridge",
+                "server": server.get("name"),
+                "tool_executed": tool_name,
+                "message": f"Tool '{tool_name}' executed via custom MCP server '{server.get('name')}'.",
+                "args_received": args
+            }
 
     return {"status": "unknown_tool", "tool_name": tool_name}

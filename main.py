@@ -215,6 +215,18 @@ class McpExecuteRequest(BaseModel):
     email: Optional[str] = Field(None, description="Operator email to resolve GitHub PAT")
 
 
+class McpConnectRequest(BaseModel):
+    server_id: str = Field(..., description="Unique server ID identifier (e.g. 'custom_blender')")
+    name: str = Field(..., description="Human-readable server name")
+    url: str = Field(..., description="MCP server base URL (e.g. http://localhost:8989)")
+    description: Optional[str] = Field("Custom MCP Server", description="Description")
+    tools: Optional[List[Dict[str, Any]]] = None
+
+
+class McpDisconnectRequest(BaseModel):
+    server_id: str = Field(..., description="Server ID to disconnect")
+
+
 # ==============================================================================
 # ROUTE HANDLERS: FRONTEND ASSET SERVING
 # ==============================================================================
@@ -798,6 +810,38 @@ async def execute_mcp_call(payload: McpExecuteRequest):
     return res
 
 
+@app.post("/mcp/connect", tags=["Universal MCP Bridge"])
+async def connect_custom_mcp_server(payload: McpConnectRequest):
+    """
+    POST /mcp/connect
+    Connects Stroke to any custom local or remote MCP server!
+    """
+    server = mcp_bridge.register_custom_mcp_server(
+        server_id=payload.server_id,
+        name=payload.name,
+        description=payload.description or "Custom MCP Server",
+        url=payload.url,
+        tools=payload.tools
+    )
+    return {
+        "status": "success",
+        "message": f"Successfully connected to MCP server '{payload.name}'.",
+        "server": server
+    }
+
+
+@app.post("/mcp/disconnect", tags=["Universal MCP Bridge"])
+async def disconnect_custom_mcp_server(payload: McpDisconnectRequest):
+    """
+    POST /mcp/disconnect
+    Disconnects a custom MCP server.
+    """
+    success = mcp_bridge.remove_custom_mcp_server(payload.server_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Server '{payload.server_id}' not found or cannot be removed.")
+    return {"status": "success", "server_id": payload.server_id, "disconnected": True}
+
+
 # ==============================================================================
 # ROUTE HANDLERS: NOTES AI & LUAU COPILOT
 # ==============================================================================
@@ -1096,6 +1140,12 @@ class ChatMessage(BaseModel):
     role: str = Field(..., description="Role: user, assistant, or system")
     content: str = Field(..., description="Message text content")
 
+class FileAttachment(BaseModel):
+    name: str = Field(..., description="File name (e.g. script.luau, model.json, visual.png)")
+    content: str = Field(..., description="File text or base64 data string")
+    type: Optional[str] = Field("text/plain", description="MIME type or file extension")
+    is_image: Optional[bool] = Field(False, description="Whether attachment is an image")
+
 class AiChatRequest(BaseModel):
     messages: List[ChatMessage] = Field(..., description="Conversation history list")
     model: Optional[str] = Field("llama3.2", description="Target model (e.g. llama3.2, llama3.3, llama-3.3-70b-versatile)")
@@ -1106,6 +1156,7 @@ class AiChatRequest(BaseModel):
     is_temporary: Optional[bool] = Field(False, description="If True, chat is ephemeral and excluded from history and continuous learning")
     session_id: Optional[str] = Field(None, description="Chat session ID")
     think_mode: Optional[bool] = Field(False, description="Enable deep neural reasoning mode")
+    attachments: Optional[List[FileAttachment]] = Field(None, description="Attached code, image, or text files")
 
 class SaveChatSessionRequest(BaseModel):
     email: str = Field(..., description="User email identity")
@@ -1670,8 +1721,18 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         system_instruction += "\n\nDEEP REASONING MODE: Please think through the problem rigorously step-by-step before outputting the final code or answer."
 
     api_messages = [{"role": "system", "content": system_instruction}]
-    for msg in payload.messages:
-        api_messages.append({"role": msg.role, "content": msg.content})
+    for idx, msg in enumerate(payload.messages):
+        content = msg.content
+        if idx == len(payload.messages) - 1 and payload.attachments:
+            att_text = "\n\n=== ATTACHED ASSETS & FILES ===\n"
+            for att in payload.attachments:
+                if att.is_image:
+                    att_text += f"[Attached Image: {att.name}] (Type: {att.type})\n"
+                else:
+                    att_text += f"--- FILE: {att.name} ({att.type}) ---\n{att.content[:8000]}\n--- END FILE ---\n"
+            att_text += "=== END ATTACHMENTS ===\n"
+            content += att_text
+        api_messages.append({"role": msg.role, "content": content})
 
     ai_reply_text = ""
     provider_used = "neural-agent"

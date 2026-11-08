@@ -1,7 +1,31 @@
 {
-  "total_chats_learned": 6,
-  "last_updated": "2026-11-08T05:04:56.908795+00:00",
+  "total_chats_learned": 8,
+  "last_updated": "2026-11-08T05:27:05.232589+00:00",
   "insights": [
+    {
+      "id": "INS-LUAU-008",
+      "domain": "Luau",
+      "element": "Scripting",
+      "topic": "Optimized Luau Architecture for 'Please review the attached script and image'",
+      "summary": "Distilled from session: Addressed Luau interaction with tool 'direct'. Validated Luau kinematics and emitter parameters.",
+      "code_snippet": "-- Refined pattern for Please review the attached scr\nprint('[Stroke Learned] Pattern optimized')",
+      "impact_score": 9.4,
+      "source_tool": "direct",
+      "contributor": "deve***",
+      "created_at": "2026-11-08T05:27:05.232488+00:00"
+    },
+    {
+      "id": "INS-LUAU-007",
+      "domain": "Luau",
+      "element": "Scripting",
+      "topic": "Optimized Luau Architecture for 'Analyze this attached Luau script and explain what it does'",
+      "summary": "Distilled from session: Addressed Luau interaction with tool 'web_search'. Validated Luau kinematics and emitter parameters.",
+      "code_snippet": "-- Refined pattern for Analyze this attached Luau scr\nprint('[Stroke Learned] Pattern optimized')",
+      "impact_score": 9.5,
+      "source_tool": "web_search",
+      "contributor": "anon***",
+      "created_at": "2026-11-08T05:24:18.973211+00:00"
+    },
     {
       "id": "INS-SLAS-006",
       "domain": "Slash",

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stroke // Cyberpunk Neural Matrix & VFX Studio</title>
-  <!-- Tailwind CSS CDN -->
+  <title>Stroke // AI Systems &amp; VFX Studio</title>
+  <!-- Tailwind CSS Engine -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts: Space Grotesk & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,20 +17,19 @@
       theme: {
         extend: {
           colors: {
-            matrix: {
-              black: '#050505',
-              surface: '#0d0d0d',
-              card: '#121212',
-              input: '#0a0a0a',
-              border: '#1f2922',
-              'border-bright': '#00ff66',
-              green: '#00ff66',
-              glow: '#33ff85',
-              darkgreen: '#005522',
-              muted: '#00aa44',
-              danger: '#ff3344',
+            brand: {
+              black: '#090a0f',
+              surface: '#0e1017',
+              card: '#141722',
+              input: '#0b0c12',
+              border: '#1e2333',
+              accent: '#00ff66',
+              accentDark: '#006629',
+              cyan: '#00d4ff',
               amber: '#ffaa00',
-              cyan: '#00d4ff'
+              danger: '#ff4455',
+              text: '#f0f3f8',
+              muted: '#7e889e'
             }
           },
           fontFamily: {
@@ -44,7 +43,7 @@
 
   <style>
     body {
-      background-color: #050505;
+      background-color: #090a0f;
       color: #00ff66;
       font-family: 'JetBrains Mono', monospace;
       height: 100vh;
@@ -53,31 +52,21 @@
       padding: 0;
     }
 
-    /* Subtle Scanlines overlay */
-    .crt-scanlines {
-      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%),
-                  linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
-      background-size: 100% 3px, 6px 100%;
-      pointer-events: none;
-    }
-
     .glow-text {
-      text-shadow: 0 0 8px rgba(0, 255, 102, 0.6), 0 0 20px rgba(0, 255, 102, 0.3);
+      text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
     }
     .glow-cyan {
-      text-shadow: 0 0 8px rgba(0, 212, 255, 0.6), 0 0 20px rgba(0, 212, 255, 0.3);
+      text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
     }
-
     .glow-box {
-      box-shadow: 0 0 15px rgba(0, 255, 102, 0.15), inset 0 0 10px rgba(0, 255, 102, 0.03);
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.12), inset 0 0 10px rgba(0, 255, 102, 0.02);
     }
-
     .glow-button {
-      box-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
+      box-shadow: 0 0 10px rgba(0, 255, 102, 0.25);
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .glow-button:hover:not(:disabled) {
-      box-shadow: 0 0 20px rgba(0, 255, 102, 0.7);
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.6);
       transform: translateY(-1px);
     }
 
@@ -121,163 +110,153 @@
     .waveform-bar:nth-child(4) { animation: wave-bounce 0.8s ease-in-out infinite 0.35s; }
     .waveform-bar:nth-child(5) { animation: wave-bounce 1.0s ease-in-out infinite 0.2s; }
 
-    /* Custom Matrix Scrollbar */
+    /* Custom Scrollbar */
     ::-webkit-scrollbar {
       width: 5px;
       height: 5px;
     }
     ::-webkit-scrollbar-track {
-      background: #050505;
+      background: #090a0f;
     }
     ::-webkit-scrollbar-thumb {
-      background: #15331f;
+      background: #1e2535;
       border-radius: 4px;
     }
     ::-webkit-scrollbar-thumb:hover {
       background: #00ff66;
     }
-
-    /* Tooltip styling */
-    .tooltip {
-      visibility: hidden;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .has-tooltip:hover .tooltip {
-      visibility: visible;
-      opacity: 1;
-    }
   </style>
 </head>
-<body class="bg-matrix-black text-matrix-green flex h-screen w-screen overflow-hidden select-none">
-  <div class="crt-scanlines fixed inset-0 z-50 pointer-events-none"></div>
+<body class="bg-brand-black text-brand-text flex h-screen w-screen overflow-hidden select-none font-mono">
+
+  <!-- Hidden File Input for Attachment Button (+) -->
+  <input type="file" id="fileAttachmentInput" multiple accept="image/*,.luau,.lua,.py,.js,.ts,.json,.txt,.rbxm,.md,.html,.css" class="hidden">
 
   <!-- ========================================================================= -->
-  <!-- LEFT SIDEBAR: ChatGPT / Gemini Layout (Collapsible, Full Features)         -->
+  <!-- LEFT SIDEBAR: Clean, Modern AI Layout (Collapsible)                       -->
   <!-- ========================================================================= -->
-  <aside id="sidebar" class="w-64 bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-40 relative">
+  <aside id="sidebar" class="w-64 bg-brand-surface border-r border-brand-border flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-40 relative">
     
-    <!-- Top Section: Brand + Actions + Navigation -->
+    <!-- Top Brand & Navigation -->
     <div class="flex flex-col flex-1 overflow-hidden p-3 space-y-3">
       
       <!-- Brand Header -->
-      <div class="flex items-center justify-between px-2 pt-1 pb-2 border-b border-[#18251c]">
+      <div class="flex items-center justify-between px-2 pt-1 pb-2 border-b border-brand-border">
         <div class="flex items-center space-x-2">
-          <div class="w-7 h-7 rounded-lg bg-matrix-green/10 border border-matrix-green/40 flex items-center justify-center font-bold text-xs text-matrix-green glow-text">
+          <div class="w-7 h-7 rounded-lg bg-brand-accent/10 border border-brand-accent/40 flex items-center justify-center font-bold text-xs text-brand-accent glow-text">
             S
           </div>
-          <span class="font-sans font-bold text-base tracking-wide text-white glow-text">Stroke</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded border border-matrix-green/30 bg-matrix-green/5 text-matrix-green">2.5</span>
+          <span class="font-sans font-bold text-base tracking-wide text-white">Stroke</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded border border-brand-accent/30 bg-brand-accent/5 text-brand-accent">2.5</span>
         </div>
         <div class="flex items-center space-x-1">
-          <button id="searchChatsBtn" class="p-1.5 rounded-md hover:bg-white/5 text-[#888] hover:text-matrix-green transition-colors" title="Search chats">
+          <button id="searchChatsBtn" class="p-1.5 rounded-md hover:bg-white/5 text-brand-muted hover:text-brand-accent transition-colors" title="Search chats">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           </button>
-          <button id="collapseSidebarBtn" class="p-1.5 rounded-md hover:bg-white/5 text-[#888] hover:text-white transition-colors" title="Collapse sidebar">
+          <button id="collapseSidebarBtn" class="p-1.5 rounded-md hover:bg-white/5 text-brand-muted hover:text-white transition-colors" title="Collapse sidebar">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
           </button>
         </div>
       </div>
 
-      <!-- Action: + New Chat (Pill button like ChatGPT) -->
-      <button id="newChatBtn" class="w-full py-2 px-3 rounded-lg bg-matrix-green/10 hover:bg-matrix-green/20 border border-matrix-green/40 text-white font-medium text-xs flex items-center justify-between transition-all glow-button group">
+      <!-- Action: + New Chat -->
+      <button id="newChatBtn" class="w-full py-2 px-3 rounded-lg bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/40 text-white font-medium text-xs flex items-center justify-between transition-all glow-button group">
         <span class="flex items-center space-x-2">
-          <svg class="w-3.5 h-3.5 text-matrix-green group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          <svg class="w-3.5 h-3.5 text-brand-accent group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           <span>New chat</span>
         </span>
-        <span class="text-[10px] text-[#666] font-mono">⌘K</span>
+        <span class="text-[10px] text-brand-muted font-mono">Cmd+K</span>
       </button>
 
       <!-- Navigation Apps & Tools -->
       <nav class="space-y-1 text-xs">
-        <button id="openVfxLibBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-matrix-green hover:bg-white/5 transition-colors group">
+        <button id="openVfxLibBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
           <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-matrix-muted group-hover:text-matrix-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
             <span>VFX Library</span>
           </span>
-          <span class="text-[9px] px-1 py-0.2 rounded bg-matrix-green/10 text-matrix-green border border-matrix-green/30 font-mono">14.6k</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">14.6k</span>
         </button>
 
-        <button id="openMcpDrawerBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-matrix-green hover:bg-white/5 transition-colors group">
+        <button id="openMcpHubBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
           <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-matrix-muted group-hover:text-matrix-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-            <span>Studio / GitHub MCP</span>
+            <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>MCP Servers</span>
           </span>
-          <span class="w-2 h-2 rounded-full bg-matrix-green animate-pulse"></span>
+          <span id="mcpConnectedCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">2 Live</span>
         </button>
 
-        <button id="openContinuousLearningBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-matrix-green hover:bg-white/5 transition-colors group">
+        <button id="openContinuousLearningBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
           <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-matrix-cyan group-hover:text-matrix-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            <svg class="w-4 h-4 text-brand-cyan group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
             <span>Continuous Learning</span>
           </span>
-          <span id="sidebarInsightBadge" class="text-[9px] px-1 py-0.2 rounded bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 font-mono">Live</span>
+          <span id="sidebarInsightBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-500/30 font-mono">Active</span>
         </button>
 
-        <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-white hover:bg-white/5 transition-colors">
-          <svg class="w-4 h-4 text-[#777]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-brand-text hover:text-white hover:bg-white/5 transition-colors">
+          <svg class="w-4 h-4 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           <span>Settings</span>
         </button>
       </nav>
 
-      <!-- Recents List Section (matching ChatGPT screenshot) -->
+      <!-- Recents List Section -->
       <div class="flex-1 overflow-y-auto pr-1 pt-2 space-y-1">
-        <div class="text-[10px] uppercase font-bold tracking-wider text-[#555] px-2.5 py-1">Recents</div>
+        <div class="text-[10px] uppercase font-bold tracking-wider text-brand-muted px-2.5 py-1">Recents</div>
         <div id="recentChatsList" class="space-y-0.5">
-          <!-- Dynamically populated or seed items -->
-          <button class="chat-session-item active w-full text-left px-2.5 py-2 rounded-md text-xs text-white bg-white/5 border-l-2 border-matrix-green flex items-center justify-between group">
+          <!-- Dynamically populated -->
+          <button class="chat-session-item active w-full text-left px-2.5 py-2 rounded-md text-xs text-white bg-white/5 border-l-2 border-brand-accent flex items-center justify-between group">
             <span class="truncate pr-2">Elemental Worlds Core Design</span>
-            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
           </button>
-          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-[#888] hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
+          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
             <span class="truncate pr-2">Sukuna Domain Cleave Luau</span>
-            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
           </button>
-          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-[#888] hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
+          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
             <span class="truncate pr-2">Hollow Purple Flipbook Bezier</span>
-            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Bottom Profile Row (matching ChatGPT screenshot bottom-left) -->
-    <div class="p-3 border-t border-[#18251c] bg-[#070707] relative">
-      <!-- Profile Button / Popover Trigger -->
+    <!-- Bottom Profile Row: Natural Free / Pro Tier -->
+    <div class="p-3 border-t border-brand-border bg-brand-surface relative">
       <button id="userProfileBtn" class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors text-left group">
         <div class="flex items-center space-x-2.5 min-w-0">
           <!-- Circular Avatar with Initials -->
-          <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-matrix-green/20 border border-matrix-green text-matrix-green font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text">
+          <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text">
             NN
           </div>
           <div class="min-w-0">
             <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Neha Nibisha</div>
-            <div id="userTierLabel" class="text-[10px] text-[#888] font-mono">Cyber Matrix Free</div>
+            <div id="userTierLabel" class="text-[10px] text-brand-muted font-mono">Free Plan</div>
           </div>
         </div>
-        <svg class="w-4 h-4 text-[#666] group-hover:text-matrix-green transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+        <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
       </button>
 
-      <!-- Upgrade / Claim Offer Button (below profile like screenshot) -->
-      <button id="claimOfferBtn" class="mt-2 w-full py-1.5 px-3 rounded-lg border border-matrix-green/30 bg-matrix-green/5 hover:bg-matrix-green/15 text-[11px] text-matrix-green font-medium flex items-center justify-center space-x-1.5 transition-colors">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/></svg>
-        <span>Pro Matrix Upgrade</span>
+      <!-- Clean Upgrade Button -->
+      <button id="claimOfferBtn" class="mt-2 w-full py-1.5 px-3 rounded-lg border border-brand-accent/30 bg-brand-accent/5 hover:bg-brand-accent/15 text-[11px] text-brand-accent font-medium flex items-center justify-center space-x-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        <span>Upgrade to Pro</span>
       </button>
 
-      <!-- User Profile Popover Menu (hidden by default) -->
-      <div id="profilePopover" class="hidden absolute bottom-20 left-3 right-3 bg-[#0d0d0d] border border-[#223328] rounded-xl p-2 shadow-2xl z-50 space-y-1">
-        <div class="px-3 py-2 border-b border-[#18251c]">
-          <div class="text-[10px] text-[#666] uppercase">Signed In As</div>
-          <div id="popoverEmail" class="text-xs text-matrix-green truncate font-mono">user@domain.com</div>
+      <!-- User Profile Popover -->
+      <div id="profilePopover" class="hidden absolute bottom-20 left-3 right-3 bg-brand-card border border-brand-border rounded-xl p-2 shadow-2xl z-50 space-y-1">
+        <div class="px-3 py-2 border-b border-brand-border">
+          <div class="text-[10px] text-brand-muted uppercase">Signed In As</div>
+          <div id="popoverEmail" class="text-xs text-brand-accent truncate font-mono">developer@cyber.matrix</div>
         </div>
-        <button id="trigger5xMatrixBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-[#bbb] hover:text-white hover:bg-white/5 flex items-center justify-between">
+        <button id="trigger5xMatrixBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center justify-between">
           <span>5X VFX Ingestion</span>
-          <span id="popoverDbFedBadge" class="text-[9px] px-1 rounded bg-matrix-green/20 text-matrix-green">Fed</span>
+          <span id="popoverDbFedBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/20 text-brand-accent">Fed</span>
         </button>
-        <button id="authModalTriggerBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-[#bbb] hover:text-white hover:bg-white/5 flex items-center space-x-2">
+        <button id="authModalTriggerBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center space-x-2">
           <span>Switch Account / Sign In</span>
         </button>
-        <button id="logoutBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-500/10 flex items-center space-x-2">
+        <button id="logoutBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-brand-danger hover:bg-red-500/10 flex items-center space-x-2">
           <span>Sign Out</span>
         </button>
       </div>
@@ -285,45 +264,45 @@
   </aside>
 
   <!-- ========================================================================= -->
-  <!-- MAIN CHAT & WORKSPACE AREA (Full Screen, Flagship AI Layout)               -->
+  <!-- MAIN WORKSPACE: Clean Full-Screen AI Stream                               -->
   <!-- ========================================================================= -->
-  <main class="flex-1 flex flex-col h-full bg-[#050505] relative overflow-hidden">
+  <main class="flex-1 flex flex-col h-full bg-brand-black relative overflow-hidden">
     
     <!-- Top Header Bar -->
-    <header class="h-14 border-b border-[#152219] px-4 flex items-center justify-between flex-shrink-0 bg-[#070707]/90 backdrop-blur z-20">
+    <header class="h-14 border-b border-brand-border px-4 flex items-center justify-between flex-shrink-0 bg-brand-surface/90 backdrop-blur z-20">
       
       <!-- Left: Expand Sidebar + Model Selector -->
       <div class="flex items-center space-x-3">
-        <button id="expandSidebarBtn" class="hidden p-1.5 rounded-lg hover:bg-white/5 text-[#888] hover:text-white transition-colors" title="Open sidebar">
+        <button id="expandSidebarBtn" class="hidden p-1.5 rounded-lg hover:bg-white/5 text-brand-muted hover:text-white transition-colors" title="Open sidebar">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
-        <!-- Model Selector Pill (like ChatGPT top pill) -->
+        <!-- Model Selector Pill -->
         <div class="relative">
-          <button id="modelDropdownBtn" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-sans font-semibold text-xs transition-colors border border-[#1f2922]">
+          <button id="modelDropdownBtn" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-sans font-semibold text-xs transition-colors border border-brand-border">
             <span id="selectedModelLabel">Stroke 2.5 Neural</span>
-            <svg class="w-3.5 h-3.5 text-[#888]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            <svg class="w-3.5 h-3.5 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
           
           <!-- Dropdown items -->
-          <div id="modelDropdownMenu" class="hidden absolute top-10 left-0 w-64 bg-[#0d0d0d] border border-[#223328] rounded-xl shadow-2xl py-1 z-50">
+          <div id="modelDropdownMenu" class="hidden absolute top-10 left-0 w-64 bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1 z-50">
             <button class="model-option w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 flex items-center justify-between" data-model="stroke-neural">
               <div>
-                <div class="font-semibold text-matrix-green">Stroke 2.5 Neural</div>
-                <div class="text-[10px] text-[#777]">Autonomous Agent + VFX RAG + MCP</div>
+                <div class="font-semibold text-brand-accent">Stroke 2.5 Neural</div>
+                <div class="text-[10px] text-brand-muted">Autonomous Agent + VFX RAG + MCP</div>
               </div>
-              <span class="text-matrix-green text-xs">✓</span>
+              <span class="text-brand-accent text-xs font-bold">[active]</span>
             </button>
-            <button class="model-option w-full text-left px-3 py-2 text-xs text-[#bbb] hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama-3.3-70b-versatile">
+            <button class="model-option w-full text-left px-3 py-2 text-xs text-brand-text hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama-3.3-70b-versatile">
               <div>
                 <div class="font-semibold">Groq Llama 3.3 70B</div>
-                <div class="text-[10px] text-[#777]">High-speed cloud function calling</div>
+                <div class="text-[10px] text-brand-muted">High-speed cloud tool calling</div>
               </div>
             </button>
-            <button class="model-option w-full text-left px-3 py-2 text-xs text-[#bbb] hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama3.2">
+            <button class="model-option w-full text-left px-3 py-2 text-xs text-brand-text hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama3.2">
               <div>
                 <div class="font-semibold">Local Llama 3.2 1B</div>
-                <div class="text-[10px] text-[#777]">Offline GGUF weights on device</div>
+                <div class="text-[10px] text-brand-muted">Offline GGUF weights on device</div>
               </div>
             </button>
           </div>
@@ -333,75 +312,75 @@
       <!-- Right: Temporary Chat Button + Status Badges -->
       <div class="flex items-center space-x-2 sm:space-x-3">
         
-        <!-- TEMPORARY CHAT TOGGLE (matching top-right in screenshot!) -->
-        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-[#26352b] bg-[#0c120e] hover:border-matrix-amber/60 text-xs text-[#999] hover:text-white transition-all group" title="Temporary chat: Excluded from history and continuous learning">
-          <svg class="w-3.5 h-3.5 text-[#777] group-hover:text-matrix-amber transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+        <!-- TEMPORARY CHAT TOGGLE -->
+        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-amber text-xs text-brand-muted hover:text-white transition-all group" title="Temporary chat: Excluded from history and continuous learning">
+          <svg class="w-3.5 h-3.5 text-brand-muted group-hover:text-brand-amber transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
           <span id="tempChatBtnText" class="font-medium">Temporary chat</span>
-          <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-[#555]"></span>
+          <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-brand-border"></span>
         </button>
 
-        <!-- MCP Bridge Indicator -->
-        <div class="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded-full border border-[#1e2e22] bg-[#090f0b] text-[11px] text-[#888]">
-          <span class="w-2 h-2 rounded-full bg-matrix-green animate-pulse"></span>
-          <span class="text-white font-mono">MCP Ready</span>
-        </div>
+        <!-- MCP Hub Trigger Button -->
+        <button id="openMcpHubTopBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-accent text-xs text-brand-muted hover:text-white transition-colors" title="Manage connected MCP servers">
+          <span class="w-2 h-2 rounded-full bg-brand-accent animate-pulse"></span>
+          <span class="font-mono text-white text-[11px]">MCP Hub</span>
+        </button>
 
         <!-- Continuous Learning Telemetry Pill -->
-        <button id="learningStatusPill" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full border border-cyan-800/40 bg-cyan-950/20 text-[11px] text-cyan-300 hover:bg-cyan-950/40 transition-colors">
-          <svg class="w-3.5 h-3.5 text-matrix-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          <span class="font-mono text-[10px]">Learning <span id="insightsCountHeader">6</span></span>
+        <button id="learningStatusPill" class="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-full border border-cyan-800/40 bg-cyan-950/20 text-[11px] text-cyan-300 hover:bg-cyan-950/40 transition-colors">
+          <svg class="w-3.5 h-3.5 text-brand-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <span class="font-mono text-[10px]">Learning <span id="insightsCountHeader">7</span></span>
         </button>
       </div>
     </header>
 
-    <!-- Temporary Chat Active Banner (shown when Temporary Mode is enabled) -->
+    <!-- Temporary Chat Active Banner -->
     <div id="tempChatBanner" class="hidden bg-amber-950/40 border-b border-amber-600/30 px-4 py-1.5 text-center text-xs text-amber-300 flex items-center justify-center space-x-2 z-10">
       <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-      <span><strong>Temporary chat is on.</strong> This chat won't appear in history, persist to database, or be used to train Stroke's continuous learning loop.</span>
+      <span><strong>Temporary chat active.</strong> Messages will not be saved to your account or used to train Stroke.</span>
       <button id="turnOffTempChatBtn" class="underline hover:text-white font-bold ml-2">Turn off</button>
     </div>
 
-    <!-- Center Content: Empty Greeting State OR Chat Messages Stream -->
+    <!-- Center Content: Empty Greeting State OR Chat Stream -->
     <div id="chatScrollContainer" class="flex-1 overflow-y-auto px-4 py-6 flex flex-col items-center">
       
-      <!-- EMPTY STATE: Centered Hero (Matching ChatGPT Screenshot!) -->
+      <!-- EMPTY STATE: Natural Clean Greeting -->
       <div id="emptyStateHero" class="my-auto max-w-2xl w-full flex flex-col items-center justify-center text-center space-y-6 pt-10 pb-6 transition-all">
-        <h1 class="text-2xl sm:text-3xl font-sans font-bold text-white tracking-tight glow-text">
-          What’s on the agenda today?
+        <h1 class="text-2xl sm:text-3xl font-sans font-bold text-white tracking-tight">
+          What would you like to build today?
         </h1>
 
-        <!-- Quick Prompt Suggestion Chips -->
+        <!-- Quick Prompt Chips (Clean SVGs, NO Emojis) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl text-left">
-          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
-            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
-              <span>🔮</span>
+          <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
+              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
               <span>Script Hollow Purple in Luau</span>
             </div>
-            <div class="text-[11px] text-[#777] mt-1">Dual Bezier curves with CurveSize0=-9.83</div>
+            <div class="text-[11px] text-brand-muted mt-1">Dual Bezier curves with CurveSize0=-9.83</div>
           </button>
 
-          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
-            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
-              <span>⚔️</span>
-              <span>Synthesize Sukuna 360° Cleave</span>
+          <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
+              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a3 3 0 11-4.242-4.242L12 12m0 0l-7-7m7 7l-7 7"/></svg>
+              <span>Synthesize Sukuna 360 Cleave</span>
             </div>
-            <div class="text-[11px] text-[#777] mt-1">Snap deceleration with Drag=22.0</div>
+            <div class="text-[11px] text-brand-muted mt-1">Snap deceleration with Drag=22.0</div>
           </button>
 
-          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
-            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
-              <span>💥</span>
+          <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
+              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg>
               <span>Construct 1,460-Emitter Explosion</span>
             </div>
-            <div class="text-[11px] text-[#777] mt-1">PointLight synchronized mobile LODs</div>
+            <div class="text-[11px] text-brand-muted mt-1">PointLight synchronized mobile LODs</div>
           </button>
 
-          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
-            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
-              <span>🌊</span>
+          <button class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2">
+              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
               <span>Hydrokinetic Mist Torrent</span>
             </div>
-            <div class="text-[11px] text-[#777] mt-1">240-beam dual attachment ribbon vortex</div>
+            <div class="text-[11px] text-brand-muted mt-1">240-beam dual ribbon vortex</div>
           </button>
         </div>
       </div>
@@ -413,52 +392,56 @@
     </div>
 
     <!-- ======================================================================= -->
-    <!-- FLOATING COMPOSER: Bottom Input Pill (Matching ChatGPT Screenshot!)     -->
+    <!-- FLOATING COMPOSER: Plus Button for Files/Code/Images + Audio Voice Btn  -->
     <!-- ======================================================================= -->
     <div class="w-full px-4 pb-4 flex flex-col items-center justify-center flex-shrink-0 z-30">
       
-      <!-- Composer Container Pill -->
-      <div class="w-full max-w-3xl bg-[#0d120e] border border-[#213025] focus-within:border-matrix-green rounded-2xl p-2.5 shadow-2xl transition-all duration-200 glow-box">
+      <!-- Composer Container -->
+      <div class="w-full max-w-3xl bg-brand-card border border-brand-border focus-within:border-brand-accent rounded-2xl p-2.5 shadow-2xl transition-all duration-200 glow-box">
         
+        <!-- Attachment Previews Strip (Images, Code Files, Text) -->
+        <div id="attachmentsPreviewStrip" class="hidden flex flex-wrap gap-2 pb-2 mb-2 border-b border-brand-border">
+          <!-- Dynamically populated attachment chips -->
+        </div>
+
         <!-- Textarea Row -->
         <div class="flex items-end space-x-2">
           
-          <!-- Left: Attachment / Context Button (+) -->
-          <button id="attachBtn" class="p-2 rounded-xl text-[#777] hover:text-matrix-green hover:bg-white/5 transition-colors flex-shrink-0" title="Attach VFX, reference script, or assets">
+          <!-- Plus Button: Attaches Images, Code files, Luau scripts, etc. -->
+          <button id="attachBtn" class="p-2 rounded-xl text-brand-muted hover:text-brand-accent hover:bg-white/5 transition-colors flex-shrink-0" title="Attach image files, code, or documents">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           </button>
 
           <!-- Input Textarea -->
-          <textarea id="promptInput" rows="1" class="w-full bg-transparent text-white placeholder-[#555] text-sm resize-none focus:outline-none max-h-36 py-1.5 leading-relaxed font-sans" placeholder="Ask Stroke..."></textarea>
+          <textarea id="promptInput" rows="1" class="w-full bg-transparent text-white placeholder-brand-muted text-sm resize-none focus:outline-none max-h-36 py-1.5 leading-relaxed font-sans" placeholder="Ask Stroke, or attach code/images..."></textarea>
 
           <!-- Right Action Controls -->
           <div class="flex items-center space-x-1.5 flex-shrink-0 pb-0.5">
             
             <!-- Think Mode Toggle Button -->
-            <button id="thinkModeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium text-[#777] hover:text-white border border-transparent hover:border-[#253529] transition-all flex items-center space-x-1" title="Toggle deep neural reasoning">
+            <button id="thinkModeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium text-brand-muted hover:text-white border border-transparent hover:border-brand-border transition-all flex items-center space-x-1" title="Toggle deep reasoning mode">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
               <span>Think</span>
             </button>
 
-            <!-- Microphone Button: Dictate Speech-to-Text directly into textarea -->
-            <button id="micDictationBtn" class="p-2 rounded-xl text-[#777] hover:text-matrix-green hover:bg-white/5 transition-colors" title="Speech-to-text dictation">
+            <!-- Microphone Button: Speech-to-Text directly into textarea -->
+            <button id="micDictationBtn" class="p-2 rounded-xl text-brand-muted hover:text-brand-accent hover:bg-white/5 transition-colors" title="Speech dictation">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
             </button>
 
-            <!-- AUDIO / VOICE MODE BUTTON: Circular Audio Button (Matching Blue Voice Button in Screenshot!) -->
-            <button id="startVoiceChatBtn" class="w-9 h-9 rounded-full bg-matrix-green/20 hover:bg-matrix-green/30 border border-matrix-green text-matrix-green flex items-center justify-center transition-all glow-button relative group" title="Start live voice chat with Stroke">
-              <!-- Animated mini waveform bars inside circle -->
+            <!-- Circular Audio Voice Mode Button -->
+            <button id="startVoiceChatBtn" class="w-9 h-9 rounded-full bg-brand-accent/20 hover:bg-brand-accent/30 border border-brand-accent text-brand-accent flex items-center justify-center transition-all glow-button relative group" title="Start live voice chat with Stroke">
               <div class="flex items-center space-x-0.5 h-4">
-                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
               </div>
             </button>
 
             <!-- Send Button -->
-            <button id="sendPromptBtn" class="w-8 h-8 rounded-full bg-matrix-green text-black flex items-center justify-center hover:bg-matrix-glow transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+            <button id="sendPromptBtn" class="w-8 h-8 rounded-full bg-brand-accent text-black flex items-center justify-center hover:bg-emerald-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
             </button>
           </div>
@@ -466,42 +449,84 @@
       </div>
 
       <!-- Footer Microtext -->
-      <div class="text-[11px] text-[#555] mt-2 flex items-center space-x-2">
-        <span>Stroke Neural Core v2.5</span>
+      <div class="text-[11px] text-brand-muted mt-2 flex items-center space-x-2">
+        <span>Stroke AI Systems v2.5</span>
         <span>•</span>
-        <span>Elemental Worlds 5X Matrix Fed</span>
+        <span>Universal MCP Connectable</span>
         <span>•</span>
-        <span>Continuous Learning Active</span>
+        <span>Continuous Learning</span>
       </div>
     </div>
   </main>
 
   <!-- ========================================================================= -->
-  <!-- MODAL: INTERACTIVE VOICE CHAT MODE (Full Voice Room Experience)           -->
+  <!-- MODAL: UNIVERSAL MCP SERVER CONNECTIVITY HUB                              -->
+  <!-- ========================================================================= -->
+  <div id="mcpHubModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5">
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
+        <div class="flex items-center space-x-2">
+          <svg class="w-5 h-5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <h3 class="font-sans font-bold text-white text-base">Universal MCP Server Hub</h3>
+        </div>
+        <button id="closeMcpHubBtn" class="text-brand-muted hover:text-white p-1">x</button>
+      </div>
+
+      <p class="text-xs text-brand-muted">
+        Connect Stroke to any Model Context Protocol (MCP) server across your system or network (Roblox Studio, GitHub, Blender, local tools, or custom agent endpoints).
+      </p>
+
+      <!-- Active Connected Servers List -->
+      <div class="space-y-2">
+        <div class="text-[11px] uppercase font-bold text-brand-muted">Connected MCP Servers</div>
+        <div id="mcpServersList" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <!-- Dynamically populated from /mcp/servers -->
+        </div>
+      </div>
+
+      <!-- Connect Custom MCP Server Form -->
+      <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-3">
+        <div class="text-xs font-semibold text-white">Connect New MCP Server</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block text-[10px] uppercase text-brand-muted mb-1">Server Identifier</label>
+            <input id="newMcpIdInput" type="text" placeholder="blender_mcp" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-2.5 py-1.5 text-white focus:outline-none font-mono">
+          </div>
+          <div>
+            <label class="block text-[10px] uppercase text-brand-muted mb-1">Display Name</label>
+            <input id="newMcpNameInput" type="text" placeholder="Blender Geometry Engine" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-2.5 py-1.5 text-white focus:outline-none font-mono">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] uppercase text-brand-muted mb-1">Server Base URL / Endpoint</label>
+          <input id="newMcpUrlInput" type="text" placeholder="http://127.0.0.1:9090" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-2.5 py-1.5 text-white focus:outline-none font-mono text-xs">
+        </div>
+        <button id="submitConnectMcpBtn" class="w-full py-2 rounded-lg bg-brand-accent/20 hover:bg-brand-accent/30 border border-brand-accent text-brand-accent text-xs font-semibold transition-colors">
+          Connect MCP Server
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: INTERACTIVE VOICE CHAT MODE                                        -->
   <!-- ========================================================================= -->
   <div id="voiceModal" class="hidden fixed inset-0 bg-[#050505]/95 backdrop-blur-xl z-50 flex flex-col items-center justify-between p-8 select-none">
-    
-    <!-- Top Bar: Exit + Status -->
     <div class="w-full max-w-xl flex items-center justify-between">
       <div class="flex items-center space-x-2">
-        <span class="w-2.5 h-2.5 rounded-full bg-matrix-green animate-ping"></span>
-        <span class="font-sans font-bold text-sm text-white glow-text">Stroke Voice Mode</span>
+        <span class="w-2.5 h-2.5 rounded-full bg-brand-accent animate-ping"></span>
+        <span class="font-sans font-bold text-sm text-white">Stroke Voice Mode</span>
       </div>
-      <button id="closeVoiceModalBtn" class="p-2 rounded-full hover:bg-white/10 text-[#888] hover:text-white transition-colors">
+      <button id="closeVoiceModalBtn" class="p-2 rounded-full hover:bg-white/10 text-brand-muted hover:text-white transition-colors">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
 
-    <!-- Center: Interactive Audio Visualizer Orb -->
+    <!-- Center: Interactive Audio Orb Visualizer -->
     <div class="flex flex-col items-center justify-center space-y-8 my-auto">
-      
-      <!-- Pulsating Orb -->
       <div class="relative flex items-center justify-center">
-        <!-- Outer Glow Ring -->
-        <div id="voiceOrbOuter" class="w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300">
-          <!-- Inner Core -->
-          <div id="voiceOrbInner" class="w-32 h-32 rounded-full bg-gradient-to-tr from-matrix-darkgreen via-[#00441b] to-matrix-green/80 shadow-2xl flex items-center justify-center">
-            <!-- Icon/Waveform -->
+        <div id="voiceOrbOuter" class="w-48 h-48 rounded-full border-2 border-brand-accent/40 flex items-center justify-center voice-orb-active transition-all duration-300">
+          <div id="voiceOrbInner" class="w-32 h-32 rounded-full bg-gradient-to-tr from-brand-accentDark via-[#00441b] to-brand-accent/80 shadow-2xl flex items-center justify-center">
             <div id="voiceWaveformVisual" class="flex items-center space-x-1.5 h-10">
               <div class="waveform-bar w-1 bg-white rounded-full"></div>
               <div class="waveform-bar w-1 bg-white rounded-full"></div>
@@ -513,24 +538,23 @@
         </div>
       </div>
 
-      <!-- Live Voice Subtitles & State -->
       <div class="text-center max-w-md space-y-2">
-        <div id="voiceStateLabel" class="text-xs uppercase tracking-widest text-matrix-green font-mono">
+        <div id="voiceStateLabel" class="text-xs uppercase tracking-widest text-brand-accent font-mono">
           Listening... Speak clearly into your microphone
         </div>
         <p id="voiceLiveTranscript" class="text-base font-sans text-white font-medium min-h-[48px] px-4">
-          "What can you build with the 5x Elemental Worlds dataset?"
+          "How can I construct an optimized particle shockwave in Luau?"
         </p>
       </div>
     </div>
 
-    <!-- Bottom Controls: Interrupt, Mute, End Call -->
+    <!-- Bottom Controls -->
     <div class="w-full max-w-sm flex items-center justify-center space-x-6 pb-6">
       <button id="toggleVoiceMuteBtn" class="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors" title="Mute/Unmute Mic">
-        <svg id="muteIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
       </button>
 
-      <button id="interruptVoiceBtn" class="px-5 py-2.5 rounded-full border border-matrix-green/40 bg-matrix-green/10 hover:bg-matrix-green/20 text-matrix-green text-xs font-mono glow-button">
+      <button id="interruptVoiceBtn" class="px-5 py-2.5 rounded-full border border-brand-accent/40 bg-brand-accent/10 hover:bg-brand-accent/20 text-brand-accent text-xs font-mono glow-button">
         Interrupt Speech
       </button>
 
@@ -541,94 +565,87 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- DRAWER: CONTINUOUS CHAT LEARNING MATRIX                                    -->
+  <!-- DRAWER: CONTINUOUS LEARNING MATRIX                                        -->
   <!-- ========================================================================= -->
-  <div id="learningDrawer" class="hidden fixed inset-y-0 right-0 w-full sm:w-96 bg-[#090909] border-l border-[#1f2922] shadow-2xl z-50 flex flex-col justify-between">
-    <div class="p-4 border-b border-[#18251c] flex items-center justify-between">
+  <div id="learningDrawer" class="hidden fixed inset-y-0 right-0 w-full sm:w-96 bg-brand-surface border-l border-brand-border shadow-2xl z-50 flex flex-col justify-between">
+    <div class="p-4 border-b border-brand-border flex items-center justify-between">
       <div class="flex items-center space-x-2">
-        <svg class="w-5 h-5 text-matrix-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        <span class="font-sans font-bold text-white text-sm">Continuous Learning Matrix</span>
+        <svg class="w-5 h-5 text-brand-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <span class="font-sans font-bold text-white text-sm">Continuous Learning</span>
       </div>
-      <button id="closeLearningDrawerBtn" class="text-[#777] hover:text-white p-1">✕</button>
+      <button id="closeLearningDrawerBtn" class="text-brand-muted hover:text-white p-1">x</button>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 space-y-4">
-      <p class="text-xs text-[#888] leading-relaxed">
-        Stroke continuously distills solutions and code patterns from your chats into structured knowledge. These learnings recursively elevate both the real-time AI and the 5-cycle database feeding matrix.
+      <p class="text-xs text-brand-muted leading-relaxed">
+        Stroke automatically distills user prompts and solutions into reusable knowledge patterns. These patterns enrich future AI responses and feed the 5-cycle VFX ingestion pipeline.
       </p>
 
-      <!-- Metrics Row -->
       <div class="grid grid-cols-2 gap-2">
-        <div class="p-3 rounded-lg border border-[#1f2922] bg-[#0c120e]">
-          <div class="text-[10px] text-[#666] uppercase">Chats Distilled</div>
+        <div class="p-3 rounded-lg border border-brand-border bg-brand-card">
+          <div class="text-[10px] text-brand-muted uppercase">Chats Distilled</div>
           <div id="telemetryChatsCount" class="text-lg font-bold text-white font-mono">14</div>
         </div>
-        <div class="p-3 rounded-lg border border-[#1f2922] bg-[#0c120e]">
-          <div class="text-[10px] text-[#666] uppercase">Accuracy Gain</div>
-          <div id="telemetryAccuracyGain" class="text-lg font-bold text-matrix-cyan font-mono">+12.4%</div>
+        <div class="p-3 rounded-lg border border-brand-border bg-brand-card">
+          <div class="text-[10px] text-brand-muted uppercase">Accuracy Gain</div>
+          <div id="telemetryAccuracyGain" class="text-lg font-bold text-brand-cyan font-mono">+12.4%</div>
         </div>
       </div>
 
-      <!-- Action: Re-feed 5X Matrix with Learnings -->
-      <button id="refeedWithLearningsBtn" class="w-full py-2 px-3 rounded-lg bg-matrix-green/10 hover:bg-matrix-green/20 border border-matrix-green/40 text-matrix-green text-xs font-semibold flex items-center justify-center space-x-2 transition-all glow-button">
+      <button id="refeedWithLearningsBtn" class="w-full py-2 px-3 rounded-lg bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/40 text-brand-accent text-xs font-semibold flex items-center justify-center space-x-2 transition-all glow-button">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         <span>Re-Feed 5X Matrix with Chat Insights</span>
       </button>
 
-      <!-- Distilled Insights List -->
       <div class="space-y-2 pt-2">
-        <div class="text-[11px] font-bold text-[#888] uppercase tracking-wider">Active Distilled Insights</div>
-        <div id="learningInsightsList" class="space-y-2">
-          <!-- Dynamically populated from /ai/learned-insights -->
-        </div>
+        <div class="text-[11px] font-bold text-brand-muted uppercase tracking-wider">Active Distilled Insights</div>
+        <div id="learningInsightsList" class="space-y-2"></div>
       </div>
     </div>
 
-    <div class="p-3 border-t border-[#18251c] bg-[#050505] text-[11px] text-[#666] text-center">
-      Temporary chats are automatically excluded from training.
+    <div class="p-3 border-t border-brand-border bg-brand-black text-[11px] text-brand-muted text-center">
+      Temporary chats are excluded from learning.
     </div>
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL: AUTH / OTP VERIFICATION (Login-Gated Database Feeding)             -->
+  <!-- MODAL: AUTH / OTP GATEWAY                                                 -->
   <!-- ========================================================================= -->
   <div id="authModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-[#0b0f0c] border border-matrix-green/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 glow-box">
-      <div class="flex items-center justify-between border-b border-[#1f2922] pb-3">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
         <div class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded bg-matrix-green/20 border border-matrix-green flex items-center justify-center font-bold text-xs">S</div>
-          <h3 class="font-sans font-bold text-white text-base">Stroke Matrix Identity Gateway</h3>
+          <div class="w-6 h-6 rounded bg-brand-accent/20 border border-brand-accent flex items-center justify-center font-bold text-xs text-brand-accent">S</div>
+          <h3 class="font-sans font-bold text-white text-base">Stroke Account Gateway</h3>
         </div>
-        <button id="closeAuthModalBtn" class="text-[#777] hover:text-white">✕</button>
+        <button id="closeAuthModalBtn" class="text-brand-muted hover:text-white">x</button>
       </div>
 
-      <!-- Step 1: Send OTP -->
       <div id="otpStep1" class="space-y-3">
-        <p class="text-xs text-[#888] leading-relaxed">
-          Enter your email to receive a single-use 6-digit cryptographic security code. Feeding the 5X VFX database occurs automatically upon successful authentication.
+        <p class="text-xs text-brand-muted leading-relaxed">
+          Enter your email to receive a 6-digit verification code. Database ingestion triggers automatically upon authentication.
         </p>
         <div>
-          <label class="block text-[11px] text-[#777] uppercase mb-1">Email Identity Address</label>
-          <input id="authEmailInput" type="email" placeholder="developer@cyber.matrix" class="w-full bg-[#050505] border border-[#1f2922] focus:border-matrix-green rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Email Address</label>
+          <input id="authEmailInput" type="email" placeholder="developer@cyber.matrix" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
         </div>
-        <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-matrix-green text-black font-semibold text-xs hover:bg-matrix-glow transition-all glow-button">
-          Send 6-Digit OTP Token
+        <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button">
+          Send Verification Code
         </button>
       </div>
 
-      <!-- Step 2: Verify OTP -->
       <div id="otpStep2" class="hidden space-y-3">
-        <p class="text-xs text-matrix-muted leading-relaxed">
-          OTP dispatched to stdout! Enter the 6-digit security key below:
+        <p class="text-xs text-brand-accent leading-relaxed">
+          Verification token dispatched! Enter the 6-digit code below:
         </p>
         <div>
-          <label class="block text-[11px] text-[#777] uppercase mb-1">6-Digit Security Token</label>
-          <input id="authOtpInput" type="text" maxlength="6" placeholder="123456" class="w-full bg-[#050505] border border-matrix-green rounded-lg px-3 py-2 text-white text-lg tracking-widest text-center focus:outline-none font-mono font-bold">
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">6-Digit Code</label>
+          <input id="authOtpInput" type="text" maxlength="6" placeholder="123456" class="w-full bg-brand-input border border-brand-accent rounded-lg px-3 py-2 text-white text-lg tracking-widest text-center focus:outline-none font-mono font-bold">
         </div>
         <div class="flex space-x-2">
           <button id="backToStep1Btn" class="w-1/3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs">Back</button>
-          <button id="verifyOtpBtn" class="w-2/3 py-2 rounded-lg bg-matrix-green text-black font-semibold text-xs hover:bg-matrix-glow transition-all glow-button">
-            Verify & Authenticate
+          <button id="verifyOtpBtn" class="w-2/3 py-2 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button">
+            Verify &amp; Sign In
           </button>
         </div>
       </div>
@@ -636,41 +653,39 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL: 5-CYCLE SEQUENTIAL VFX DATABASE INGESTION MODAL                     -->
+  <!-- MODAL: 5-CYCLE INGESTION RUNNER                                           -->
   <!-- ========================================================================= -->
   <div id="ingestionModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-[#090d0a] border border-matrix-green/50 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 glow-box">
-      <div class="flex items-center justify-between border-b border-[#1f2922] pb-3">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5">
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
         <div>
-          <div class="text-[10px] text-matrix-cyan uppercase tracking-wider font-mono">Sequential Ingestion Engine</div>
+          <div class="text-[10px] text-brand-cyan uppercase tracking-wider font-mono">Sequential Ingestion Engine</div>
           <h3 class="font-sans font-bold text-white text-lg">5-Cycle VFX Matrix Feeding</h3>
         </div>
-        <span class="text-xs px-2 py-0.5 rounded bg-matrix-green/10 border border-matrix-green/30 text-matrix-green font-mono">14,666 Instances</span>
+        <span class="text-xs px-2 py-0.5 rounded bg-brand-accent/10 border border-brand-accent/30 text-brand-accent font-mono">14,666 Instances</span>
       </div>
 
-      <p class="text-xs text-[#888]">
-        Ingesting Elemental Worlds dataset across 5 sequential passes. When Cycle N synthesis is absorbed, Cycle N+1 builds upon it until the AI masters all particle kinematics.
+      <p class="text-xs text-brand-muted">
+        Ingesting Elemental Worlds dataset across 5 sequential passes. When Cycle N synthesis is absorbed, Cycle N+1 builds upon it.
       </p>
 
-      <!-- Cycle Stepper Visual -->
       <div class="grid grid-cols-5 gap-2 text-center text-[10px] font-mono">
-        <div id="step-c1" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">1. Void</div>
-        <div id="step-c2" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">2. Slash</div>
-        <div id="step-c3" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">3. Fire</div>
-        <div id="step-c4" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">4. Aqua</div>
-        <div id="step-c5" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">5. Electro</div>
+        <div id="step-c1" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">1. Void</div>
+        <div id="step-c2" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">2. Slash</div>
+        <div id="step-c3" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">3. Fire</div>
+        <div id="step-c4" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">4. Aqua</div>
+        <div id="step-c5" class="p-2 rounded border border-brand-border bg-brand-surface text-brand-muted">5. Electro</div>
       </div>
 
-      <!-- Current Cycle Terminal Box -->
-      <div class="bg-[#030504] border border-[#1f2922] rounded-xl p-3 font-mono text-xs space-y-2 h-44 overflow-y-auto">
-        <div id="ingestionTerminalLogs" class="text-matrix-green space-y-1">
+      <div class="bg-brand-black border border-brand-border rounded-xl p-3 font-mono text-xs space-y-2 h-44 overflow-y-auto">
+        <div id="ingestionTerminalLogs" class="text-brand-accent space-y-1">
           <div>[STROKE] Initializing 5-Cycle Sequential Ingestion Engine...</div>
         </div>
       </div>
 
       <div class="flex items-center justify-between pt-2">
-        <button id="cancelIngestionBtn" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-[#888]">Dismiss</button>
-        <button id="start5CycleIngestionBtn" class="px-6 py-2 rounded-lg bg-matrix-green text-black font-semibold text-xs hover:bg-matrix-glow transition-all glow-button">
+        <button id="cancelIngestionBtn" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-brand-muted">Dismiss</button>
+        <button id="start5CycleIngestionBtn" class="px-6 py-2 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button">
           Execute 5-Cycle Absorption
         </button>
       </div>
@@ -678,10 +693,9 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- JAVASCRIPT CONTROLLERS & AUDIO / VOICE CLIENT                              -->
+  <!-- JAVASCRIPT LOGIC: File Attachments, MCP Hub, Voice Mode, Clean UI         -->
   <!-- ========================================================================= -->
   <script>
-    // System State
     const state = {
       userEmail: localStorage.getItem('stroke_user_email') || 'developer@cyber.matrix',
       isTemporaryMode: false,
@@ -690,9 +704,9 @@
       selectedModel: 'stroke-neural',
       databaseFed: false,
       isVoiceActive: false,
-      isVoiceListening: false,
       isVoiceMuted: false,
-      chatMessages: []
+      chatMessages: [],
+      pendingAttachments: []
     };
 
     // DOM Elements
@@ -724,34 +738,41 @@
     const userDisplayName = document.getElementById('userDisplayName');
     const userAvatarCircle = document.getElementById('userAvatarCircle');
     const authModal = document.getElementById('authModal');
-    const openContinuousLearningBtn = document.getElementById('openContinuousLearningBtn');
     const learningDrawer = document.getElementById('learningDrawer');
     const closeLearningDrawerBtn = document.getElementById('closeLearningDrawerBtn');
     const refeedWithLearningsBtn = document.getElementById('refeedWithLearningsBtn');
     const ingestionModal = document.getElementById('ingestionModal');
+    const fileAttachmentInput = document.getElementById('fileAttachmentInput');
+    const attachBtn = document.getElementById('attachBtn');
+    const attachmentsPreviewStrip = document.getElementById('attachmentsPreviewStrip');
+    const mcpHubModal = document.getElementById('mcpHubModal');
+    const openMcpHubBtn = document.getElementById('openMcpHubBtn');
+    const openMcpHubTopBtn = document.getElementById('openMcpHubTopBtn');
+    const closeMcpHubBtn = document.getElementById('closeMcpHubBtn');
+    const mcpServersList = document.getElementById('mcpServersList');
+    const submitConnectMcpBtn = document.getElementById('submitConnectMcpBtn');
 
-    // Speech Recognition & Synthesis APIs
+    // Speech APIs
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let voiceRecognition = null;
     let dictationRecognition = null;
 
-    // Initialize UI on load
     document.addEventListener('DOMContentLoaded', () => {
       updateUserIdentityUI();
       loadUserChats();
       fetchLearningTelemetry();
       setupSpeechEngines();
+      loadConnectedMcpServers();
     });
 
-    // 1. User Identity & Popover UI
+    // 1. Identity
     function updateUserIdentityUI() {
       const email = state.userEmail;
       popoverEmail.textContent = email;
       const namePart = email.split('@')[0];
       const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1);
       userDisplayName.textContent = capitalized;
-      const initials = namePart.slice(0, 2).toUpperCase();
-      userAvatarCircle.textContent = initials;
+      userAvatarCircle.textContent = namePart.slice(0, 2).toUpperCase();
     }
 
     userProfileBtn.addEventListener('click', (e) => {
@@ -760,7 +781,7 @@
     });
     document.addEventListener('click', () => profilePopover.classList.add('hidden'));
 
-    // 2. Sidebar Collapse / Expand
+    // 2. Sidebar Collapse
     collapseSidebarBtn.addEventListener('click', () => {
       sidebar.classList.add('-ml-64');
       expandSidebarBtn.classList.remove('hidden');
@@ -770,7 +791,7 @@
       expandSidebarBtn.classList.add('hidden');
     });
 
-    // 3. Temporary Chat Toggle (Matching Screenshot!)
+    // 3. Temporary Chat Toggle
     temporaryChatToggleBtn.addEventListener('click', () => {
       toggleTemporaryChatMode(!state.isTemporaryMode);
     });
@@ -782,14 +803,14 @@
       state.isTemporaryMode = enabled;
       if (enabled) {
         tempChatBanner.classList.remove('hidden');
-        temporaryChatToggleBtn.classList.add('border-matrix-amber', 'text-matrix-amber', 'bg-amber-950/20');
-        tempChatIndicator.classList.remove('bg-[#555]');
-        tempChatIndicator.classList.add('bg-matrix-amber', 'animate-pulse');
+        temporaryChatToggleBtn.classList.add('border-brand-amber', 'text-brand-amber', 'bg-amber-950/20');
+        tempChatIndicator.classList.remove('bg-brand-border');
+        tempChatIndicator.classList.add('bg-brand-amber', 'animate-pulse');
       } else {
         tempChatBanner.classList.add('hidden');
-        temporaryChatToggleBtn.classList.remove('border-matrix-amber', 'text-matrix-amber', 'bg-amber-950/20');
-        tempChatIndicator.classList.add('bg-[#555]');
-        tempChatIndicator.classList.remove('bg-matrix-amber', 'animate-pulse');
+        temporaryChatToggleBtn.classList.remove('border-brand-amber', 'text-brand-amber', 'bg-amber-950/20');
+        tempChatIndicator.classList.add('bg-brand-border');
+        tempChatIndicator.classList.remove('bg-brand-amber', 'animate-pulse');
       }
     }
 
@@ -797,20 +818,195 @@
     thinkModeBtn.addEventListener('click', () => {
       state.thinkMode = !state.thinkMode;
       if (state.thinkMode) {
-        thinkModeBtn.classList.add('border-matrix-green', 'text-matrix-green', 'bg-matrix-green/10');
+        thinkModeBtn.classList.add('border-brand-accent', 'text-brand-accent', 'bg-brand-accent/10');
       } else {
-        thinkModeBtn.classList.remove('border-matrix-green', 'text-matrix-green', 'bg-matrix-green/10');
+        thinkModeBtn.classList.remove('border-brand-accent', 'text-brand-accent', 'bg-brand-accent/10');
       }
     });
 
-    // 5. New Chat Action
-    newChatBtn.addEventListener('click', () => {
-      startNewConversation();
+    // 5. Model Selector Dropdown
+    document.getElementById('modelDropdownBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('modelDropdownMenu').classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => document.getElementById('modelDropdownMenu').classList.add('hidden'));
+    document.querySelectorAll('.model-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        state.selectedModel = opt.getAttribute('data-model');
+        document.getElementById('selectedModelLabel').textContent = opt.querySelector('.font-semibold').textContent;
+        document.getElementById('modelDropdownMenu').classList.add('hidden');
+      });
     });
 
+    // 6. PLUS BUTTON (+) FOR ATTACHING CODE, IMAGES, TEXT FILES
+    attachBtn.addEventListener('click', () => {
+      fileAttachmentInput.click();
+    });
+
+    fileAttachmentInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      for (const file of files) {
+        const isImage = file.type.startsWith('image/');
+        const reader = new FileReader();
+
+        if (isImage) {
+          reader.onload = (event) => {
+            const base64Data = event.target.result;
+            state.pendingAttachments.push({
+              name: file.name,
+              content: base64Data,
+              type: file.type,
+              is_image: true,
+              size: file.size
+            });
+            renderAttachmentPreviews();
+          };
+          reader.readAsDataURL(file);
+        } else {
+          reader.onload = (event) => {
+            const textContent = event.target.result;
+            state.pendingAttachments.push({
+              name: file.name,
+              content: textContent,
+              type: file.type || 'text/plain',
+              is_image: false,
+              size: file.size
+            });
+            renderAttachmentPreviews();
+          };
+          reader.readAsText(file);
+        }
+      }
+      fileAttachmentInput.value = '';
+    });
+
+    function renderAttachmentPreviews() {
+      if (state.pendingAttachments.length === 0) {
+        attachmentsPreviewStrip.classList.add('hidden');
+        attachmentsPreviewStrip.innerHTML = '';
+        return;
+      }
+      attachmentsPreviewStrip.classList.remove('hidden');
+      attachmentsPreviewStrip.innerHTML = '';
+
+      state.pendingAttachments.forEach((att, idx) => {
+        const chip = document.createElement('div');
+        chip.className = 'flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-brand-surface border border-brand-border text-xs text-white';
+        const sizeKb = Math.round(att.size / 1024) || 1;
+
+        if (att.is_image) {
+          chip.innerHTML = `
+            <img src="${att.content}" class="w-5 h-5 rounded object-cover border border-brand-border">
+            <span class="truncate max-w-[120px]">${escapeHtml(att.name)}</span>
+            <span class="text-[10px] text-brand-muted">${sizeKb}KB</span>
+            <button onclick="removePendingAttachment(${idx})" class="text-brand-muted hover:text-brand-danger ml-1">x</button>
+          `;
+        } else {
+          chip.innerHTML = `
+            <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span class="truncate max-w-[120px] font-mono text-[11px]">${escapeHtml(att.name)}</span>
+            <span class="text-[10px] text-brand-muted">${sizeKb}KB</span>
+            <button onclick="removePendingAttachment(${idx})" class="text-brand-muted hover:text-brand-danger ml-1">x</button>
+          `;
+        }
+        attachmentsPreviewStrip.appendChild(chip);
+      });
+      sendPromptBtn.disabled = false;
+    }
+
+    window.removePendingAttachment = function(idx) {
+      state.pendingAttachments.splice(idx, 1);
+      renderAttachmentPreviews();
+      if (!promptInput.value.trim() && state.pendingAttachments.length === 0) {
+        sendPromptBtn.disabled = true;
+      }
+    };
+
+    // 7. Universal MCP Hub Controllers
+    openMcpHubBtn.addEventListener('click', openMcpModal);
+    openMcpHubTopBtn.addEventListener('click', openMcpModal);
+    closeMcpHubBtn.addEventListener('click', () => mcpHubModal.classList.add('hidden'));
+
+    function openMcpModal() {
+      mcpHubModal.classList.remove('hidden');
+      loadConnectedMcpServers();
+    }
+
+    async function loadConnectedMcpServers() {
+      try {
+        const res = await fetch('/mcp/servers');
+        if (!res.ok) return;
+        const servers = await res.json();
+        const serverKeys = Object.keys(servers);
+        document.getElementById('mcpConnectedCountBadge').textContent = `${serverKeys.length} Live`;
+
+        mcpServersList.innerHTML = '';
+        serverKeys.forEach(k => {
+          const s = servers[k];
+          const div = document.createElement('div');
+          div.className = 'p-3 rounded-lg border border-brand-border bg-brand-surface flex items-start justify-between text-xs';
+          div.innerHTML = `
+            <div class="space-y-1">
+              <div class="flex items-center space-x-2">
+                <span class="font-semibold text-white">${escapeHtml(s.name)}</span>
+                <span class="text-[9px] px-1.5 py-0.2 rounded bg-brand-accent/20 text-brand-accent font-mono">${s.connected ? 'Connected' : 'Offline'}</span>
+              </div>
+              <div class="text-[11px] text-brand-muted">${escapeHtml(s.description || '')}</div>
+              <div class="text-[10px] text-brand-accent font-mono">${s.tools ? s.tools.length : 0} tools available</div>
+            </div>
+            ${s.is_custom ? `
+              <button onclick="disconnectCustomMcpServer('${k}')" class="text-xs text-brand-danger hover:underline">Disconnect</button>
+            ` : '<span class="text-[10px] text-brand-muted">Core Built-in</span>'}
+          `;
+          mcpServersList.appendChild(div);
+        });
+      } catch(e){}
+    }
+
+    submitConnectMcpBtn.addEventListener('click', async () => {
+      const id = document.getElementById('newMcpIdInput').value.trim();
+      const name = document.getElementById('newMcpNameInput').value.trim();
+      const url = document.getElementById('newMcpUrlInput').value.trim();
+
+      if (!id || !name || !url) return;
+      submitConnectMcpBtn.disabled = true;
+      submitConnectMcpBtn.textContent = 'Connecting...';
+
+      try {
+        const res = await fetch('/mcp/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ server_id: id, name: name, url: url })
+        });
+        if (res.ok) {
+          document.getElementById('newMcpIdInput').value = '';
+          document.getElementById('newMcpNameInput').value = '';
+          document.getElementById('newMcpUrlInput').value = '';
+          loadConnectedMcpServers();
+        }
+      } catch(e){}
+      submitConnectMcpBtn.disabled = false;
+      submitConnectMcpBtn.textContent = 'Connect MCP Server';
+    });
+
+    window.disconnectCustomMcpServer = async function(serverId) {
+      try {
+        await fetch('/mcp/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ server_id: serverId })
+        });
+        loadConnectedMcpServers();
+      } catch(e){}
+    };
+
+    // 8. New Chat & Prompt Handling
+    newChatBtn.addEventListener('click', startNewConversation);
     function startNewConversation() {
       state.activeSessionId = 'session-' + Date.now();
       state.chatMessages = [];
+      state.pendingAttachments = [];
+      renderAttachmentPreviews();
       messagesList.innerHTML = '';
       messagesList.classList.add('hidden');
       emptyStateHero.classList.remove('hidden');
@@ -818,7 +1014,6 @@
       promptInput.focus();
     }
 
-    // 6. Prompt Chips Click Handlers
     document.querySelectorAll('.prompt-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const text = chip.querySelector('span:last-child').textContent;
@@ -827,11 +1022,10 @@
       });
     });
 
-    // 7. Auto-growing Textarea & Enter to Send
     promptInput.addEventListener('input', () => {
       promptInput.style.height = 'auto';
       promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
-      sendPromptBtn.disabled = !promptInput.value.trim();
+      sendPromptBtn.disabled = !promptInput.value.trim() && state.pendingAttachments.length === 0;
     });
 
     promptInput.addEventListener('keydown', (e) => {
@@ -843,23 +1037,26 @@
 
     sendPromptBtn.addEventListener('click', submitUserPrompt);
 
-    // 8. Submit Prompt Controller
+    // 9. Submit Prompt (Including Attached Files)
     async function submitUserPrompt() {
       const text = promptInput.value.trim();
-      if (!text) return;
+      const currentAttachments = [...state.pendingAttachments];
 
-      // Switch view from hero to message list
+      if (!text && currentAttachments.length === 0) return;
+
       emptyStateHero.classList.add('hidden');
       messagesList.classList.remove('hidden');
 
-      // Append User message
-      appendMessage('user', text);
-      state.chatMessages.push({ role: 'user', content: text });
+      // Append User message with attachment previews
+      appendMessage('user', text || '(Attached files provided)', { attachments: currentAttachments });
+      state.chatMessages.push({ role: 'user', content: text || 'Analyze the attached files.' });
+
       promptInput.value = '';
       promptInput.style.height = 'auto';
+      state.pendingAttachments = [];
+      renderAttachmentPreviews();
       sendPromptBtn.disabled = true;
 
-      // Append temporary typing indicator
       const typingId = 'typing-' + Date.now();
       appendTypingIndicator(typingId);
 
@@ -871,6 +1068,7 @@
           is_temporary: state.isTemporaryMode,
           session_id: state.activeSessionId,
           think_mode: state.thinkMode,
+          attachments: currentAttachments,
           web_search: true
         };
 
@@ -898,7 +1096,6 @@
           learning_recorded: data.learning_recorded
         });
 
-        // If continuous learning was recorded, refresh badge count
         if (data.learning_recorded) {
           fetchLearningTelemetry();
         }
@@ -909,31 +1106,44 @@
       }
     }
 
-    // 9. Message Renderer
+    // 10. Message Renderer
     function appendMessage(role, content, meta = {}) {
       const isUser = role === 'user';
       const msgDiv = document.createElement('div');
       msgDiv.className = `w-full flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`;
 
       if (isUser) {
+        let attHtml = '';
+        if (meta.attachments && meta.attachments.length > 0) {
+          attHtml = '<div class="flex flex-wrap gap-1.5 mb-2">';
+          meta.attachments.forEach(att => {
+            if (att.is_image) {
+              attHtml += `<img src="${att.content}" class="w-16 h-16 rounded-lg object-cover border border-brand-border">`;
+            } else {
+              attHtml += `<span class="px-2 py-0.5 rounded bg-white/10 text-[10px] font-mono">[File: ${escapeHtml(att.name)}]</span>`;
+            }
+          });
+          attHtml += '</div>';
+        }
+
         msgDiv.innerHTML = `
           <div class="max-w-[85%] bg-[#122417] border border-[#23422c] text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed font-sans">
+            ${attHtml}
             ${escapeHtml(content)}
           </div>
         `;
       } else {
-        // AI Message with Tools & Markdown
         let toolChipHtml = '';
         if (meta.tool_invoked) {
           toolChipHtml = `
             <div class="mb-2 flex flex-wrap gap-1.5 text-[11px] font-mono">
-              <span class="px-2 py-0.5 rounded-full bg-matrix-green/15 text-matrix-green border border-matrix-green/30 flex items-center space-x-1">
-                <span>⚡ Tool:</span>
+              <span class="px-2 py-0.5 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/30 flex items-center space-x-1">
+                <span>Tool:</span>
                 <span class="font-bold">${meta.tool_name || 'autonomous_rag'}</span>
               </span>
               ${meta.learning_recorded ? `
-                <span class="px-2 py-0.5 rounded-full bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 flex items-center space-x-1">
-                  <span>🧠 Distilled into 5X loop</span>
+                <span class="px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/30 flex items-center space-x-1">
+                  <span>Distilled into 5X loop</span>
                 </span>
               ` : ''}
             </div>
@@ -944,7 +1154,7 @@
 
         msgDiv.innerHTML = `
           <div class="flex items-start space-x-3 max-w-[90%]">
-            <div class="w-7 h-7 rounded-lg bg-matrix-green/20 border border-matrix-green text-matrix-green font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text mt-0.5">
+            <div class="w-7 h-7 rounded-lg bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text mt-0.5">
               S
             </div>
             <div class="min-w-0">
@@ -952,10 +1162,10 @@
               <div class="prose prose-invert max-w-none text-sm text-[#e0e0e0] leading-relaxed font-sans">
                 ${formattedBody}
               </div>
-              <div class="mt-2 flex items-center space-x-2 text-[10px] text-[#666]">
-                <button onclick="speakText('${encodeURIComponent(content.replace(/'/g, ''))}')" class="hover:text-matrix-green flex items-center space-x-1">
+              <div class="mt-2 flex items-center space-x-2 text-[10px] text-brand-muted">
+                <button onclick="speakText('${encodeURIComponent(content.replace(/'/g, ''))}')" class="hover:text-brand-accent flex items-center space-x-1">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
-                  <span>Read</span>
+                  <span>Read aloud</span>
                 </button>
               </div>
             </div>
@@ -975,11 +1185,11 @@
       div.id = id;
       div.className = 'w-full flex justify-start items-center space-x-3';
       div.innerHTML = `
-        <div class="w-7 h-7 rounded-lg bg-matrix-green/20 border border-matrix-green text-matrix-green font-bold text-xs flex items-center justify-center glow-text">S</div>
+        <div class="w-7 h-7 rounded-lg bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center glow-text">S</div>
         <div class="flex items-center space-x-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-          <div class="w-1.5 h-1.5 rounded-full bg-matrix-green animate-bounce"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-matrix-green animate-bounce" style="animation-delay: 0.15s"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-matrix-green animate-bounce" style="animation-delay: 0.3s"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-bounce"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-bounce" style="animation-delay: 0.15s"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-bounce" style="animation-delay: 0.3s"></div>
         </div>
       `;
       messagesList.appendChild(div);
@@ -994,14 +1204,10 @@
       if (el) el.remove();
     }
 
-    // 10. Speech-to-Text & Interactive Voice Mode
+    // 11. Speech Engines & Voice Mode
     function setupSpeechEngines() {
-      if (!SpeechRecognition) {
-        console.warn('SpeechRecognition not supported in browser.');
-        return;
-      }
+      if (!SpeechRecognition) return;
 
-      // Voice Chat Recognition instance
       voiceRecognition = new SpeechRecognition();
       voiceRecognition.continuous = true;
       voiceRecognition.interimResults = true;
@@ -1013,17 +1219,11 @@
           transcript += event.results[i][0].transcript;
         }
         voiceLiveTranscript.textContent = `"${transcript}"`;
-
         if (event.results[event.results.length - 1].isFinal) {
           handleVoiceTurnComplete(transcript);
         }
       };
 
-      voiceRecognition.onerror = (e) => {
-        console.warn('Voice recognition error:', e.error);
-      };
-
-      // Dictation Recognition instance (for input textarea)
       dictationRecognition = new SpeechRecognition();
       dictationRecognition.continuous = false;
       dictationRecognition.interimResults = false;
@@ -1037,11 +1237,7 @@
       };
     }
 
-    // Circular Audio Button -> Launch Voice Chat Room (like ChatGPT!)
-    startVoiceChatBtn.addEventListener('click', () => {
-      openVoiceModal();
-    });
-
+    startVoiceChatBtn.addEventListener('click', openVoiceModal);
     closeVoiceModalBtn.addEventListener('click', closeVoiceModal);
     endVoiceCallBtn.addEventListener('click', closeVoiceModal);
 
@@ -1049,7 +1245,7 @@
       voiceModal.classList.remove('hidden');
       state.isVoiceActive = true;
       voiceStateLabel.textContent = 'Listening... Speak naturally';
-      voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300';
+      voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-brand-accent/40 flex items-center justify-center voice-orb-active transition-all duration-300';
       if (voiceRecognition && !state.isVoiceMuted) {
         try { voiceRecognition.start(); } catch(e){}
       }
@@ -1064,7 +1260,6 @@
       }
     }
 
-    // Toggle Voice Mute
     toggleVoiceMuteBtn.addEventListener('click', () => {
       state.isVoiceMuted = !state.isVoiceMuted;
       if (state.isVoiceMuted) {
@@ -1078,21 +1273,18 @@
       }
     });
 
-    // Interrupt AI Voice Output
     interruptVoiceBtn.addEventListener('click', () => {
       window.speechSynthesis.cancel();
-      voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300';
+      voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-brand-accent/40 flex items-center justify-center voice-orb-active transition-all duration-300';
       voiceStateLabel.textContent = 'Interrupted. Listening again...';
       if (voiceRecognition && !state.isVoiceMuted) {
         try { voiceRecognition.start(); } catch(e){}
       }
     });
 
-    // Process Voice Prompt
     async function handleVoiceTurnComplete(spokenText) {
       if (!spokenText.trim()) return;
-
-      voiceStateLabel.textContent = 'Stroke is synthesizing...';
+      voiceStateLabel.textContent = 'Synthesizing response...';
       voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-cyan-400/60 flex items-center justify-center voice-orb-speaking transition-all duration-300';
 
       try {
@@ -1113,25 +1305,21 @@
 
         const data = await res.json();
         const reply = data.message || 'I have processed your query.';
-
-        // Strip markdown for speech output
         const cleanSpeechText = reply.replace(/```[\s\S]*?```/g, 'Code block generated.').replace(/[#*`_]/g, '');
         voiceLiveTranscript.textContent = `Stroke: "${cleanSpeechText.slice(0, 150)}..."`;
-        voiceStateLabel.textContent = 'Stroke is speaking...';
+        voiceStateLabel.textContent = 'Speaking...';
 
         speakText(cleanSpeechText, () => {
           if (state.isVoiceActive && !state.isVoiceMuted) {
             voiceStateLabel.textContent = 'Listening again...';
-            voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300';
+            voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-brand-accent/40 flex items-center justify-center voice-orb-active transition-all duration-300';
           }
         });
-
       } catch (err) {
         voiceStateLabel.textContent = 'Error processing speech.';
       }
     }
 
-    // Text-to-Speech Output
     function speakText(rawText, onEndCallback) {
       if (!window.speechSynthesis) return;
       window.speechSynthesis.cancel();
@@ -1143,19 +1331,18 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    // Mic Dictation for Input Box
     micDictationBtn.addEventListener('click', () => {
       if (dictationRecognition) {
         try {
           dictationRecognition.start();
-          micDictationBtn.classList.add('text-matrix-green', 'bg-matrix-green/10');
-          setTimeout(() => micDictationBtn.classList.remove('text-matrix-green', 'bg-matrix-green/10'), 4000);
+          micDictationBtn.classList.add('text-brand-accent', 'bg-brand-accent/10');
+          setTimeout(() => micDictationBtn.classList.remove('text-brand-accent', 'bg-brand-accent/10'), 4000);
         } catch(e){}
       }
     });
 
-    // 11. Continuous Learning Telemetry & Drawer
-    openContinuousLearningBtn.addEventListener('click', () => {
+    // 12. Continuous Learning Drawer
+    document.getElementById('openContinuousLearningBtn').addEventListener('click', () => {
       learningDrawer.classList.remove('hidden');
       fetchLearningTelemetry();
     });
@@ -1167,7 +1354,7 @@
         if (!res.ok) return;
         const data = await res.json();
         const telem = data.telemetry || {};
-        document.getElementById('insightsCountHeader').textContent = telem.active_insights_count || '6';
+        document.getElementById('insightsCountHeader').textContent = telem.active_insights_count || '7';
         document.getElementById('telemetryChatsCount').textContent = telem.total_chats_distilled || '14';
         document.getElementById('telemetryAccuracyGain').textContent = telem.accuracy_enhancement_ratio || '+12.4%';
 
@@ -1175,13 +1362,13 @@
         list.innerHTML = '';
         (data.insights || []).slice(0, 8).forEach(ins => {
           const div = document.createElement('div');
-          div.className = 'p-2.5 rounded-lg border border-[#1a251e] bg-[#070b08] space-y-1';
+          div.className = 'p-2.5 rounded-lg border border-brand-border bg-brand-card space-y-1';
           div.innerHTML = `
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-matrix-green font-mono">${escapeHtml(ins.topic)}</span>
-              <span class="text-[9px] px-1 py-0.2 rounded bg-matrix-green/10 text-matrix-green">${ins.domain}</span>
+              <span class="text-xs font-semibold text-brand-accent font-mono">${escapeHtml(ins.topic)}</span>
+              <span class="text-[9px] px-1 py-0.2 rounded bg-brand-accent/10 text-brand-accent">${ins.domain}</span>
             </div>
-            <p class="text-[11px] text-[#888] leading-tight">${escapeHtml(ins.summary)}</p>
+            <p class="text-[11px] text-brand-muted leading-tight">${escapeHtml(ins.summary)}</p>
           `;
           list.appendChild(div);
         });
@@ -1190,26 +1377,25 @@
 
     refeedWithLearningsBtn.addEventListener('click', async () => {
       refeedWithLearningsBtn.disabled = true;
-      refeedWithLearningsBtn.innerHTML = '<span>Refeeding 5X Matrix...</span>';
+      refeedWithLearningsBtn.textContent = 'Refeeding 5X Matrix...';
       try {
-        const res = await fetch('/ai/refeed-with-learnings', {
+        await fetch('/ai/refeed-with-learnings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: state.userEmail })
         });
-        const data = await res.json();
-        refeedWithLearningsBtn.innerHTML = '<span>✓ 5X Matrix Updated with Learnings!</span>';
+        refeedWithLearningsBtn.textContent = 'Refeed Complete';
         setTimeout(() => {
           refeedWithLearningsBtn.disabled = false;
-          refeedWithLearningsBtn.innerHTML = '<span>Re-Feed 5X Matrix with Chat Insights</span>';
+          refeedWithLearningsBtn.textContent = 'Re-Feed 5X Matrix with Chat Insights';
         }, 3000);
       } catch(e) {
-        refeedWithLearningsBtn.innerHTML = '<span>Failed to refeed</span>';
+        refeedWithLearningsBtn.textContent = 'Failed';
         refeedWithLearningsBtn.disabled = false;
       }
     });
 
-    // 12. Load Chat Sessions
+    // 13. Chats Loader
     async function loadUserChats() {
       try {
         const res = await fetch(`/chats?email=${encodeURIComponent(state.userEmail)}`);
@@ -1219,21 +1405,21 @@
         list.innerHTML = '';
         (data.chats || []).forEach(chat => {
           const btn = document.createElement('button');
-          btn.className = 'chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-[#888] hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group';
+          btn.className = 'chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-brand-muted hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group';
           btn.innerHTML = `
             <span class="truncate pr-2">${escapeHtml(chat.title)}</span>
-            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Remove</span>
           `;
           btn.addEventListener('click', () => {
-            document.querySelectorAll('.chat-session-item').forEach(b => b.classList.remove('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-matrix-green'));
-            btn.classList.add('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-matrix-green');
+            document.querySelectorAll('.chat-session-item').forEach(b => b.classList.remove('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent'));
+            btn.classList.add('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent');
           });
           list.appendChild(btn);
         });
       } catch(e){}
     }
 
-    // 13. Auth Modal & Triggering
+    // 14. Auth Modal
     document.getElementById('authModalTriggerBtn').addEventListener('click', () => {
       profilePopover.classList.add('hidden');
       authModal.classList.remove('hidden');
@@ -1270,13 +1456,12 @@
           localStorage.setItem('stroke_user_email', email);
           updateUserIdentityUI();
           authModal.classList.add('hidden');
-          // Launch 5X Ingestion Modal automatically after login
           ingestionModal.classList.remove('hidden');
         }
       } catch(e){}
     });
 
-    // 14. 5-Cycle Ingestion Runner
+    // 15. Ingestion Runner
     document.getElementById('trigger5xMatrixBtn').addEventListener('click', () => {
       profilePopover.classList.add('hidden');
       ingestionModal.classList.remove('hidden');
@@ -1292,30 +1477,25 @@
       let prevSynth = '';
       for (let c = 1; c <= 5; c++) {
         const stepEl = document.getElementById(`step-c${c}`);
-        stepEl.className = 'p-2 rounded border border-matrix-green bg-matrix-green/10 text-matrix-green animate-pulse';
-
-        terminal.innerHTML += `<div>[CYCLE ${c}/5] Ingesting dataset slice from vfx_data.json & vfx_dump.txt...</div>`;
+        stepEl.className = 'p-2 rounded border border-brand-accent bg-brand-accent/10 text-brand-accent animate-pulse';
+        terminal.innerHTML += `<div>[CYCLE ${c}/5] Ingesting dataset slice from vfx_data.json &amp; vfx_dump.txt...</div>`;
 
         try {
           const res = await fetch('/database/feed-cycle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: state.userEmail,
-              cycle: c,
-              previous_synthesis: prevSynth
-            })
+            body: JSON.stringify({ email: state.userEmail, cycle: c, previous_synthesis: prevSynth })
           });
           const data = await res.json();
           prevSynth = data.ai_synthesis || '';
-          terminal.innerHTML += `<div class="text-white">✓ Record ${data.record.record_id} committed to Firestore. Load: ${data.record.metric_load}%</div>`;
-          stepEl.className = 'p-2 rounded border border-matrix-green bg-matrix-green/20 text-matrix-green font-bold';
+          terminal.innerHTML += `<div class="text-white">Record ${data.record.record_id} committed. Load: ${data.record.metric_load}%</div>`;
+          stepEl.className = 'p-2 rounded border border-brand-accent bg-brand-accent/20 text-brand-accent font-bold';
         } catch(e) {
           terminal.innerHTML += `<div class="text-red-400">Error in Cycle ${c}</div>`;
         }
       }
 
-      terminal.innerHTML += `<div class="text-matrix-glow font-bold mt-2">>>> 5X DATABASE FEEDING COMPLETE! STRK-BAT-001..005 ACTIVE <<<</div>`;
+      terminal.innerHTML += `<div class="text-brand-accent font-bold mt-2">Database feeding completed successfully.</div>`;
       btn.textContent = 'Ingestion Succeeded';
       setTimeout(() => ingestionModal.classList.add('hidden'), 2000);
     });
@@ -1327,25 +1507,21 @@
 
     function formatMarkdownText(md) {
       if (!md) return '';
-      // Code blocks
       let html = md.replace(/```([a-zA-Z0-9_]*)\n([\s\S]*?)```/g, (match, lang, code) => {
         return `
-          <div class="my-3 rounded-xl border border-[#1f2922] bg-[#070b08] overflow-hidden">
-            <div class="flex items-center justify-between px-3 py-1.5 bg-[#0e1611] border-b border-[#1f2922] text-[10px] text-[#777] font-mono">
+          <div class="my-3 rounded-xl border border-brand-border bg-brand-surface overflow-hidden">
+            <div class="flex items-center justify-between px-3 py-1.5 bg-brand-card border-b border-brand-border text-[10px] text-brand-muted font-mono">
               <span>${lang || 'code'}</span>
-              <button onclick="navigator.clipboard.writeText(this.getAttribute('data-code'))" data-code="${escapeHtml(code)}" class="hover:text-matrix-green">Copy</button>
+              <button onclick="navigator.clipboard.writeText(this.getAttribute('data-code'))" data-code="${escapeHtml(code)}" class="hover:text-brand-accent">Copy</button>
             </div>
-            <pre class="p-3 text-xs font-mono text-matrix-green overflow-x-auto"><code>${escapeHtml(code)}</code></pre>
+            <pre class="p-3 text-xs font-mono text-brand-accent overflow-x-auto"><code>${escapeHtml(code)}</code></pre>
           </div>
         `;
       });
-      // Headers
       html = html.replace(/^### (.*$)/gim, '<h3 class="font-bold text-white text-base mt-2 mb-1">$1</h3>');
-      html = html.replace(/^#### (.*$)/gim, '<h4 class="font-semibold text-matrix-green text-sm mt-2 mb-1">$1</h4>');
-      // Bold
+      html = html.replace(/^#### (.*$)/gim, '<h4 class="font-semibold text-brand-accent text-sm mt-2 mb-1">$1</h4>');
       html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>');
-      // Lists
-      html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start space-x-1.5 my-0.5"><span class="text-matrix-green">•</span><span>$1</span></div>');
+      html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start space-x-1.5 my-0.5"><span class="text-brand-accent">•</span><span>$1</span></div>');
       return html;
     }
   </script>
