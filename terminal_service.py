@@ -120,7 +120,8 @@ def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
 
     # 2. Check destructive deletion utilities
     if clean_cmd in DESTRUCTIVE_COMMANDS:
-        return SecurityDecision.REQUIRES_APPROVAL, f"Destructive file/process operation '{clean_cmd} {' '.join(args)}' requires user authorization."
+        target = " ".join(args) if args else "this file/directory"
+        return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to delete {target}? [Allow] [Decline]"
 
     # 3. Check Git operations
     if clean_cmd == "git":
@@ -128,17 +129,24 @@ def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
         if subcmd in GIT_ALLOWED_SUBCOMMANDS:
             return SecurityDecision.ALLOWED, "Routine Git read-only inspection."
         if subcmd in GIT_APPROVAL_SUBCOMMANDS:
-            return SecurityDecision.REQUIRES_APPROVAL, f"Git modification 'git {subcmd}' requires user confirmation."
-        return SecurityDecision.REQUIRES_APPROVAL, f"Git operation 'git {subcmd}' requires user confirmation."
+            return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
+        return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
 
     # 4. Check Package Managers (install/update require approval; test/list allowed)
     if clean_cmd in PACKAGE_MANAGERS:
         subcmd = args[0].lower() if args else ""
         if subcmd in ("test", "run", "list", "show", "--version", "-v"):
             return SecurityDecision.ALLOWED, f"Package manager diagnostics '{clean_cmd} {subcmd}'."
-        if subcmd in ("install", "add", "remove", "uninstall", "update", "upgrade"):
-            return SecurityDecision.REQUIRES_APPROVAL, f"Package modification '{clean_cmd} {subcmd}' requires user authorization."
-        return SecurityDecision.REQUIRES_APPROVAL, f"Package manager command '{clean_cmd} {subcmd}' requires user authorization."
+        if subcmd in ("install", "add"):
+            pkgs = " ".join(args[1:]) if len(args) > 1 else "required packages"
+            return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to install {pkgs}? [Allow] [Decline]"
+        if subcmd in ("update", "upgrade"):
+            target = " ".join(args[1:]) if len(args) > 1 else f"{clean_cmd} to the latest version"
+            return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to update {target}? [Allow] [Decline]"
+        if subcmd in ("remove", "uninstall"):
+            pkgs = " ".join(args[1:]) if len(args) > 1 else "this package"
+            return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to delete {pkgs}? [Allow] [Decline]"
+        return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run {clean_cmd} {' '.join(args)}? [Allow] [Decline]"
 
     # 5. Check Routine Allowed Commands
     if clean_cmd in SAFE_ROUTINE_COMMANDS:
@@ -251,9 +259,20 @@ class TerminalSession:
                     "state": "failed"
                 }
 
-        # Resolve command binary (prefer venv binaries if available)
-        venv_bin = os.path.join(self.workspace_path, "venv", "bin", command)
-        cmd_path = venv_bin if os.path.exists(venv_bin) and os.access(venv_bin, os.X_OK) else command
+        # Resolve command binary (prefer venv binaries, local node bin, and system paths)
+        extra_search_dirs = [
+            os.path.join(self.workspace_path, "venv", "bin"),
+            os.path.expanduser("~/.local/node/bin"),
+            os.path.expanduser("~/.aftman/bin"),
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+        ]
+        cmd_path = command
+        for d in extra_search_dirs:
+            candidate = os.path.join(d, command)
+            if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+                cmd_path = candidate
+                break
 
         # Verify command security policy
         decision, rationale = evaluate_command_security(command, args)
@@ -291,7 +310,7 @@ class TerminalSession:
                 "command": command,
                 "args": args,
                 "rationale": rationale,
-                "message": f"Action requires user authorization: {rationale}. AI must solicit approval before proceeding."
+                "message": f"{rationale}"
             }
 
         # Safe for routine execution: Launch real background process
@@ -304,6 +323,10 @@ class TerminalSession:
         stderr_chunks = []
 
         try:
+            env = os.environ.copy()
+            extra_path_str = ":".join(d for d in extra_search_dirs if os.path.isdir(d))
+            env["PATH"] = f"{extra_path_str}:{env.get('PATH', '')}"
+
             # shell=False ensures structured arguments and prevents shell injection
             proc = subprocess.Popen(
                 full_argv,
@@ -312,7 +335,7 @@ class TerminalSession:
                 stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL,
                 shell=False,
-                env=os.environ.copy()
+                env=env
             )
             self.current_process = proc
 

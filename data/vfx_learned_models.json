@@ -437,5 +437,60 @@
     "god_tier_score": 9.66,
     "learned_dynamically": true,
     "learned_at": "2026-11-08T11:41:55.861041+00:00"
+  },
+  "GodTier_Aqua_Script_a_smooth_shockwave_in": {
+    "name": "GodTier_Aqua_Script_a_smooth_shockwave_in",
+    "domain": "Aqua",
+    "element": "Aqua",
+    "particle_emitters": [
+      {
+        "name": "Aqua_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 82,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://18462751521"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Aqua_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Aqua_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://18462751521",
+      "rbxassetid://13780268621"
+    ],
+    "snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Studio session verified for: Script a smooth shockwave in Luau`\n\n**Smooth Shockwave in Luau**\n\n**Generated Script**\n```lua\n-- Smooth Shockwave in Luau\n\n-- Function to create a smooth shockwave effect\nlocal function createSh",
+    "god_tier_score": 9.47,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T12:06:55.636838+00:00"
   }
 }
