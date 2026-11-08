@@ -170,6 +170,9 @@ def get_all_mcp_servers() -> Dict[str, Any]:
     return servers_summary
 
 
+get_mcp_servers_info = get_all_mcp_servers
+
+
 def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
     """Transforms registered MCP tools into standard function schemas for the AI."""
     ai_tools = []
