@@ -988,7 +988,7 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
     """Returns the internal tool schemas exposed to Stroke's AI agent."""
     return [
         {
-            "name": "terminal_create_session",
+            "name": "create_terminal",
             "description": "Initializes a silent, private background terminal session in the project workspace.",
             "parameters": {
                 "type": "object",
@@ -1001,7 +1001,7 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             }
         },
         {
-            "name": "terminal_run",
+            "name": "run_command",
             "description": "Executes a development check, compiler, test runner, or background process in the background terminal.",
             "parameters": {
                 "type": "object",
@@ -1032,7 +1032,7 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             }
         },
         {
-            "name": "terminal_read_output",
+            "name": "read_terminal_output",
             "description": "Reads the captured stdout/stderr output lines from a background terminal session.",
             "parameters": {
                 "type": "object",
@@ -1050,7 +1050,7 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             }
         },
         {
-            "name": "terminal_get_status",
+            "name": "get_terminal_status",
             "description": "Checks the process state, working directory, and exit code of a terminal session.",
             "parameters": {
                 "type": "object",
@@ -1064,7 +1064,7 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             }
         },
         {
-            "name": "terminal_list_sessions",
+            "name": "list_terminals",
             "description": "Lists all active background terminal sessions.",
             "parameters": {
                 "type": "object",
@@ -1072,7 +1072,7 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             }
         },
         {
-            "name": "terminal_stop",
+            "name": "stop_terminal",
             "description": "Terminates any running processes in the session and reclaims resources.",
             "parameters": {
                 "type": "object",
@@ -1082,69 +1082,6 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
                         "description": "The terminal session ID."
                     }
                 },
-                "required": ["session_id"]
-            }
-        },
-        # Legacy aliases
-        {
-            "name": "create_terminal",
-            "description": "Initializes a silent, private background terminal session in the project workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "workspace_path": {
-                        "type": "string",
-                        "description": "Optional project root path. Defaults to active workspace."
-                    }
-                }
-            }
-        },
-        {
-            "name": "run_command",
-            "description": "Executes a development check, test runner, syntax validator, or build tool in the background terminal.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string"},
-                    "command": {"type": "string"},
-                    "args": {"type": "array", "items": {"type": "string"}},
-                    "timeout_sec": {"type": "integer"}
-                },
-                "required": ["session_id", "command"]
-            }
-        },
-        {
-            "name": "read_terminal_output",
-            "description": "Reads captured stdout/stderr output lines from a background terminal session.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "session_id": {"type": "string"},
-                    "tail_lines": {"type": "integer"}
-                },
-                "required": ["session_id"]
-            }
-        },
-        {
-            "name": "get_terminal_status",
-            "description": "Checks the process state, working directory, and exit code of a terminal session.",
-            "parameters": {
-                "type": "object",
-                "properties": {"session_id": {"type": "string"}},
-                "required": ["session_id"]
-            }
-        },
-        {
-            "name": "list_terminals",
-            "description": "Lists all active background terminal sessions.",
-            "parameters": {"type": "object", "properties": {}}
-        },
-        {
-            "name": "stop_terminal",
-            "description": "Terminates any running processes in the session and reclaims resources.",
-            "parameters": {
-                "type": "object",
-                "properties": {"session_id": {"type": "string"}},
                 "required": ["session_id"]
             }
         }

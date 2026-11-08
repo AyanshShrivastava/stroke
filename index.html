@@ -957,13 +957,32 @@
     profilePopover.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('click', () => profilePopover.classList.add('hidden'));
 
-    document.getElementById('logoutBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      signOutUser();
-    });
-    document.getElementById('authModalTriggerBtn').addEventListener('click', (e) => {
+    document.getElementById('logoutBtn').addEventListener('click', async (e) => {
       e.stopPropagation();
       profilePopover.classList.add('hidden');
+      const email = state.userEmail || 'current session';
+      const confirmed = await askConfirmation({
+        title: 'Sign Out',
+        message: `Do you want to sign out of ${email}? You will need to verify via email OTP to sign back in.`,
+        confirmText: 'Sign Out',
+        isDanger: true
+      });
+      if (confirmed) {
+        signOutUser();
+      }
+    });
+    document.getElementById('authModalTriggerBtn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      profilePopover.classList.add('hidden');
+      if (state.userEmail) {
+        const confirmed = await askConfirmation({
+          title: 'Switch Account',
+          message: `Do you want to switch accounts? You are currently signed in as ${state.userEmail}.`,
+          confirmText: 'Switch Account',
+          isDanger: false
+        });
+        if (!confirmed) return;
+      }
       openAuthModal();
     });
     document.getElementById('popoverOpenSettingsBtn').addEventListener('click', (e) => {
@@ -1118,16 +1137,33 @@
       checkOrRunMandatoryMemorySetup(true);
     });
 
-    settingsClearCacheBtn.addEventListener('click', () => {
+    settingsClearCacheBtn.addEventListener('click', async () => {
+      const confirmed = await askConfirmation({
+        title: 'Clear Local Cache',
+        message: 'Do you want to clear your local VFX database cache? Cached shaders and particle systems will be re-synchronized.',
+        confirmText: 'Clear Cache',
+        isDanger: true
+      });
+      if (!confirmed) return;
       const email = state.userEmail || 'guest';
       localStorage.removeItem('stroke_mandatory_vfx_cache_' + email);
       settingsCacheBadge.textContent = 'Cache Cleared';
       settingsCacheBadge.className = 'text-[10px] font-mono text-red-400';
+      showToast('Local cache cleared.');
     });
 
-    settingsSignOutBtn.addEventListener('click', () => {
-      closeSettingsModal();
-      signOutUser();
+    settingsSignOutBtn.addEventListener('click', async () => {
+      const email = state.userEmail || 'current session';
+      const confirmed = await askConfirmation({
+        title: 'Sign Out',
+        message: `Do you want to sign out of ${email}? You will need to verify via email OTP to sign back in.`,
+        confirmText: 'Sign Out',
+        isDanger: true
+      });
+      if (confirmed) {
+        closeSettingsModal();
+        signOutUser();
+      }
     });
 
     // 6. Plus Button (+) for Attachments - Supports .py, .csv, .luau, .lua, .json, .txt, images, etc.
@@ -1363,11 +1399,19 @@
       saveMcpConfigBtn.textContent = 'Save and Connect Servers';
     });
 
-    resetMcpDefaultBtn.addEventListener('click', () => {
+    resetMcpDefaultBtn.addEventListener('click', async () => {
+      const confirmed = await askConfirmation({
+        title: 'Clear MCP Configuration',
+        message: 'Do you want to clear your current Model Context Protocol (MCP) server configuration?',
+        confirmText: 'Clear',
+        isDanger: true
+      });
+      if (!confirmed) return;
       const emptyConfig = {
         mcpServers: {}
       };
       mcpJsonConfigInput.value = JSON.stringify(emptyConfig, null, 2);
+      showToast('MCP configuration reset.');
     });
 
     copyMcpJsonBtn.addEventListener('click', () => {
@@ -2272,7 +2316,18 @@
     }
 
     document.getElementById('closeAuthModalBtn').addEventListener('click', () => authModal.classList.add('hidden'));
-    document.getElementById('authModalSignOutBtn').addEventListener('click', signOutUser);
+    document.getElementById('authModalSignOutBtn').addEventListener('click', async () => {
+      const email = state.userEmail || 'current session';
+      const confirmed = await askConfirmation({
+        title: 'Sign Out',
+        message: `Do you want to sign out of ${email}? You will need to verify via email OTP to sign back in.`,
+        confirmText: 'Sign Out',
+        isDanger: true
+      });
+      if (confirmed) {
+        signOutUser();
+      }
+    });
 
     const toggleAuthPasswordBtn = document.getElementById('toggleAuthPasswordBtn');
     if (toggleAuthPasswordBtn) {
@@ -2316,6 +2371,7 @@
           body: JSON.stringify({ email, password })
         });
         if (res.ok) {
+          const data = await res.json().catch(() => ({}));
           const targetEl = document.getElementById('otpTargetEmailDisplay');
           if (targetEl) targetEl.textContent = email;
 
@@ -2327,7 +2383,7 @@
             otpInput.value = '';
             otpInput.focus();
           }
-          showToast('6-digit OTP code sent to ' + email + '. Check your inbox.');
+          showToast(data.message || ('6-digit OTP code sent to ' + email + '. Check your inbox.'));
         } else {
           const err = await res.json().catch(() => ({}));
           showToast(err.detail || 'Failed to dispatch verification code.');
@@ -2534,9 +2590,17 @@
       clearMemBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!state.userEmail) return;
+        const confirmed = await askConfirmation({
+          title: 'Clear AI Memory',
+          message: `Do you want to clear all learned project memory for ${state.userEmail}?`,
+          confirmText: 'Clear Memory',
+          isDanger: true
+        });
+        if (!confirmed) return;
         try {
           await fetch(`/memory/clear?email=${encodeURIComponent(state.userEmail)}`, { method: 'POST' });
           await fetchMemoryStats();
+          showToast('AI memory cleared.');
         } catch(e){}
       });
     }
@@ -2582,6 +2646,68 @@
     // Check Mandatory Memory local cache & fetch memory quota stats on app startup
     checkOrRunMandatoryMemorySetup();
     fetchMemoryStats();
+
+    // Modal Confirmation Dialog Controller
+    function askConfirmation({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', isDanger = true }) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('confirmationModal');
+        const titleEl = document.getElementById('confirmModalTitle');
+        const msgEl = document.getElementById('confirmModalMessage');
+        const actionBtn = document.getElementById('confirmModalActionBtn');
+        const cancelBtn = document.getElementById('confirmModalCancelBtn');
+        const iconBox = document.getElementById('confirmModalIconBox');
+
+        if (!modal || !actionBtn || !cancelBtn) {
+          resolve(window.confirm(message || title || 'Are you sure?'));
+          return;
+        }
+
+        if (titleEl) titleEl.textContent = title || 'Confirmation Required';
+        if (msgEl) msgEl.textContent = message || 'Are you sure you want to proceed?';
+        actionBtn.textContent = confirmText;
+        cancelBtn.textContent = cancelText;
+
+        if (isDanger) {
+          actionBtn.className = 'px-4 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold font-mono transition-colors shadow-sm';
+          if (iconBox) iconBox.className = 'w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0';
+        } else {
+          actionBtn.className = 'px-4 py-1.5 rounded-xl bg-brand-accent hover:bg-emerald-400 text-black text-xs font-semibold font-mono transition-colors shadow-sm';
+          if (iconBox) iconBox.className = 'w-9 h-9 rounded-xl bg-brand-accent/10 border border-brand-accent/30 flex items-center justify-center text-brand-accent shrink-0';
+        }
+
+        modal.classList.remove('hidden');
+
+        function cleanup(result) {
+          modal.classList.add('hidden');
+          actionBtn.removeEventListener('click', onConfirm);
+          cancelBtn.removeEventListener('click', onCancel);
+          modal.removeEventListener('click', onBackdrop);
+          document.removeEventListener('keydown', onKey);
+          resolve(result);
+        }
+
+        function onConfirm(e) {
+          if (e) e.stopPropagation();
+          cleanup(true);
+        }
+        function onCancel(e) {
+          if (e) e.stopPropagation();
+          cleanup(false);
+        }
+        function onBackdrop(e) {
+          if (e.target === modal) cleanup(false);
+        }
+        function onKey(e) {
+          if (e.key === 'Escape') cleanup(false);
+          if (e.key === 'Enter') cleanup(true);
+        }
+
+        actionBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+        document.addEventListener('keydown', onKey);
+      });
+    }
 
     // Utilities
     function showToast(message) {
