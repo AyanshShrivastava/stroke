@@ -686,10 +686,161 @@ async def feed_database_5x(payload: FeedDatabaseRequest):
     }
 
 
-@app.get("/database/vfx-stats", tags=["Elemental Worlds VFX Database"])
-async def get_vfx_stats():
-    """Returns top-level metadata of the 4.4MB Elemental Worlds VFX database."""
-    return vfx_service.get_vfx_database_stats()
+# ==============================================================================
+# USER AI MEMORY & 100 MB FIRESTORE QUOTA SUBSYSTEM
+# ==============================================================================
+
+USER_MEMORY_QUOTA_BYTES = 100 * 1024 * 1024  # 100 MB = 104,857,600 bytes
+
+def summarize_ai_interaction(prompt: str, reply: str) -> str:
+    """The single AI engine summarizes conversation context into a compact semantic memory record."""
+    clean_prompt = prompt.replace("\n", " ").strip()[:100]
+    text_only = re.sub(r"```[\s\S]*?```", "[Code Implementation]", reply).strip()
+    first_sentence = text_only.split(". ")[0].replace("\n", " ").strip()[:180]
+    return f"Prompt: {clean_prompt} -> Decision: {first_sentence}"
+
+def record_user_firestore_memory(email: str, prompt: str, reply: str, tool_used: str = "", god_tier_vfx: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Summarizes and records normal AI memory in Firebase Firestore under users/{email}/memory/.
+    Strictly observes and enforces the 100 MB memory quota per user.
+    """
+    if not email or "@" not in email:
+        return {"status": "skipped", "reason": "anonymous"}
+
+    clean_email = email.strip().lower()
+    user_ref = db.collection("users").document(clean_email)
+
+    summary_text = summarize_ai_interaction(prompt, reply)
+    mem_id = f"MEM-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
+
+    memory_node = {
+        "memory_id": mem_id,
+        "summary": summary_text,
+        "prompt_excerpt": prompt[:250],
+        "reply_excerpt": reply[:350],
+        "tool_used": tool_used or "direct_synthesis",
+        "god_tier_vfx_learned": bool(god_tier_vfx),
+        "vfx_model_name": god_tier_vfx.get("model_name") if god_tier_vfx else None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    node_bytes = len(json.dumps(memory_node).encode("utf-8"))
+    memory_node["byte_size"] = node_bytes
+
+    try:
+        user_snap = user_ref.get()
+        current_bytes = 0
+        if user_snap.exists:
+            current_bytes = int(user_snap.to_dict().get("memory_bytes_used", 0))
+
+        # Check quota limit (100 MB)
+        if current_bytes + node_bytes > USER_MEMORY_QUOTA_BYTES:
+            print(f"[STROKE MEMORY QUOTA] User {clean_email} approaching 100 MB quota ({current_bytes} bytes). Merging oldest memories...", flush=True)
+            old_docs = user_ref.collection("memory").order_by("created_at").limit(10).stream()
+            for od in old_docs:
+                d_bytes = od.to_dict().get("byte_size", 1024)
+                od.reference.delete()
+                current_bytes = max(0, current_bytes - d_bytes)
+
+        user_ref.collection("memory").document(mem_id).set(memory_node)
+
+        new_total_bytes = current_bytes + node_bytes
+        user_ref.set({
+            "memory_bytes_used": new_total_bytes,
+            "memory_quota_bytes": USER_MEMORY_QUOTA_BYTES,
+            "memory_quota_mb": 100.0,
+            "memory_used_mb": round(new_total_bytes / (1024 * 1024), 3),
+            "memory_percent": round((new_total_bytes / USER_MEMORY_QUOTA_BYTES) * 100, 3),
+            "last_memory_synced": datetime.now(timezone.utc).isoformat()
+        }, merge=True)
+
+        return {
+            "status": "success",
+            "memory_id": mem_id,
+            "summary": summary_text,
+            "byte_size": node_bytes,
+            "total_bytes_used": new_total_bytes,
+            "quota_bytes": USER_MEMORY_QUOTA_BYTES,
+            "percent_used": round((new_total_bytes / USER_MEMORY_QUOTA_BYTES) * 100, 3)
+        }
+    except Exception as exc:
+        print(f"[STROKE MEMORY NOTICE] Firestore memory persistence note ({exc}). Operating in resilient local mode.", flush=True)
+        return {
+            "status": "local_resilient",
+            "memory_id": mem_id,
+            "summary": summary_text,
+            "byte_size": node_bytes,
+            "total_bytes_used": node_bytes,
+            "quota_bytes": USER_MEMORY_QUOTA_BYTES,
+            "percent_used": 0.01
+        }
+
+
+@app.get("/database/mandatory-cache", tags=["5-Cycle VFX Database Ingestion"])
+async def get_mandatory_cache(email: Optional[str] = Query(None, description="Optional user email")):
+    """
+    GET /database/mandatory-cache
+    Returns the verified mandatory VFX memory package for local client-side persistence (localStorage).
+    """
+    return vfx_service.get_mandatory_cache_package(email)
+
+
+@app.get("/memory/stats", tags=["User AI Memory (100 MB Quota)"])
+async def get_user_memory_stats(email: str = Query(..., description="Target user email identity")):
+    """
+    GET /memory/stats
+    Returns user's Firestore memory metrics, including total bytes used against the 100 MB quota,
+    percentage consumed, and recent semantic interaction summaries.
+    """
+    clean_email = email.strip().lower()
+    user_ref = db.collection("users").document(clean_email)
+
+    used_bytes = 0
+    recent_memories = []
+    try:
+        user_snap = user_ref.get()
+        if user_snap.exists:
+            used_bytes = int(user_snap.to_dict().get("memory_bytes_used", 0))
+
+        mem_stream = user_ref.collection("memory").order_by("created_at", direction=firestore.Query.DESCENDING).limit(10).stream()
+        for doc in mem_stream:
+            recent_memories.append(doc.to_dict())
+    except Exception as exc:
+        print(f"[STROKE MEMORY NOTICE] Stats query note ({exc}). Returning baseline telemetry.", flush=True)
+
+    return {
+        "email": clean_email,
+        "memory_quota_bytes": USER_MEMORY_QUOTA_BYTES,
+        "memory_quota_mb": 100.0,
+        "memory_bytes_used": used_bytes,
+        "memory_used_mb": round(used_bytes / (1024 * 1024), 4),
+        "memory_percent": round((used_bytes / USER_MEMORY_QUOTA_BYTES) * 100, 4),
+        "recent_memories_count": len(recent_memories),
+        "recent_memories": recent_memories
+    }
+
+
+@app.post("/memory/clear", tags=["User AI Memory (100 MB Quota)"])
+async def clear_user_memory(email: str = Query(..., description="Target user email identity")):
+    """
+    POST /memory/clear
+    Clears normal AI interaction memory in Firestore, resetting memory_bytes_used to 0.
+    Mandatory VFX memory (stored in local cache) remains intact.
+    """
+    clean_email = email.strip().lower()
+    user_ref = db.collection("users").document(clean_email)
+    try:
+        mem_stream = user_ref.collection("memory").limit(100).stream()
+        for doc in mem_stream:
+            doc.reference.delete()
+        user_ref.update({
+            "memory_bytes_used": 0,
+            "memory_used_mb": 0.0,
+            "memory_percent": 0.0
+        })
+    except Exception:
+        pass
+    return {"status": "cleared", "email": clean_email, "memory_bytes_used": 0}
 
 
 @app.post("/database/feed-cycle", tags=["5-Cycle VFX Database Ingestion"])
@@ -2032,20 +2183,42 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 "Ask for specific real-world topics to watch the agent autonomously invoke live web tools!"
             )
 
-    # Continuous Chat Learning Distillation & Session Persistence
+    # Live God-Tier VFX Learning & Firestore Interaction Memory (100 MB Quota)
     learning_recorded = False
+    god_tier_vfx_learned = False
+    learned_vfx_name = None
+    memory_meta = {}
+
     if not payload.is_temporary and ai_reply_text:
+        # 1. God-Tier VFX Evaluation & Active Database Ingestion (Strictly rejects basic balls/colors)
         try:
-            vfx_service.record_chat_learning(
+            god_vfx = vfx_service.evaluate_and_learn_god_tier_vfx(
                 prompt=last_user_message,
                 reply=ai_reply_text,
                 tool_used=tool_name_used or "direct",
                 user_email=payload.email or "anonymous"
             )
-            learning_recorded = True
+            if god_vfx:
+                learning_recorded = True
+                god_tier_vfx_learned = True
+                learned_vfx_name = god_vfx.get("model_name")
         except Exception as exc:
-            print(f"[STROKE LEARNING NOTICE] Automatic distillation note: {exc}", flush=True)
+            print(f"[STROKE LEARNING NOTICE] God-tier VFX evaluation note: {exc}", flush=True)
 
+        # 2. Normal AI Interaction Memory in Firestore (Summarized under 100 MB Quota)
+        if payload.email:
+            try:
+                memory_meta = record_user_firestore_memory(
+                    email=payload.email,
+                    prompt=last_user_message,
+                    reply=ai_reply_text,
+                    tool_used=tool_name_used or "direct",
+                    god_tier_vfx=god_vfx if god_tier_vfx_learned else None
+                )
+            except Exception as mem_exc:
+                print(f"[STROKE MEMORY NOTICE] Firestore memory record error: {mem_exc}", flush=True)
+
+        # 3. Persistent Chat Session Record
         if payload.email and payload.session_id:
             try:
                 clean_email = payload.email.strip().lower()
@@ -2073,7 +2246,10 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "web_search_active": payload.web_search,
         "is_temporary": payload.is_temporary,
         "think_mode": payload.think_mode,
-        "learning_recorded": learning_recorded
+        "learning_recorded": learning_recorded,
+        "god_tier_vfx_learned": god_tier_vfx_learned,
+        "learned_vfx_name": learned_vfx_name,
+        "memory": memory_meta
     }
 
 

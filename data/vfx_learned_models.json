@@ -1,0 +1,112 @@
+{
+  "GodTier_Slash_Construct_Sukuna_360_Cleave": {
+    "name": "GodTier_Slash_Construct_Sukuna_360_Cleave",
+    "domain": "Slash",
+    "element": "Slash",
+    "particle_emitters": [
+      {
+        "name": "Slash_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 101,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 22.0,
+          "Acceleration": [
+            0,
+            20,
+            0
+          ],
+          "Texture": "rbxassetid://13780268621"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Slash_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Slash_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://13780268621",
+      "rbxassetid://18462751521"
+    ],
+    "snippet": "",
+    "god_tier_score": 9.79,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T06:41:40.121469+00:00"
+  },
+  "GodTier_Fire_How_do_I_make_a_Hollow_Purpl": {
+    "name": "GodTier_Fire_How_do_I_make_a_Hollow_Purpl",
+    "domain": "Fire",
+    "element": "Fire",
+    "particle_emitters": [
+      {
+        "name": "Fire_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 92,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://13780268621"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Fire_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Fire_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://13780268621",
+      "rbxassetid://18462751521"
+    ],
+    "snippet": "local emitter = Instance.new(\"ParticleEmitter\")\nemitter.Name = \"HollowParticleEmitter\"\nemitter.Color = Vector3.new(0.5, 0.6, 0.7)\nemitter.Size = 2\nemitter.Rate = -1\nemitter.EmitterKind = Enum.EmitterKind.Particle\nemitter.SphereSize = 0.5",
+    "god_tier_score": 9.71,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T06:41:54.281519+00:00"
+  }
+}
