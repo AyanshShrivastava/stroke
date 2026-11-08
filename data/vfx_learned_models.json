@@ -391,7 +391,7 @@
       {
         "name": "Elemental_PrimaryMatrixEmitter",
         "properties": {
-          "Rate": 102,
+          "Rate": 93,
           "Lifetime": [
             0.15,
             0.35
@@ -402,7 +402,7 @@
             0,
             0
           ],
-          "Texture": "rbxassetid://13780268621"
+          "Texture": "rbxassetid://18462751521"
         }
       }
     ],
@@ -430,13 +430,13 @@
       }
     ],
     "textures": [
-      "rbxassetid://13780268621",
-      "rbxassetid://18462751521"
+      "rbxassetid://18462751521",
+      "rbxassetid://13780268621"
     ],
-    "snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Creator Store Note: Insertion requires user inventory ownership or Toolbox public access: User is not authorized to access Asset.`\n\n**Spawning a Creator Store House from the Creator Store**\n\n### Overview\n\nThe following Luau",
-    "god_tier_score": 9.66,
+    "snippet": "> **Roblox Studio MCP Status**: Session synchronized (`workspace`). Output: `Prepared complete production Luau code for workspace.`\n\n**Spawning a House from the Creator Store in Roblox Studio**\n===========\n\n**Overview**\n------------\n\nThis Roblox script will spawn a house asset from the Creator Store",
+    "god_tier_score": 9.42,
     "learned_dynamically": true,
-    "learned_at": "2026-11-08T11:41:55.861041+00:00"
+    "learned_at": "2026-11-08T12:29:42.198698+00:00"
   },
   "GodTier_Aqua_Script_a_smooth_shockwave_in": {
     "name": "GodTier_Aqua_Script_a_smooth_shockwave_in",
@@ -492,5 +492,60 @@
     "god_tier_score": 9.47,
     "learned_dynamically": true,
     "learned_at": "2026-11-08T12:06:55.636838+00:00"
+  },
+  "GodTier_Elemental_do_you_have_your_own_termina": {
+    "name": "GodTier_Elemental_do_you_have_your_own_termina",
+    "domain": "Elemental",
+    "element": "Matrix",
+    "particle_emitters": [
+      {
+        "name": "Elemental_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 115,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://13780268621"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Elemental_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Elemental_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://13780268621",
+      "rbxassetid://18462751521"
+    ],
+    "snippet": "-- Create a new script\nlocal function createEffect() end\n\n-- Run the script in Studio\nstudio_execute_luau(createEffect)",
+    "god_tier_score": 9.43,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T12:21:27.458161+00:00"
   }
 }

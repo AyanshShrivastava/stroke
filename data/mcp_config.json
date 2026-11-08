@@ -1,7 +1,3 @@
 {
-  "mcpServers": {
-    "Roblox_Studio": {
-      "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP"
-    }
-  }
+  "mcpServers": {}
 }

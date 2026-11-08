@@ -409,7 +409,7 @@ def apply_mcp_config_json(config: Dict[str, Any]) -> Dict[str, Any]:
       {
         "mcpServers": {
           "Roblox_Studio": {
-            "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP"
+            "command": "/path/to/StudioMCP"
           },
           "github": {
             "command": "npx",
