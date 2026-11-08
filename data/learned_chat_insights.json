@@ -1,33 +1,7 @@
 {
-  "total_chats_learned": 8,
-  "last_updated": "2026-11-08T13:22:14.700060+00:00",
+  "total_chats_learned": 11,
+  "last_updated": "2026-11-08T13:24:37.911854+00:00",
   "insights": [
-    {
-      "id": "INS-GOD-ELEM-008",
-      "domain": "Elemental",
-      "element": "Matrix",
-      "model_name": "GodTier_Elemental_Optimize_particle_emitters_f",
-      "topic": "God-Tier Elemental Mastery: 'GodTier_Elemental_Optimize_particle_emitters_f'",
-      "summary": "Distilled top-tier Elemental kinematics with 2 texture assets. Active in Elemental Worlds index.",
-      "code_snippet": "local particleEmitter = game.Workspace.ParticleEmitter\nparticleEmitter:Destroy()\nparticleEmitter = game.Workspace.ParticleEmitter\nparticleEmitter:Destroy()",
-      "impact_score": 9.67,
-      "source_tool": "vfx_kinematics_lookup",
-      "contributor": "anon***",
-      "created_at": "2026-11-08T13:22:14.700020+00:00"
-    },
-    {
-      "id": "INS-GOD-ELEM-007",
-      "domain": "Elemental",
-      "element": "Matrix",
-      "model_name": "GodTier_Elemental_Optimize_particle_emitters_f",
-      "topic": "God-Tier Elemental Mastery: 'GodTier_Elemental_Optimize_particle_emitters_f'",
-      "summary": "Distilled top-tier Elemental kinematics with 2 texture assets. Active in Elemental Worlds index.",
-      "code_snippet": "local particleEmitter = game.Workspace.ParticleEmitter\nparticleEmitter.Lifetime = NumberRange.new(0.4, 0.8) -- Set lifetime to 0.4 seconds and 0.8 seconds",
-      "impact_score": 9.46,
-      "source_tool": "vfx_kinematics_lookup",
-      "contributor": "anon***",
-      "created_at": "2026-11-08T13:21:54.748093+00:00"
-    },
     {
       "id": "INS-GOD-FIRE-007",
       "domain": "Fire",

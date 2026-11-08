@@ -1,27 +1,15 @@
 [
   {
-    "id": "CTX-1794144134",
-    "timestamp": 1794144134.6988869,
+    "id": "CTX-1794144277",
+    "timestamp": 1794144277.9104881,
     "prompt": "Optimize particle emitters for mobile",
     "language": "lua",
-    "passed_checks_count": 40,
+    "passed_checks_count": 7,
     "untested_count": 2,
     "verified": true,
-    "iterations": 1,
+    "iterations": 2,
     "user_email": "anonymous",
-    "summary": "Verified lua solution with 40 passing checks."
-  },
-  {
-    "id": "CTX-1794144114",
-    "timestamp": 1794144114.746638,
-    "prompt": "Optimize particle emitters for mobile",
-    "language": "lua",
-    "passed_checks_count": 29,
-    "untested_count": 2,
-    "verified": true,
-    "iterations": 1,
-    "user_email": "anonymous",
-    "summary": "Verified lua solution with 29 passing checks."
+    "summary": "Verified lua solution with 7 passing checks."
   },
   {
     "id": "CTX-1794142991",

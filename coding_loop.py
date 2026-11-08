@@ -539,11 +539,20 @@ class RobloxDomainTestRunner:
                 if has_rate_control:
                     passed_checks.append("Mobile Emission Rate Budgeting (Throttles particles per second to prevent mobile fill-rate drops)")
                 else:
+                    is_fatal = not (has_lifetime_budget or has_burst_or_toggle)
                     failed_checks.append({
-                        "type": "warning",
+                        "type": "error" if is_fatal else "warning",
                         "line": 1,
-                        "message": "Particle emitter optimization should explicitly throttle emitter.Rate for mobile clients.",
+                        "message": "Particle emitter optimization must explicitly throttle emitter.Rate for mobile clients (e.g. emitter.Rate = isMobile and 15 or 50).",
                         "suggestion": "Set 'emitter.Rate = isMobile and 15 or 50' or use math.clamp to restrict emission."
+                    })
+
+                if "Destroy()" in code and not (has_rate_control or has_lifetime_budget or has_burst_or_toggle):
+                    failed_checks.append({
+                        "type": "error",
+                        "line": 1,
+                        "message": "Calling :Destroy() does not optimize particle emitters. Configure properties like .Rate, .Lifetime, or call :Emit(count).",
+                        "suggestion": "Throttle emitter.Rate and constrict emitter.Lifetime for mobile LOD."
                     })
 
                 if has_lifetime_budget:
