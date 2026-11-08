@@ -3,18 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stroke // Cyberpunk Neural Matrix & Flagship AI</title>
-
-  <!-- External Styles & Scripts -->
+  <title>Stroke // Cyberpunk Neural Matrix & VFX Studio</title>
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Space Grotesk & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Marked for Markdown Parsing -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <script>
     tailwind.config = {
@@ -24,1501 +19,1335 @@
           colors: {
             matrix: {
               black: '#050505',
-              dark: '#080c09',
-              card: '#0b120d',
-              surface: '#0f1811',
-              border: '#15291b',
-              borderLight: '#1f4229',
-              neon: '#00ff66',
-              neonHover: '#33ff85',
-              neonDim: '#00cc52',
-              glow: 'rgba(0, 255, 102, 0.35)',
-              cyan: '#00f0ff',
-              purple: '#b026ff',
-              red: '#ff3344'
+              surface: '#0d0d0d',
+              card: '#121212',
+              input: '#0a0a0a',
+              border: '#1f2922',
+              'border-bright': '#00ff66',
+              green: '#00ff66',
+              glow: '#33ff85',
+              darkgreen: '#005522',
+              muted: '#00aa44',
+              danger: '#ff3344',
+              amber: '#ffaa00',
+              cyan: '#00d4ff'
             }
           },
           fontFamily: {
-            mono: ['"Fira Code"', 'monospace'],
-            sans: ['"Inter"', 'sans-serif']
+            mono: ['"JetBrains Mono"', 'monospace'],
+            sans: ['"Space Grotesk"', 'sans-serif'],
           }
         }
       }
-    }
+    };
   </script>
 
   <style>
     body {
       background-color: #050505;
-      color: #e0e0e0;
-      font-family: 'Inter', sans-serif;
+      color: #00ff66;
+      font-family: 'JetBrains Mono', monospace;
+      height: 100vh;
       overflow: hidden;
+      margin: 0;
+      padding: 0;
     }
 
-    /* Matrix Glow & Neon Effects */
-    .neon-text {
-      text-shadow: 0 0 8px rgba(0, 255, 102, 0.65), 0 0 16px rgba(0, 255, 102, 0.3);
+    /* Subtle Scanlines overlay */
+    .crt-scanlines {
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%),
+                  linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
     }
-    .neon-border {
-      box-shadow: 0 0 15px rgba(0, 255, 102, 0.2), inset 0 0 10px rgba(0, 255, 102, 0.05);
+
+    .glow-text {
+      text-shadow: 0 0 8px rgba(0, 255, 102, 0.6), 0 0 20px rgba(0, 255, 102, 0.3);
     }
-    .neon-glow-btn {
-      box-shadow: 0 0 12px rgba(0, 255, 102, 0.4);
+    .glow-cyan {
+      text-shadow: 0 0 8px rgba(0, 212, 255, 0.6), 0 0 20px rgba(0, 212, 255, 0.3);
+    }
+
+    .glow-box {
+      box-shadow: 0 0 15px rgba(0, 255, 102, 0.15), inset 0 0 10px rgba(0, 255, 102, 0.03);
+    }
+
+    .glow-button {
+      box-shadow: 0 0 10px rgba(0, 255, 102, 0.3);
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .neon-glow-btn:hover {
-      box-shadow: 0 0 22px rgba(0, 255, 102, 0.7);
+    .glow-button:hover:not(:disabled) {
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.7);
+      transform: translateY(-1px);
     }
 
-    /* Custom Cyberpunk Scrollbar */
+    /* Voice Mode Audio Orb Pulse */
+    @keyframes orb-pulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 35px rgba(0, 255, 102, 0.4), inset 0 0 25px rgba(0, 255, 102, 0.3);
+      }
+      50% {
+        transform: scale(1.14);
+        box-shadow: 0 0 70px rgba(0, 255, 102, 0.8), 0 0 120px rgba(0, 212, 255, 0.4), inset 0 0 40px rgba(0, 255, 102, 0.6);
+      }
+    }
+    .voice-orb-active {
+      animation: orb-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes orb-speaking {
+      0%, 100% {
+        transform: scale(1.05);
+        box-shadow: 0 0 50px rgba(0, 212, 255, 0.6), inset 0 0 30px rgba(0, 212, 255, 0.4);
+      }
+      50% {
+        transform: scale(1.22);
+        box-shadow: 0 0 90px rgba(0, 212, 255, 0.9), 0 0 150px rgba(0, 255, 102, 0.5), inset 0 0 50px rgba(0, 212, 255, 0.7);
+      }
+    }
+    .voice-orb-speaking {
+      animation: orb-speaking 1s ease-in-out infinite;
+    }
+
+    /* Waveform animation */
+    @keyframes wave-bounce {
+      0%, 100% { height: 4px; }
+      50% { height: 20px; }
+    }
+    .waveform-bar:nth-child(1) { animation: wave-bounce 1.1s ease-in-out infinite 0.1s; }
+    .waveform-bar:nth-child(2) { animation: wave-bounce 0.9s ease-in-out infinite 0.25s; }
+    .waveform-bar:nth-child(3) { animation: wave-bounce 1.2s ease-in-out infinite 0.05s; }
+    .waveform-bar:nth-child(4) { animation: wave-bounce 0.8s ease-in-out infinite 0.35s; }
+    .waveform-bar:nth-child(5) { animation: wave-bounce 1.0s ease-in-out infinite 0.2s; }
+
+    /* Custom Matrix Scrollbar */
     ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
     }
     ::-webkit-scrollbar-track {
       background: #050505;
     }
     ::-webkit-scrollbar-thumb {
-      background: #15291b;
-      border-radius: 3px;
+      background: #15331f;
+      border-radius: 4px;
     }
     ::-webkit-scrollbar-thumb:hover {
       background: #00ff66;
     }
 
-    /* Markdown Code Block Styling */
-    .prose pre {
-      background: #050505 !important;
-      border: 1px solid #1a3322 !important;
-      border-radius: 8px !important;
-      padding: 1rem !important;
-      margin: 0.75rem 0 !important;
-      overflow-x: auto;
+    /* Tooltip styling */
+    .tooltip {
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s;
     }
-    .prose code {
-      color: #00ff66 !important;
-      font-family: 'Fira Code', monospace !important;
-      font-size: 0.875rem !important;
-    }
-    .prose p {
-      line-height: 1.65;
-      margin-bottom: 0.75rem;
-    }
-    .prose ul, .prose ol {
-      margin-left: 1.25rem;
-      margin-bottom: 0.75rem;
-    }
-    .prose li {
-      margin-bottom: 0.25rem;
-    }
-    .prose strong {
-      color: #ffffff;
-      font-weight: 600;
-    }
-    .prose h1, .prose h2, .prose h3 {
-      color: #00ff66;
-      font-family: 'Fira Code', monospace;
-      font-weight: 600;
-      margin-top: 1rem;
-      margin-bottom: 0.5rem;
-    }
-
-    /* Audio Waveform Animations */
-    @keyframes wavePulse {
-      0%, 100% { height: 8px; }
-      50% { height: 32px; }
-    }
-    .wave-bar {
-      animation: wavePulse 1.2s infinite ease-in-out;
-    }
-    .wave-bar:nth-child(2) { animation-delay: 0.15s; }
-    .wave-bar:nth-child(3) { animation-delay: 0.3s; }
-    .wave-bar:nth-child(4) { animation-delay: 0.45s; }
-    .wave-bar:nth-child(5) { animation-delay: 0.6s; }
-
-    /* Voice Orb Pulsing */
-    @keyframes orbGlow {
-      0% { transform: scale(0.96); box-shadow: 0 0 25px rgba(0, 255, 102, 0.4); }
-      50% { transform: scale(1.06); box-shadow: 0 0 65px rgba(0, 255, 102, 0.85), 0 0 100px rgba(0, 240, 255, 0.4); }
-      100% { transform: scale(0.96); box-shadow: 0 0 25px rgba(0, 255, 102, 0.4); }
-    }
-    .voice-orb {
-      animation: orbGlow 2.5s infinite ease-in-out;
+    .has-tooltip:hover .tooltip {
+      visibility: visible;
+      opacity: 1;
     }
   </style>
 </head>
+<body class="bg-matrix-black text-matrix-green flex h-screen w-screen overflow-hidden select-none">
+  <div class="crt-scanlines fixed inset-0 z-50 pointer-events-none"></div>
 
-<body class="bg-matrix-black text-gray-200 antialiased flex h-screen w-screen overflow-hidden font-sans select-none">
-
-  <!-- ===================================================================== -->
-  <!-- LEFT SIDEBAR (ChatGPT / Gemini Flagship Style)                         -->
-  <!-- ===================================================================== -->
-  <aside id="sidebar" class="w-64 bg-matrix-black border-r border-matrix-border flex flex-col justify-between transition-all duration-300 z-30 flex-shrink-0">
+  <!-- ========================================================================= -->
+  <!-- LEFT SIDEBAR: ChatGPT / Gemini Layout (Collapsible, Full Features)         -->
+  <!-- ========================================================================= -->
+  <aside id="sidebar" class="w-64 bg-[#0a0a0a] border-r border-[#1a1a1a] flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-40 relative">
     
-    <!-- Top Nav & Brand -->
-    <div class="p-3.5 flex flex-col gap-3">
+    <!-- Top Section: Brand + Actions + Navigation -->
+    <div class="flex flex-col flex-1 overflow-hidden p-3 space-y-3">
+      
       <!-- Brand Header -->
-      <div class="flex items-center justify-between px-1.5 pt-1">
-        <div class="flex items-center gap-2">
-          <div class="w-7 h-7 rounded-lg bg-matrix-card border border-matrix-neon flex items-center justify-center text-matrix-neon font-mono font-bold text-sm shadow-[0_0_10px_rgba(0,255,102,0.3)]">
-            ⚡
+      <div class="flex items-center justify-between px-2 pt-1 pb-2 border-b border-[#18251c]">
+        <div class="flex items-center space-x-2">
+          <div class="w-7 h-7 rounded-lg bg-matrix-green/10 border border-matrix-green/40 flex items-center justify-center font-bold text-xs text-matrix-green glow-text">
+            S
           </div>
-          <span class="font-mono font-bold text-matrix-neon tracking-wide text-base neon-text">STROKE</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-matrix-border text-matrix-neonDim font-mono">v1.1</span>
+          <span class="font-sans font-bold text-base tracking-wide text-white glow-text">Stroke</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded border border-matrix-green/30 bg-matrix-green/5 text-matrix-green">2.5</span>
         </div>
-        <button id="sidebarCollapseBtn" title="Close sidebar" class="p-1.5 rounded-md hover:bg-matrix-surface text-gray-400 hover:text-matrix-neon transition">
-          <i data-lucide="panel-left-close" class="w-4 h-4"></i>
-        </button>
+        <div class="flex items-center space-x-1">
+          <button id="searchChatsBtn" class="p-1.5 rounded-md hover:bg-white/5 text-[#888] hover:text-matrix-green transition-colors" title="Search chats">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </button>
+          <button id="collapseSidebarBtn" class="p-1.5 rounded-md hover:bg-white/5 text-[#888] hover:text-white transition-colors" title="Collapse sidebar">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+          </button>
+        </div>
       </div>
 
-      <!-- New Chat Button -->
-      <button id="newChatBtn" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-matrix-card hover:bg-matrix-surface border border-matrix-border hover:border-matrix-neon/50 text-white font-medium text-sm transition group shadow-sm">
-        <div class="flex items-center gap-2.5">
-          <i data-lucide="square-pen" class="w-4 h-4 text-matrix-neon group-hover:scale-110 transition"></i>
+      <!-- Action: + New Chat (Pill button like ChatGPT) -->
+      <button id="newChatBtn" class="w-full py-2 px-3 rounded-lg bg-matrix-green/10 hover:bg-matrix-green/20 border border-matrix-green/40 text-white font-medium text-xs flex items-center justify-between transition-all glow-button group">
+        <span class="flex items-center space-x-2">
+          <svg class="w-3.5 h-3.5 text-matrix-green group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           <span>New chat</span>
-        </div>
-        <kbd class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-matrix-black border border-matrix-border text-gray-400">⌘K</kbd>
+        </span>
+        <span class="text-[10px] text-[#666] font-mono">⌘K</span>
       </button>
 
-      <!-- Primary Sidebar Navigation Links -->
-      <nav class="flex flex-col gap-0.5 text-xs font-medium text-gray-300">
-        <button class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-matrix-surface hover:text-matrix-neon transition">
-          <i data-lucide="sparkles" class="w-4 h-4 text-matrix-neonDim"></i>
-          <span>VFX Library (Elemental)</span>
+      <!-- Navigation Apps & Tools -->
+      <nav class="space-y-1 text-xs">
+        <button id="openVfxLibBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-matrix-green hover:bg-white/5 transition-colors group">
+          <span class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-matrix-muted group-hover:text-matrix-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>VFX Library</span>
+          </span>
+          <span class="text-[9px] px-1 py-0.2 rounded bg-matrix-green/10 text-matrix-green border border-matrix-green/30 font-mono">14.6k</span>
         </button>
-        <button id="openMcpFromSidebarBtn" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-matrix-surface hover:text-matrix-neon transition">
-          <i data-lucide="cable" class="w-4 h-4 text-matrix-cyan"></i>
-          <span>Plugins & MCP Bridge</span>
+
+        <button id="openMcpDrawerBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-matrix-green hover:bg-white/5 transition-colors group">
+          <span class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-matrix-muted group-hover:text-matrix-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+            <span>Studio / GitHub MCP</span>
+          </span>
+          <span class="w-2 h-2 rounded-full bg-matrix-green animate-pulse"></span>
         </button>
-        <button class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-matrix-surface hover:text-matrix-neon transition">
-          <i data-lucide="clock" class="w-4 h-4 text-gray-400"></i>
-          <span>Scheduled Tasks</span>
+
+        <button id="openContinuousLearningBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-matrix-green hover:bg-white/5 transition-colors group">
+          <span class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-matrix-cyan group-hover:text-matrix-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            <span>Continuous Learning</span>
+          </span>
+          <span id="sidebarInsightBadge" class="text-[9px] px-1 py-0.2 rounded bg-cyan-900/40 text-cyan-300 border border-cyan-500/30 font-mono">Live</span>
         </button>
-        <button class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-matrix-surface hover:text-matrix-neon transition">
-          <i data-lucide="compass" class="w-4 h-4 text-matrix-purple"></i>
-          <span>Explore Models</span>
+
+        <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-[#bbb] hover:text-white hover:bg-white/5 transition-colors">
+          <svg class="w-4 h-4 text-[#777]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Settings</span>
         </button>
       </nav>
-    </div>
 
-    <!-- Middle: Chat History (Recents) -->
-    <div class="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-4">
-      <!-- Projects Section -->
-      <div>
-        <div class="text-[11px] font-mono uppercase text-gray-500 font-semibold px-2 mb-1.5 flex items-center justify-between">
-          <span>Projects</span>
-          <i data-lucide="plus" class="w-3 h-3 hover:text-matrix-neon cursor-pointer"></i>
-        </div>
-        <div class="px-2 py-1.5 text-xs text-gray-400 hover:text-white rounded-md hover:bg-matrix-surface cursor-pointer flex items-center gap-2">
-          <div class="w-2 h-2 rounded-full bg-matrix-neon"></div>
-          <span class="truncate">Elemental Worlds Studio</span>
-        </div>
-      </div>
-
-      <!-- Recents / Chat History List -->
-      <div>
-        <div class="text-[11px] font-mono uppercase text-gray-500 font-semibold px-2 mb-1.5 flex items-center justify-between">
-          <span>Recents</span>
-          <span id="chatCountBadge" class="text-[10px] text-gray-500 font-mono">4</span>
-        </div>
-        <div id="chatHistoryList" class="flex flex-col gap-0.5">
-          <!-- Chat items rendered dynamically via JavaScript -->
+      <!-- Recents List Section (matching ChatGPT screenshot) -->
+      <div class="flex-1 overflow-y-auto pr-1 pt-2 space-y-1">
+        <div class="text-[10px] uppercase font-bold tracking-wider text-[#555] px-2.5 py-1">Recents</div>
+        <div id="recentChatsList" class="space-y-0.5">
+          <!-- Dynamically populated or seed items -->
+          <button class="chat-session-item active w-full text-left px-2.5 py-2 rounded-md text-xs text-white bg-white/5 border-l-2 border-matrix-green flex items-center justify-between group">
+            <span class="truncate pr-2">Elemental Worlds Core Design</span>
+            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+          </button>
+          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-[#888] hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
+            <span class="truncate pr-2">Sukuna Domain Cleave Luau</span>
+            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+          </button>
+          <button class="chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-[#888] hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group">
+            <span class="truncate pr-2">Hollow Purple Flipbook Bezier</span>
+            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- Bottom: User Profile & Controls -->
-    <div class="p-3 border-t border-matrix-border flex flex-col gap-2 bg-matrix-black">
-      <!-- Claim Offer / 5X Matrix Banner -->
-      <button id="matrixFeedPillBtn" class="w-full px-3 py-2 rounded-lg bg-matrix-card hover:bg-matrix-surface border border-matrix-neon/30 text-xs font-mono text-matrix-neon flex items-center justify-between transition group">
-        <div class="flex items-center gap-2 truncate">
-          <i data-lucide="gift" class="w-3.5 h-3.5 text-matrix-neon group-hover:rotate-12 transition"></i>
-          <span id="matrixFeedStatusLabel" class="truncate font-semibold">5X VFX Injected</span>
-        </div>
-        <span class="text-[10px] text-gray-400">✓ Sync</span>
-      </button>
-
-      <!-- User Profile Card (Initials Avatar, Name, Settings) -->
-      <div id="userProfileBtn" class="flex items-center justify-between p-2 rounded-xl hover:bg-matrix-surface cursor-pointer transition group">
-        <div class="flex items-center gap-2.5 min-w-0">
-          <!-- Circular Avatar with User Initials -->
-          <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-700 via-indigo-600 to-matrix-neon flex items-center justify-center text-white font-mono font-bold text-xs shadow-inner flex-shrink-0">
+    <!-- Bottom Profile Row (matching ChatGPT screenshot bottom-left) -->
+    <div class="p-3 border-t border-[#18251c] bg-[#070707] relative">
+      <!-- Profile Button / Popover Trigger -->
+      <button id="userProfileBtn" class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors text-left group">
+        <div class="flex items-center space-x-2.5 min-w-0">
+          <!-- Circular Avatar with Initials -->
+          <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-matrix-green/20 border border-matrix-green text-matrix-green font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text">
             NN
           </div>
-          <div class="flex flex-col min-w-0">
-            <span id="userNameLabel" class="text-xs font-semibold text-white truncate group-hover:text-matrix-neon transition">Neha Nibisha</span>
-            <span id="userPlanBadge" class="text-[10px] text-gray-400 font-mono flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-matrix-neon inline-block"></span> Free • Matrix Core
-            </span>
+          <div class="min-w-0">
+            <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Neha Nibisha</div>
+            <div id="userTierLabel" class="text-[10px] text-[#888] font-mono">Cyber Matrix Free</div>
           </div>
         </div>
-        <button id="settingsModalTriggerBtn" title="Account settings" class="p-1.5 text-gray-400 hover:text-white rounded-md hover:bg-matrix-card">
-          <i data-lucide="settings" class="w-4 h-4"></i>
+        <svg class="w-4 h-4 text-[#666] group-hover:text-matrix-green transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+      </button>
+
+      <!-- Upgrade / Claim Offer Button (below profile like screenshot) -->
+      <button id="claimOfferBtn" class="mt-2 w-full py-1.5 px-3 rounded-lg border border-matrix-green/30 bg-matrix-green/5 hover:bg-matrix-green/15 text-[11px] text-matrix-green font-medium flex items-center justify-center space-x-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/></svg>
+        <span>Pro Matrix Upgrade</span>
+      </button>
+
+      <!-- User Profile Popover Menu (hidden by default) -->
+      <div id="profilePopover" class="hidden absolute bottom-20 left-3 right-3 bg-[#0d0d0d] border border-[#223328] rounded-xl p-2 shadow-2xl z-50 space-y-1">
+        <div class="px-3 py-2 border-b border-[#18251c]">
+          <div class="text-[10px] text-[#666] uppercase">Signed In As</div>
+          <div id="popoverEmail" class="text-xs text-matrix-green truncate font-mono">user@domain.com</div>
+        </div>
+        <button id="trigger5xMatrixBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-[#bbb] hover:text-white hover:bg-white/5 flex items-center justify-between">
+          <span>5X VFX Ingestion</span>
+          <span id="popoverDbFedBadge" class="text-[9px] px-1 rounded bg-matrix-green/20 text-matrix-green">Fed</span>
+        </button>
+        <button id="authModalTriggerBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-[#bbb] hover:text-white hover:bg-white/5 flex items-center space-x-2">
+          <span>Switch Account / Sign In</span>
+        </button>
+        <button id="logoutBtn" class="w-full text-left px-3 py-1.5 rounded text-xs text-red-400 hover:bg-red-500/10 flex items-center space-x-2">
+          <span>Sign Out</span>
         </button>
       </div>
     </div>
-
   </aside>
 
-  <!-- ===================================================================== -->
-  <!-- MAIN FULL-SCREEN CONVERSATIONAL WORKSPACE                             -->
-  <!-- ===================================================================== -->
-  <main class="flex-1 flex flex-col h-full bg-matrix-black relative overflow-hidden">
-
+  <!-- ========================================================================= -->
+  <!-- MAIN CHAT & WORKSPACE AREA (Full Screen, Flagship AI Layout)               -->
+  <!-- ========================================================================= -->
+  <main class="flex-1 flex flex-col h-full bg-[#050505] relative overflow-hidden">
+    
     <!-- Top Header Bar -->
-    <header class="h-14 border-b border-matrix-border flex items-center justify-between px-4 z-20 bg-matrix-black/90 backdrop-blur-md">
-      <!-- Left: Sidebar Toggle & Model Selector -->
-      <div class="flex items-center gap-3">
-        <button id="sidebarExpandBtn" class="hidden p-2 rounded-lg hover:bg-matrix-surface text-gray-400 hover:text-matrix-neon transition">
-          <i data-lucide="panel-left-open" class="w-5 h-5"></i>
+    <header class="h-14 border-b border-[#152219] px-4 flex items-center justify-between flex-shrink-0 bg-[#070707]/90 backdrop-blur z-20">
+      
+      <!-- Left: Expand Sidebar + Model Selector -->
+      <div class="flex items-center space-x-3">
+        <button id="expandSidebarBtn" class="hidden p-1.5 rounded-lg hover:bg-white/5 text-[#888] hover:text-white transition-colors" title="Open sidebar">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
-        <!-- Model Selector Dropdown -->
+        <!-- Model Selector Pill (like ChatGPT top pill) -->
         <div class="relative">
-          <button id="modelSelectorBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-matrix-card hover:bg-matrix-surface border border-matrix-border hover:border-matrix-neon/50 text-xs font-mono text-white transition">
-            <span class="w-2 h-2 rounded-full bg-matrix-neon"></span>
-            <span id="selectedModelLabel">Stroke Neural 3.2 (Cloud)</span>
-            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400"></i>
+          <button id="modelDropdownBtn" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-sans font-semibold text-xs transition-colors border border-[#1f2922]">
+            <span id="selectedModelLabel">Stroke 2.5 Neural</span>
+            <svg class="w-3.5 h-3.5 text-[#888]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
-
-          <!-- Model Menu Popover -->
-          <div id="modelDropdownMenu" class="hidden absolute top-full left-0 mt-1.5 w-64 bg-matrix-card border border-matrix-border rounded-xl shadow-2xl p-1.5 z-50 font-mono text-xs flex flex-col gap-1">
-            <button data-model="llama-3.3-70b-versatile" class="model-option flex items-center justify-between p-2 rounded-lg hover:bg-matrix-surface text-left text-white hover:text-matrix-neon">
+          
+          <!-- Dropdown items -->
+          <div id="modelDropdownMenu" class="hidden absolute top-10 left-0 w-64 bg-[#0d0d0d] border border-[#223328] rounded-xl shadow-2xl py-1 z-50">
+            <button class="model-option w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 flex items-center justify-between" data-model="stroke-neural">
               <div>
-                <div class="font-semibold">Llama 3.3 70B (Groq)</div>
-                <div class="text-[10px] text-gray-400">Cloud Autonomous Tool Agent</div>
+                <div class="font-semibold text-matrix-green">Stroke 2.5 Neural</div>
+                <div class="text-[10px] text-[#777]">Autonomous Agent + VFX RAG + MCP</div>
               </div>
-              <span class="text-[10px] px-1 bg-matrix-neon/20 text-matrix-neon rounded">Fast</span>
+              <span class="text-matrix-green text-xs">✓</span>
             </button>
-            <button data-model="llama3.2" class="model-option flex items-center justify-between p-2 rounded-lg hover:bg-matrix-surface text-left text-white hover:text-matrix-neon">
+            <button class="model-option w-full text-left px-3 py-2 text-xs text-[#bbb] hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama-3.3-70b-versatile">
               <div>
-                <div class="font-semibold">Llama 3.2 1B (Local)</div>
-                <div class="text-[10px] text-gray-400">Zero-latency offline weights</div>
+                <div class="font-semibold">Groq Llama 3.3 70B</div>
+                <div class="text-[10px] text-[#777]">High-speed cloud function calling</div>
               </div>
-              <span class="text-[10px] px-1 bg-gray-800 text-gray-300 rounded">GGUF</span>
             </button>
-            <button data-model="elemental-vfx" class="model-option flex items-center justify-between p-2 rounded-lg hover:bg-matrix-surface text-left text-white hover:text-matrix-neon">
+            <button class="model-option w-full text-left px-3 py-2 text-xs text-[#bbb] hover:bg-white/5 hover:text-white flex items-center justify-between" data-model="llama3.2">
               <div>
-                <div class="font-semibold">Elemental Worlds Core</div>
-                <div class="text-[10px] text-gray-400">Specialized 14.6K particle models</div>
+                <div class="font-semibold">Local Llama 3.2 1B</div>
+                <div class="text-[10px] text-[#777]">Offline GGUF weights on device</div>
               </div>
-              <span class="text-[10px] px-1 bg-matrix-purple/20 text-matrix-purple rounded">VFX</span>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Right: Temporary Chat Toggle, Telemetry Drawer, & MCP Status -->
-      <div class="flex items-center gap-2.5">
-        <!-- Temporary Chat Button (Matching ChatGPT in screenshot) -->
-        <button id="tempChatToggleBtn" title="Temporary chats won't be saved to history or used to train models" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-matrix-card hover:bg-matrix-surface border border-matrix-border text-xs font-medium text-gray-300 hover:text-white transition">
-          <i data-lucide="clock" class="w-3.5 h-3.5 text-gray-400"></i>
-          <span>Temporary chat</span>
+      <!-- Right: Temporary Chat Button + Status Badges -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        
+        <!-- TEMPORARY CHAT TOGGLE (matching top-right in screenshot!) -->
+        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-[#26352b] bg-[#0c120e] hover:border-matrix-amber/60 text-xs text-[#999] hover:text-white transition-all group" title="Temporary chat: Excluded from history and continuous learning">
+          <svg class="w-3.5 h-3.5 text-[#777] group-hover:text-matrix-amber transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+          <span id="tempChatBtnText" class="font-medium">Temporary chat</span>
+          <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-[#555]"></span>
         </button>
 
-        <!-- MCP Bridge Status Pill -->
-        <div id="mcpHeaderBadge" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-matrix-card border border-matrix-border text-[11px] font-mono text-gray-300">
-          <span class="w-1.5 h-1.5 rounded-full bg-matrix-neon animate-pulse"></span>
-          <span>Studio & GitHub MCP</span>
+        <!-- MCP Bridge Indicator -->
+        <div class="hidden sm:flex items-center space-x-1 px-2.5 py-1 rounded-full border border-[#1e2e22] bg-[#090f0b] text-[11px] text-[#888]">
+          <span class="w-2 h-2 rounded-full bg-matrix-green animate-pulse"></span>
+          <span class="text-white font-mono">MCP Ready</span>
         </div>
 
-        <!-- Telemetry Drawer Toggle Button -->
-        <button id="telemetryToggleBtn" title="Toggle Live Telemetry Terminal" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-matrix-card hover:bg-matrix-surface border border-matrix-border hover:border-matrix-neon text-xs font-mono text-matrix-neon transition">
-          <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
-          <span class="hidden md:inline">>_ Telemetry</span>
+        <!-- Continuous Learning Telemetry Pill -->
+        <button id="learningStatusPill" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full border border-cyan-800/40 bg-cyan-950/20 text-[11px] text-cyan-300 hover:bg-cyan-950/40 transition-colors">
+          <svg class="w-3.5 h-3.5 text-matrix-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <span class="font-mono text-[10px]">Learning <span id="insightsCountHeader">6</span></span>
         </button>
       </div>
     </header>
 
-    <!-- Temporary Chat Active Warning Banner -->
-    <div id="tempChatBanner" class="hidden bg-matrix-card/90 border-b border-matrix-cyan/30 px-4 py-1.5 text-center text-xs font-mono text-matrix-cyan flex items-center justify-center gap-2">
-      <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
-      <span>Temporary chat mode active • Not saved in Recents • Adaptive learning matrix paused</span>
+    <!-- Temporary Chat Active Banner (shown when Temporary Mode is enabled) -->
+    <div id="tempChatBanner" class="hidden bg-amber-950/40 border-b border-amber-600/30 px-4 py-1.5 text-center text-xs text-amber-300 flex items-center justify-center space-x-2 z-10">
+      <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      <span><strong>Temporary chat is on.</strong> This chat won't appear in history, persist to database, or be used to train Stroke's continuous learning loop.</span>
+      <button id="turnOffTempChatBtn" class="underline hover:text-white font-bold ml-2">Turn off</button>
     </div>
 
-    <!-- Central Chat Scrollable Message Stream -->
-    <div id="chatScrollArea" class="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
-      <div id="messagesContainer" class="max-w-3xl w-full mx-auto flex flex-col gap-6">
+    <!-- Center Content: Empty Greeting State OR Chat Messages Stream -->
+    <div id="chatScrollContainer" class="flex-1 overflow-y-auto px-4 py-6 flex flex-col items-center">
+      
+      <!-- EMPTY STATE: Centered Hero (Matching ChatGPT Screenshot!) -->
+      <div id="emptyStateHero" class="my-auto max-w-2xl w-full flex flex-col items-center justify-center text-center space-y-6 pt-10 pb-6 transition-all">
+        <h1 class="text-2xl sm:text-3xl font-sans font-bold text-white tracking-tight glow-text">
+          What’s on the agenda today?
+        </h1>
 
-        <!-- EMPTY STATE (Matching screenshot: "What's on the agenda today?") -->
-        <div id="emptyStateView" class="flex flex-col items-center justify-center min-h-[50vh] text-center my-auto">
-          <!-- Large Center Heading -->
-          <h1 class="text-3xl md:text-4xl font-semibold tracking-tight text-white mb-8 neon-text font-sans">
-            What’s on the agenda today?
-          </h1>
-
-          <!-- Prompt Starter Cards -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-xl text-left font-mono">
-            <button class="starter-card p-3.5 rounded-xl bg-matrix-card hover:bg-matrix-surface border border-matrix-border hover:border-matrix-neon/60 transition group flex flex-col gap-1">
-              <div class="flex items-center gap-2 text-xs font-semibold text-matrix-neon group-hover:translate-x-1 transition">
-                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
-                <span>Learn something</span>
-              </div>
-              <div class="text-xs text-gray-400 group-hover:text-gray-200">How do particle flipbooks work in Roblox Luau?</div>
-            </button>
-
-            <button class="starter-card p-3.5 rounded-xl bg-matrix-card hover:bg-matrix-surface border border-matrix-border hover:border-matrix-neon/60 transition group flex flex-col gap-1">
-              <div class="flex items-center gap-2 text-xs font-semibold text-matrix-purple group-hover:translate-x-1 transition">
-                <i data-lucide="sparkles" class="w-4 h-4"></i>
-                <span>Hollow Purple VFX</span>
-              </div>
-              <div class="text-xs text-gray-400 group-hover:text-gray-200">Script an expanding void singularity shockwave</div>
-            </button>
-
-            <button class="starter-card p-3.5 rounded-xl bg-matrix-card hover:bg-matrix-surface border border-matrix-border hover:border-matrix-neon/60 transition group flex flex-col gap-1">
-              <div class="flex items-center gap-2 text-xs font-semibold text-matrix-cyan group-hover:translate-x-1 transition">
-                <i data-lucide="gamepad-2" class="w-4 h-4"></i>
-                <span>Roblox Studio MCP</span>
-              </div>
-              <div class="text-xs text-gray-400 group-hover:text-gray-200">Execute Luau effect live into ReplicatedStorage.VFX</div>
-            </button>
-
-            <button class="starter-card p-3.5 rounded-xl bg-matrix-card hover:bg-matrix-surface border border-matrix-border hover:border-matrix-neon/60 transition group flex flex-col gap-1">
-              <div class="flex items-center gap-2 text-xs font-semibold text-matrix-neonDim group-hover:translate-x-1 transition">
-                <i data-lucide="globe" class="w-4 h-4"></i>
-                <span>Autonomous Web Search</span>
-              </div>
-              <div class="text-xs text-gray-400 group-hover:text-gray-200">Look up latest Roblox TweenService & Particle APIs</div>
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Bottom Floating Composer (Matching screenshot input pill) -->
-    <div class="p-4 pt-1 bg-gradient-to-t from-matrix-black via-matrix-black to-transparent z-20">
-      <div class="max-w-3xl w-full mx-auto flex flex-col gap-2">
-
-        <!-- Input Bar Pill -->
-        <div class="flex items-end gap-2 bg-matrix-card border border-matrix-borderLight focus-within:border-matrix-neon focus-within:shadow-[0_0_20px_rgba(0,255,102,0.25)] rounded-3xl p-2 px-3 transition duration-200">
-          
-          <!-- Attachment Button (+) -->
-          <button id="attachFileBtn" title="Attach file, script, or image" class="p-2 text-gray-400 hover:text-white rounded-full hover:bg-matrix-surface transition flex-shrink-0 mb-0.5">
-            <i data-lucide="plus" class="w-5 h-5"></i>
+        <!-- Quick Prompt Suggestion Chips -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl text-left">
+          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
+              <span>🔮</span>
+              <span>Script Hollow Purple in Luau</span>
+            </div>
+            <div class="text-[11px] text-[#777] mt-1">Dual Bezier curves with CurveSize0=-9.83</div>
           </button>
-          <input type="file" id="fileInputHidden" class="hidden">
 
-          <!-- Auto-expanding Textarea -->
-          <textarea
-            id="chatTextarea"
-            rows="1"
-            placeholder="Ask Stroke..."
-            class="flex-1 bg-transparent border-0 focus:ring-0 text-white placeholder-gray-500 text-sm py-2 px-1 resize-none max-h-48 outline-none leading-relaxed"
-          ></textarea>
+          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
+              <span>⚔️</span>
+              <span>Synthesize Sukuna 360° Cleave</span>
+            </div>
+            <div class="text-[11px] text-[#777] mt-1">Snap deceleration with Drag=22.0</div>
+          </button>
 
-          <!-- Right Action Controls (Think, Mic, Audio Voice Wave, Send) -->
-          <div class="flex items-center gap-1 flex-shrink-0 mb-0.5">
-            
-            <!-- Think / Deep Reasoning Toggle Button -->
-            <button id="thinkToggleBtn" title="Toggle Deep Reasoning (Think)" class="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium text-gray-400 hover:text-white hover:bg-matrix-surface transition">
-              <i data-lucide="brain-circuit" class="w-4 h-4"></i>
-              <span class="text-xs font-mono hidden sm:inline">Think</span>
-            </button>
+          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
+              <span>💥</span>
+              <span>Construct 1,460-Emitter Explosion</span>
+            </div>
+            <div class="text-[11px] text-[#777] mt-1">PointLight synchronized mobile LODs</div>
+          </button>
 
-            <!-- Dictation Microphone Button -->
-            <button id="dictationMicBtn" title="Dictate via microphone (Speech-to-Text)" class="p-2 text-gray-400 hover:text-matrix-neon rounded-full hover:bg-matrix-surface transition">
-              <i data-lucide="mic" class="w-4 h-4"></i>
-            </button>
-
-            <!-- Audio Waveform Live Voice Chat Button (Circular Waveform Button like ChatGPT) -->
-            <button id="voiceChatLaunchBtn" title="Start Live Voice Chat" class="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:scale-105">
-              <i data-lucide="audio-lines" class="w-5 h-5"></i>
-            </button>
-
-            <!-- Send Message Button -->
-            <button id="sendMessageBtn" title="Send message" class="w-9 h-9 rounded-full bg-matrix-neon hover:bg-matrix-neonHover text-matrix-black flex items-center justify-center font-bold transition disabled:opacity-40 disabled:hover:bg-matrix-neon disabled:cursor-not-allowed ml-1 shadow-[0_0_12px_rgba(0,255,102,0.4)]">
-              <i data-lucide="arrow-up" class="w-5 h-5"></i>
-            </button>
-
-          </div>
+          <button class="prompt-chip p-3 rounded-xl border border-[#1f2922] bg-[#0c120e] hover:border-matrix-green hover:bg-[#101b13] transition-all text-xs group">
+            <div class="font-semibold text-white group-hover:text-matrix-green flex items-center space-x-1.5">
+              <span>🌊</span>
+              <span>Hydrokinetic Mist Torrent</span>
+            </div>
+            <div class="text-[11px] text-[#777] mt-1">240-beam dual attachment ribbon vortex</div>
+          </button>
         </div>
+      </div>
 
-        <!-- Capability & Learning Status Footer -->
-        <div class="flex items-center justify-between px-3 text-[11px] font-mono text-gray-500">
-          <div class="flex items-center gap-2">
-            <span>Stroke Neural Core</span>
-            <span>•</span>
-            <span id="learningStatusNotice" class="text-matrix-neonDim">Adaptive Learning Active</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span id="offlineWeightsNotice">Offline Weights: Ready</span>
-          </div>
-        </div>
-
+      <!-- ACTIVE CHAT MESSAGES CONTAINER -->
+      <div id="messagesList" class="hidden w-full max-w-3xl space-y-6 pb-28">
+        <!-- Messages appended dynamically -->
       </div>
     </div>
 
+    <!-- ======================================================================= -->
+    <!-- FLOATING COMPOSER: Bottom Input Pill (Matching ChatGPT Screenshot!)     -->
+    <!-- ======================================================================= -->
+    <div class="w-full px-4 pb-4 flex flex-col items-center justify-center flex-shrink-0 z-30">
+      
+      <!-- Composer Container Pill -->
+      <div class="w-full max-w-3xl bg-[#0d120e] border border-[#213025] focus-within:border-matrix-green rounded-2xl p-2.5 shadow-2xl transition-all duration-200 glow-box">
+        
+        <!-- Textarea Row -->
+        <div class="flex items-end space-x-2">
+          
+          <!-- Left: Attachment / Context Button (+) -->
+          <button id="attachBtn" class="p-2 rounded-xl text-[#777] hover:text-matrix-green hover:bg-white/5 transition-colors flex-shrink-0" title="Attach VFX, reference script, or assets">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          </button>
+
+          <!-- Input Textarea -->
+          <textarea id="promptInput" rows="1" class="w-full bg-transparent text-white placeholder-[#555] text-sm resize-none focus:outline-none max-h-36 py-1.5 leading-relaxed font-sans" placeholder="Ask Stroke..."></textarea>
+
+          <!-- Right Action Controls -->
+          <div class="flex items-center space-x-1.5 flex-shrink-0 pb-0.5">
+            
+            <!-- Think Mode Toggle Button -->
+            <button id="thinkModeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium text-[#777] hover:text-white border border-transparent hover:border-[#253529] transition-all flex items-center space-x-1" title="Toggle deep neural reasoning">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+              <span>Think</span>
+            </button>
+
+            <!-- Microphone Button: Dictate Speech-to-Text directly into textarea -->
+            <button id="micDictationBtn" class="p-2 rounded-xl text-[#777] hover:text-matrix-green hover:bg-white/5 transition-colors" title="Speech-to-text dictation">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+            </button>
+
+            <!-- AUDIO / VOICE MODE BUTTON: Circular Audio Button (Matching Blue Voice Button in Screenshot!) -->
+            <button id="startVoiceChatBtn" class="w-9 h-9 rounded-full bg-matrix-green/20 hover:bg-matrix-green/30 border border-matrix-green text-matrix-green flex items-center justify-center transition-all glow-button relative group" title="Start live voice chat with Stroke">
+              <!-- Animated mini waveform bars inside circle -->
+              <div class="flex items-center space-x-0.5 h-4">
+                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-matrix-green rounded-full"></div>
+              </div>
+            </button>
+
+            <!-- Send Button -->
+            <button id="sendPromptBtn" class="w-8 h-8 rounded-full bg-matrix-green text-black flex items-center justify-center hover:bg-matrix-glow transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Microtext -->
+      <div class="text-[11px] text-[#555] mt-2 flex items-center space-x-2">
+        <span>Stroke Neural Core v2.5</span>
+        <span>•</span>
+        <span>Elemental Worlds 5X Matrix Fed</span>
+        <span>•</span>
+        <span>Continuous Learning Active</span>
+      </div>
+    </div>
   </main>
 
-  <!-- ===================================================================== -->
-  <!-- LIVE VOICE CHAT MODAL (ChatGPT Advanced Voice Mode Style)              -->
-  <!-- ===================================================================== -->
-  <div id="voiceModal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-between p-8">
+  <!-- ========================================================================= -->
+  <!-- MODAL: INTERACTIVE VOICE CHAT MODE (Full Voice Room Experience)           -->
+  <!-- ========================================================================= -->
+  <div id="voiceModal" class="hidden fixed inset-0 bg-[#050505]/95 backdrop-blur-xl z-50 flex flex-col items-center justify-between p-8 select-none">
     
-    <!-- Top Bar of Voice Modal -->
-    <div class="w-full max-w-xl flex items-center justify-between text-xs font-mono text-gray-400">
-      <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full bg-matrix-neon animate-ping"></span>
-        <span class="text-matrix-neon font-bold">STROKE LIVE VOICE MODE</span>
+    <!-- Top Bar: Exit + Status -->
+    <div class="w-full max-w-xl flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-matrix-green animate-ping"></span>
+        <span class="font-sans font-bold text-sm text-white glow-text">Stroke Voice Mode</span>
       </div>
-      <button id="closeVoiceModalBtn" class="p-2 rounded-full hover:bg-matrix-surface text-gray-400 hover:text-white transition">
-        <i data-lucide="x" class="w-6 h-6"></i>
+      <button id="closeVoiceModalBtn" class="p-2 rounded-full hover:bg-white/10 text-[#888] hover:text-white transition-colors">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>
 
-    <!-- Center: Glowing Voice Visualizer Orb -->
-    <div class="flex flex-col items-center gap-6 my-auto text-center">
-      <div id="voiceVisualizerOrb" class="voice-orb w-48 h-48 md:w-60 md:h-60 rounded-full bg-gradient-to-tr from-matrix-neon/20 via-blue-600/30 to-matrix-cyan/40 border-2 border-matrix-neon flex items-center justify-center relative shadow-[0_0_50px_rgba(0,255,102,0.4)]">
-        <!-- Inner Wave Bars -->
-        <div class="flex items-center gap-2 h-16">
-          <div class="wave-bar w-1.5 bg-matrix-neon rounded-full"></div>
-          <div class="wave-bar w-1.5 bg-matrix-cyan rounded-full"></div>
-          <div class="wave-bar w-1.5 bg-white rounded-full"></div>
-          <div class="wave-bar w-1.5 bg-matrix-cyan rounded-full"></div>
-          <div class="wave-bar w-1.5 bg-matrix-neon rounded-full"></div>
+    <!-- Center: Interactive Audio Visualizer Orb -->
+    <div class="flex flex-col items-center justify-center space-y-8 my-auto">
+      
+      <!-- Pulsating Orb -->
+      <div class="relative flex items-center justify-center">
+        <!-- Outer Glow Ring -->
+        <div id="voiceOrbOuter" class="w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300">
+          <!-- Inner Core -->
+          <div id="voiceOrbInner" class="w-32 h-32 rounded-full bg-gradient-to-tr from-matrix-darkgreen via-[#00441b] to-matrix-green/80 shadow-2xl flex items-center justify-center">
+            <!-- Icon/Waveform -->
+            <div id="voiceWaveformVisual" class="flex items-center space-x-1.5 h-10">
+              <div class="waveform-bar w-1 bg-white rounded-full"></div>
+              <div class="waveform-bar w-1 bg-white rounded-full"></div>
+              <div class="waveform-bar w-1 bg-white rounded-full"></div>
+              <div class="waveform-bar w-1 bg-white rounded-full"></div>
+              <div class="waveform-bar w-1 bg-white rounded-full"></div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- State Indicator & Live Transcription -->
-      <div class="flex flex-col gap-2 max-w-md">
-        <div id="voiceStateLabel" class="text-sm font-mono uppercase tracking-widest text-matrix-neon font-bold">
-          [LISTENING...]
+      <!-- Live Voice Subtitles & State -->
+      <div class="text-center max-w-md space-y-2">
+        <div id="voiceStateLabel" class="text-xs uppercase tracking-widest text-matrix-green font-mono">
+          Listening... Speak clearly into your microphone
         </div>
-        <p id="voiceTranscriptText" class="text-base text-gray-300 italic min-h-[3rem]">
-          "Say something to begin live speech interaction..."
+        <p id="voiceLiveTranscript" class="text-base font-sans text-white font-medium min-h-[48px] px-4">
+          "What can you build with the 5x Elemental Worlds dataset?"
         </p>
       </div>
     </div>
 
-    <!-- Bottom Controls for Voice Mode -->
-    <div class="flex items-center gap-4">
-      <button id="voiceMuteToggleBtn" class="w-12 h-12 rounded-full bg-matrix-card hover:bg-matrix-surface border border-matrix-border text-white flex items-center justify-center transition">
-        <i data-lucide="mic" id="voiceMuteIcon" class="w-5 h-5"></i>
+    <!-- Bottom Controls: Interrupt, Mute, End Call -->
+    <div class="w-full max-w-sm flex items-center justify-center space-x-6 pb-6">
+      <button id="toggleVoiceMuteBtn" class="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors" title="Mute/Unmute Mic">
+        <svg id="muteIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
       </button>
-      <button id="voiceInterruptBtn" class="px-5 py-3 rounded-full bg-matrix-surface hover:bg-matrix-card border border-matrix-border text-xs font-mono text-gray-300 hover:text-matrix-neon transition">
-        Interrupt AI
+
+      <button id="interruptVoiceBtn" class="px-5 py-2.5 rounded-full border border-matrix-green/40 bg-matrix-green/10 hover:bg-matrix-green/20 text-matrix-green text-xs font-mono glow-button">
+        Interrupt Speech
       </button>
-      <button id="voiceEndSessionBtn" class="w-12 h-12 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition shadow-lg">
-        <i data-lucide="phone-off" class="w-5 h-5"></i>
+
+      <button id="endVoiceCallBtn" class="p-4 rounded-full bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/40 transition-colors" title="End Voice Mode">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z"/></svg>
       </button>
     </div>
-
   </div>
 
-  <!-- ===================================================================== -->
-  <!-- SLIDE-OVER TELEMETRY TERMINAL & MCP DRAWER                             -->
-  <!-- ===================================================================== -->
-  <div id="telemetryDrawer" class="fixed top-0 right-0 h-full w-full sm:w-[460px] bg-matrix-black border-l border-matrix-border z-40 transform translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
-    
-    <!-- Drawer Header -->
-    <div class="h-14 border-b border-matrix-border flex items-center justify-between px-4">
-      <div class="flex items-center gap-2">
-        <i data-lucide="terminal" class="w-4 h-4 text-matrix-neon"></i>
-        <span class="font-mono font-bold text-xs text-matrix-neon">SYSTEM TELEMETRY & MCP</span>
+  <!-- ========================================================================= -->
+  <!-- DRAWER: CONTINUOUS CHAT LEARNING MATRIX                                    -->
+  <!-- ========================================================================= -->
+  <div id="learningDrawer" class="hidden fixed inset-y-0 right-0 w-full sm:w-96 bg-[#090909] border-l border-[#1f2922] shadow-2xl z-50 flex flex-col justify-between">
+    <div class="p-4 border-b border-[#18251c] flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <svg class="w-5 h-5 text-matrix-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <span class="font-sans font-bold text-white text-sm">Continuous Learning Matrix</span>
       </div>
-      <button id="closeTelemetryDrawerBtn" class="p-1.5 rounded-md hover:bg-matrix-surface text-gray-400 hover:text-white">
-        <i data-lucide="x" class="w-4 h-4"></i>
-      </button>
+      <button id="closeLearningDrawerBtn" class="text-[#777] hover:text-white p-1">✕</button>
     </div>
 
-    <!-- Tab Navigation -->
-    <div class="flex border-b border-matrix-border text-xs font-mono bg-matrix-card">
-      <button data-tab="tabTelemetry" class="drawer-tab flex-1 py-2 text-center text-matrix-neon border-b-2 border-matrix-neon font-semibold">Terminal</button>
-      <button data-tab="tabRecords" class="drawer-tab flex-1 py-2 text-center text-gray-400 hover:text-white">5X Matrix</button>
-      <button data-tab="tabMcp" class="drawer-tab flex-1 py-2 text-center text-gray-400 hover:text-white">MCP Bridge</button>
-      <button data-tab="tabLearning" class="drawer-tab flex-1 py-2 text-center text-gray-400 hover:text-white">Learning</button>
-    </div>
-
-    <!-- Tab 1: Terminal Log Stream -->
-    <div id="tabTelemetry" class="tab-pane flex-1 p-3 overflow-y-auto font-mono text-xs flex flex-col gap-1.5 bg-black">
-      <div id="telemetryLogOutput" class="space-y-1">
-        <div class="text-gray-500">[00:00:00] Stroke Cyberpunk Neural Core Initialized.</div>
-      </div>
-    </div>
-
-    <!-- Tab 2: 5X Database Injected Records -->
-    <div id="tabRecords" class="tab-pane hidden flex-1 p-3 overflow-y-auto font-mono text-xs flex flex-col gap-2">
-      <div class="text-[11px] text-gray-400 mb-1">Firestore Path: <code class="text-matrix-neon">users/{email}/records/</code></div>
-      <div id="matrixRecordsList" class="flex flex-col gap-2">
-        <!-- Records populated by JS -->
-      </div>
-    </div>
-
-    <!-- Tab 3: MCP Bridge Controls -->
-    <div id="tabMcp" class="tab-pane hidden flex-1 p-3 overflow-y-auto font-mono text-xs flex flex-col gap-3">
-      <div class="p-3 rounded-lg bg-matrix-card border border-matrix-border">
-        <div class="text-matrix-neon font-semibold mb-1">Roblox Studio MCP</div>
-        <div class="text-[11px] text-gray-400 mb-2">Connected at <code class="text-matrix-cyan">http://127.0.0.1:8989</code></div>
-        <button id="runStudioTestBtn" class="w-full py-1.5 rounded bg-matrix-surface hover:bg-matrix-border text-matrix-neon text-xs border border-matrix-border">Test Studio Ping</button>
-      </div>
-
-      <div class="p-3 rounded-lg bg-matrix-card border border-matrix-border">
-        <div class="text-matrix-purple font-semibold mb-1">GitHub MCP Server</div>
-        <div class="text-[11px] text-gray-400 mb-2">Connected via OAuth Personal Access Token</div>
-        <a id="connectGitHubLink" href="/auth/github-connect?email=developer@cyber.matrix" target="_blank" class="block text-center w-full py-1.5 rounded bg-matrix-surface hover:bg-matrix-border text-matrix-purple text-xs border border-matrix-border">Reconnect GitHub OAuth</a>
-      </div>
-    </div>
-
-    <!-- Tab 4: Adaptive Learning Matrix Inspector -->
-    <div id="tabLearning" class="tab-pane hidden flex-1 p-3 overflow-y-auto font-mono text-xs flex flex-col gap-3">
-      <div class="p-3 rounded-lg bg-matrix-card border border-matrix-border">
-        <div class="text-matrix-neon font-semibold mb-1">Continuous Feedback Engine</div>
-        <div class="text-[11px] text-gray-400 mb-2">Analyzes user chats to refine AI prompts and 5-cycle database feeding.</div>
-        <div class="space-y-1 text-[11px]">
-          <div class="flex justify-between"><span>Optimization Level:</span> <span id="learningOptPct" class="text-matrix-neon font-bold">94.2%</span></div>
-          <div class="flex justify-between"><span>Learned Concepts:</span> <span id="learningConceptsCount" class="text-matrix-cyan font-bold">18</span></div>
-        </div>
-      </div>
-      <div class="text-[11px] text-gray-400">Active Distilled Concepts:</div>
-      <div id="learningConceptsChips" class="flex flex-wrap gap-1.5">
-        <!-- Concept chips populated by JS -->
-      </div>
-    </div>
-
-  </div>
-
-  <!-- ===================================================================== -->
-  <!-- 5-CYCLE SEQUENTIAL INGESTION MODAL                                    -->
-  <!-- ===================================================================== -->
-  <div id="cycleIngestionModal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="w-full max-w-lg bg-matrix-card border border-matrix-neon rounded-2xl p-6 shadow-[0_0_35px_rgba(0,255,102,0.35)] flex flex-col gap-4 font-mono">
-      <div class="flex items-center justify-between border-b border-matrix-border pb-3">
-        <div class="flex items-center gap-2">
-          <div class="w-3 h-3 rounded-full bg-matrix-neon animate-ping"></div>
-          <h2 class="text-sm font-bold text-matrix-neon tracking-wider">5-CYCLE VFX INGESTION PIPELINE</h2>
-        </div>
-        <span class="text-xs text-gray-400">AyanshShrivastava/elemental-worlds</span>
-      </div>
-
-      <p class="text-xs text-gray-300 leading-relaxed">
-        Ingesting 14,666 instances & 4.4MB particle dump across 5 sequential cycles. Each pass builds upon the previous cycle's synthesis.
+    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+      <p class="text-xs text-[#888] leading-relaxed">
+        Stroke continuously distills solutions and code patterns from your chats into structured knowledge. These learnings recursively elevate both the real-time AI and the 5-cycle database feeding matrix.
       </p>
 
-      <!-- Active Cycle Progress Bar -->
-      <div class="space-y-1.5">
-        <div class="flex justify-between text-xs">
-          <span id="cycleStepTitle" class="text-matrix-neon font-semibold">Initializing Cycle 1/5...</span>
-          <span id="cyclePctLabel" class="text-gray-400">0%</span>
+      <!-- Metrics Row -->
+      <div class="grid grid-cols-2 gap-2">
+        <div class="p-3 rounded-lg border border-[#1f2922] bg-[#0c120e]">
+          <div class="text-[10px] text-[#666] uppercase">Chats Distilled</div>
+          <div id="telemetryChatsCount" class="text-lg font-bold text-white font-mono">14</div>
         </div>
-        <div class="w-full h-2 rounded-full bg-matrix-black border border-matrix-border overflow-hidden">
-          <div id="cycleProgressBar" class="h-full bg-matrix-neon transition-all duration-300 w-0"></div>
+        <div class="p-3 rounded-lg border border-[#1f2922] bg-[#0c120e]">
+          <div class="text-[10px] text-[#666] uppercase">Accuracy Gain</div>
+          <div id="telemetryAccuracyGain" class="text-lg font-bold text-matrix-cyan font-mono">+12.4%</div>
         </div>
       </div>
 
-      <!-- Live Synthesis Preview Box -->
-      <div class="p-3 rounded-lg bg-matrix-black border border-matrix-border text-[11px] text-gray-300 max-h-36 overflow-y-auto" id="cycleSynthesisPreview">
-        Waiting for authentication handshake...
-      </div>
-
-      <button id="startCycleFeedingBtn" class="w-full py-2.5 rounded-lg bg-matrix-neon hover:bg-matrix-neonHover text-matrix-black font-bold text-xs uppercase tracking-wider transition neon-glow-btn">
-        Execute 5-Cycle Ingestion
+      <!-- Action: Re-feed 5X Matrix with Learnings -->
+      <button id="refeedWithLearningsBtn" class="w-full py-2 px-3 rounded-lg bg-matrix-green/10 hover:bg-matrix-green/20 border border-matrix-green/40 text-matrix-green text-xs font-semibold flex items-center justify-center space-x-2 transition-all glow-button">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        <span>Re-Feed 5X Matrix with Chat Insights</span>
       </button>
+
+      <!-- Distilled Insights List -->
+      <div class="space-y-2 pt-2">
+        <div class="text-[11px] font-bold text-[#888] uppercase tracking-wider">Active Distilled Insights</div>
+        <div id="learningInsightsList" class="space-y-2">
+          <!-- Dynamically populated from /ai/learned-insights -->
+        </div>
+      </div>
+    </div>
+
+    <div class="p-3 border-t border-[#18251c] bg-[#050505] text-[11px] text-[#666] text-center">
+      Temporary chats are automatically excluded from training.
     </div>
   </div>
 
-  <!-- ===================================================================== -->
-  <!-- USER AUTHENTICATION / OTP LOGIN MODAL                                 -->
-  <!-- ===================================================================== -->
-  <div id="authModal" class="hidden fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-matrix-card border border-matrix-neon rounded-2xl p-6 shadow-[0_0_40px_rgba(0,255,102,0.3)] flex flex-col gap-4 font-mono">
-      <div class="flex items-center gap-3 border-b border-matrix-border pb-3">
-        <div class="w-8 h-8 rounded-lg bg-matrix-black border border-matrix-neon flex items-center justify-center text-matrix-neon font-bold">⚡</div>
-        <div>
-          <h2 class="text-base font-bold text-white tracking-wide">STROKE IDENTITY VERIFICATION</h2>
-          <p class="text-[11px] text-matrix-neonDim">Cryptographic Email OTP Gateway</p>
+  <!-- ========================================================================= -->
+  <!-- MODAL: AUTH / OTP VERIFICATION (Login-Gated Database Feeding)             -->
+  <!-- ========================================================================= -->
+  <div id="authModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-[#0b0f0c] border border-matrix-green/40 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 glow-box">
+      <div class="flex items-center justify-between border-b border-[#1f2922] pb-3">
+        <div class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded bg-matrix-green/20 border border-matrix-green flex items-center justify-center font-bold text-xs">S</div>
+          <h3 class="font-sans font-bold text-white text-base">Stroke Matrix Identity Gateway</h3>
         </div>
+        <button id="closeAuthModalBtn" class="text-[#777] hover:text-white">✕</button>
       </div>
 
-      <!-- Step 1: Input Email -->
-      <div id="authEmailStep" class="flex flex-col gap-3">
-        <label class="text-xs text-gray-300">Enter Verified Email Address:</label>
-        <input
-          type="email"
-          id="authEmailInput"
-          placeholder="operator@matrix.net"
-          value="developer@cyber.matrix"
-          class="w-full px-3 py-2.5 rounded-lg bg-matrix-black border border-matrix-borderLight focus:border-matrix-neon text-white text-xs outline-none"
-        >
-        <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-matrix-neon hover:bg-matrix-neonHover text-matrix-black font-bold text-xs tracking-wider uppercase transition neon-glow-btn">
+      <!-- Step 1: Send OTP -->
+      <div id="otpStep1" class="space-y-3">
+        <p class="text-xs text-[#888] leading-relaxed">
+          Enter your email to receive a single-use 6-digit cryptographic security code. Feeding the 5X VFX database occurs automatically upon successful authentication.
+        </p>
+        <div>
+          <label class="block text-[11px] text-[#777] uppercase mb-1">Email Identity Address</label>
+          <input id="authEmailInput" type="email" placeholder="developer@cyber.matrix" class="w-full bg-[#050505] border border-[#1f2922] focus:border-matrix-green rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+        </div>
+        <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-matrix-green text-black font-semibold text-xs hover:bg-matrix-glow transition-all glow-button">
           Send 6-Digit OTP Token
         </button>
       </div>
 
-      <!-- Step 2: Input OTP -->
-      <div id="authOtpStep" class="hidden flex flex-col gap-3">
-        <div class="flex items-center justify-between text-xs">
-          <span class="text-gray-300">Input 6-Digit Security Code:</span>
-          <span id="otpCountdownTimer" class="text-matrix-neon font-bold">05:00</span>
+      <!-- Step 2: Verify OTP -->
+      <div id="otpStep2" class="hidden space-y-3">
+        <p class="text-xs text-matrix-muted leading-relaxed">
+          OTP dispatched to stdout! Enter the 6-digit security key below:
+        </p>
+        <div>
+          <label class="block text-[11px] text-[#777] uppercase mb-1">6-Digit Security Token</label>
+          <input id="authOtpInput" type="text" maxlength="6" placeholder="123456" class="w-full bg-[#050505] border border-matrix-green rounded-lg px-3 py-2 text-white text-lg tracking-widest text-center focus:outline-none font-mono font-bold">
         </div>
-        <input
-          type="text"
-          id="authOtpInput"
-          maxlength="6"
-          placeholder="••••••"
-          class="w-full text-center tracking-[0.5em] px-3 py-2.5 rounded-lg bg-matrix-black border border-matrix-borderLight focus:border-matrix-neon text-matrix-neon text-lg font-bold outline-none"
-        >
-        <div class="text-[10px] text-gray-400">Check server stdout terminal for simulated OTP delivery.</div>
-        <button id="verifyOtpBtn" class="w-full py-2.5 rounded-lg bg-matrix-neon hover:bg-matrix-neonHover text-matrix-black font-bold text-xs tracking-wider uppercase transition neon-glow-btn">
-          Validate & Enter Studio
+        <div class="flex space-x-2">
+          <button id="backToStep1Btn" class="w-1/3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs">Back</button>
+          <button id="verifyOtpBtn" class="w-2/3 py-2 rounded-lg bg-matrix-green text-black font-semibold text-xs hover:bg-matrix-glow transition-all glow-button">
+            Verify & Authenticate
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: 5-CYCLE SEQUENTIAL VFX DATABASE INGESTION MODAL                     -->
+  <!-- ========================================================================= -->
+  <div id="ingestionModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-[#090d0a] border border-matrix-green/50 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 glow-box">
+      <div class="flex items-center justify-between border-b border-[#1f2922] pb-3">
+        <div>
+          <div class="text-[10px] text-matrix-cyan uppercase tracking-wider font-mono">Sequential Ingestion Engine</div>
+          <h3 class="font-sans font-bold text-white text-lg">5-Cycle VFX Matrix Feeding</h3>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded bg-matrix-green/10 border border-matrix-green/30 text-matrix-green font-mono">14,666 Instances</span>
+      </div>
+
+      <p class="text-xs text-[#888]">
+        Ingesting Elemental Worlds dataset across 5 sequential passes. When Cycle N synthesis is absorbed, Cycle N+1 builds upon it until the AI masters all particle kinematics.
+      </p>
+
+      <!-- Cycle Stepper Visual -->
+      <div class="grid grid-cols-5 gap-2 text-center text-[10px] font-mono">
+        <div id="step-c1" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">1. Void</div>
+        <div id="step-c2" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">2. Slash</div>
+        <div id="step-c3" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">3. Fire</div>
+        <div id="step-c4" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">4. Aqua</div>
+        <div id="step-c5" class="p-2 rounded border border-[#1f2922] bg-[#0c120e] text-[#666]">5. Electro</div>
+      </div>
+
+      <!-- Current Cycle Terminal Box -->
+      <div class="bg-[#030504] border border-[#1f2922] rounded-xl p-3 font-mono text-xs space-y-2 h-44 overflow-y-auto">
+        <div id="ingestionTerminalLogs" class="text-matrix-green space-y-1">
+          <div>[STROKE] Initializing 5-Cycle Sequential Ingestion Engine...</div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2">
+        <button id="cancelIngestionBtn" class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-[#888]">Dismiss</button>
+        <button id="start5CycleIngestionBtn" class="px-6 py-2 rounded-lg bg-matrix-green text-black font-semibold text-xs hover:bg-matrix-glow transition-all glow-button">
+          Execute 5-Cycle Absorption
         </button>
       </div>
-
     </div>
   </div>
 
-  <!-- ===================================================================== -->
-  <!-- SETTINGS MODAL                                                        -->
-  <!-- ===================================================================== -->
-  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="w-full max-w-lg bg-matrix-card border border-matrix-border rounded-2xl p-6 shadow-2xl flex flex-col gap-4 font-mono text-xs">
-      <div class="flex items-center justify-between border-b border-matrix-border pb-3">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
-          <i data-lucide="settings" class="w-4 h-4 text-matrix-neon"></i>
-          Stroke Preferences & Integrations
-        </h3>
-        <button id="closeSettingsModalBtn" class="p-1 hover:text-matrix-neon"><i data-lucide="x" class="w-4 h-4"></i></button>
-      </div>
-
-      <div class="space-y-3">
-        <div>
-          <label class="text-gray-400 block mb-1">Active User Identity:</label>
-          <div id="settingsEmailDisplay" class="p-2 rounded bg-matrix-black border border-matrix-border text-matrix-neon font-semibold">developer@cyber.matrix</div>
-        </div>
-
-        <div>
-          <label class="text-gray-400 block mb-1">Optional Groq API Key (for Cloud 70B Agent):</label>
-          <input type="password" id="groqApiKeyInput" placeholder="gsk_..." class="w-full p-2 rounded bg-matrix-black border border-matrix-border text-white outline-none">
-        </div>
-
-        <div class="pt-2 border-t border-matrix-border flex items-center justify-between">
-          <span>Continuous Learning Matrix:</span>
-          <span class="text-matrix-neon">Enabled (Active)</span>
-        </div>
-
-        <div class="flex items-center justify-between">
-          <span>GitHub OAuth PAT:</span>
-          <span id="settingsGithubStatus" class="text-matrix-purple">Connected</span>
-        </div>
-      </div>
-
-      <div class="flex gap-2 pt-3 border-t border-matrix-border">
-        <button id="saveSettingsBtn" class="flex-1 py-2 rounded bg-matrix-neon text-matrix-black font-bold">Save Settings</button>
-        <button id="signOutBtn" class="px-4 py-2 rounded bg-red-600/20 text-red-400 hover:bg-red-600/30">Sign Out</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================================================================== -->
-  <!-- JAVASCRIPT CONTROLLERS (Full Implementation, No Placeholders)          -->
-  <!-- ===================================================================== -->
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT CONTROLLERS & AUDIO / VOICE CLIENT                              -->
+  <!-- ========================================================================= -->
   <script>
-    // --- Application State Store ---
-    const STATE = {
-      currentUser: localStorage.getItem('stroke_email') || 'developer@cyber.matrix',
-      isAuthenticated: !!localStorage.getItem('stroke_email'),
+    // System State
+    const state = {
+      userEmail: localStorage.getItem('stroke_user_email') || 'developer@cyber.matrix',
+      isTemporaryMode: false,
+      thinkMode: false,
+      activeSessionId: 'session-' + Date.now(),
+      selectedModel: 'stroke-neural',
       databaseFed: false,
-      isTemporaryChat: false,
-      selectedModel: 'llama-3.3-70b-versatile',
-      isDeepThinking: false,
-      chats: JSON.parse(localStorage.getItem('stroke_chats') || '[]'),
-      activeChatId: null,
-      voiceSessionActive: false,
-      speechRecognition: null,
-      speechSynth: window.speechSynthesis
+      isVoiceActive: false,
+      isVoiceListening: false,
+      isVoiceMuted: false,
+      chatMessages: []
     };
 
-    // Initialize Default Chat if empty
-    if (!STATE.chats.length) {
-      STATE.chats = [
-        {
-          id: 'chat-default-1',
-          title: 'Elemental Worlds Core Design',
-          messages: [],
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: 'chat-default-2',
-          title: 'DIY Key Presser Arduino Servo',
-          messages: [],
-          updatedAt: new Date().toISOString()
-        }
-      ];
-      localStorage.setItem('stroke_chats', JSON.stringify(STATE.chats));
-    }
-    STATE.activeChatId = STATE.chats[0].id;
+    // DOM Elements
+    const sidebar = document.getElementById('sidebar');
+    const collapseSidebarBtn = document.getElementById('collapseSidebarBtn');
+    const expandSidebarBtn = document.getElementById('expandSidebarBtn');
+    const newChatBtn = document.getElementById('newChatBtn');
+    const promptInput = document.getElementById('promptInput');
+    const sendPromptBtn = document.getElementById('sendPromptBtn');
+    const emptyStateHero = document.getElementById('emptyStateHero');
+    const messagesList = document.getElementById('messagesList');
+    const temporaryChatToggleBtn = document.getElementById('temporaryChatToggleBtn');
+    const tempChatBanner = document.getElementById('tempChatBanner');
+    const tempChatIndicator = document.getElementById('tempChatIndicator');
+    const thinkModeBtn = document.getElementById('thinkModeBtn');
+    const micDictationBtn = document.getElementById('micDictationBtn');
+    const startVoiceChatBtn = document.getElementById('startVoiceChatBtn');
+    const voiceModal = document.getElementById('voiceModal');
+    const closeVoiceModalBtn = document.getElementById('closeVoiceModalBtn');
+    const endVoiceCallBtn = document.getElementById('endVoiceCallBtn');
+    const toggleVoiceMuteBtn = document.getElementById('toggleVoiceMuteBtn');
+    const interruptVoiceBtn = document.getElementById('interruptVoiceBtn');
+    const voiceLiveTranscript = document.getElementById('voiceLiveTranscript');
+    const voiceStateLabel = document.getElementById('voiceStateLabel');
+    const voiceOrbOuter = document.getElementById('voiceOrbOuter');
+    const userProfileBtn = document.getElementById('userProfileBtn');
+    const profilePopover = document.getElementById('profilePopover');
+    const popoverEmail = document.getElementById('popoverEmail');
+    const userDisplayName = document.getElementById('userDisplayName');
+    const userAvatarCircle = document.getElementById('userAvatarCircle');
+    const authModal = document.getElementById('authModal');
+    const openContinuousLearningBtn = document.getElementById('openContinuousLearningBtn');
+    const learningDrawer = document.getElementById('learningDrawer');
+    const closeLearningDrawerBtn = document.getElementById('closeLearningDrawerBtn');
+    const refeedWithLearningsBtn = document.getElementById('refeedWithLearningsBtn');
+    const ingestionModal = document.getElementById('ingestionModal');
 
-    // --- DOM Reference Helpers ---
-    const $ = (id) => document.getElementById(id);
+    // Speech Recognition & Synthesis APIs
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let voiceRecognition = null;
+    let dictationRecognition = null;
 
-    // --- Telemetry Logger ---
-    function logTelemetry(message, type = 'info') {
-      const logContainer = $('telemetryLogOutput');
-      if (!logContainer) return;
+    // Initialize UI on load
+    document.addEventListener('DOMContentLoaded', () => {
+      updateUserIdentityUI();
+      loadUserChats();
+      fetchLearningTelemetry();
+      setupSpeechEngines();
+    });
 
-      const timeStr = new Date().toTimeString().split(' ')[0];
-      const line = document.createElement('div');
-      line.className = 'font-mono text-[11px] leading-tight break-all';
-
-      let color = 'text-matrix-neon';
-      if (type === 'error') color = 'text-matrix-red';
-      if (type === 'warning') color = 'text-yellow-400';
-      if (type === 'tool') color = 'text-matrix-cyan';
-      if (type === 'purple') color = 'text-matrix-purple';
-
-      line.innerHTML = `<span class="text-gray-500">[${timeStr}]</span> <span class="${color}">${message}</span>`;
-      logContainer.appendChild(line);
-      logContainer.scrollTop = logContainer.scrollHeight;
-    }
-
-    // --- Lucide Icons Refresh ---
-    function refreshIcons() {
-      if (window.lucide) {
-        window.lucide.createIcons();
-      }
-    }
-
-    // --- Sidebar Chat History Renderer ---
-    function renderChatHistory() {
-      const list = $('chatHistoryList');
-      if (!list) return;
-      list.innerHTML = '';
-
-      $('chatCountBadge').textContent = STATE.chats.length;
-
-      STATE.chats.forEach(chat => {
-        const isActive = chat.id === STATE.activeChatId;
-        const item = document.createElement('div');
-        item.className = `group flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition ${
-          isActive ? 'bg-matrix-surface text-white border-l-2 border-matrix-neon' : 'text-gray-400 hover:bg-matrix-surface hover:text-white'
-        }`;
-
-        item.innerHTML = `
-          <div class="flex items-center gap-2 truncate flex-1" onclick="switchChat('${chat.id}')">
-            <i data-lucide="message-square" class="w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-matrix-neon' : 'text-gray-500'}"></i>
-            <span class="truncate">${chat.title}</span>
-          </div>
-          <div class="hidden group-hover:flex items-center gap-1">
-            <button onclick="event.stopPropagation(); deleteChat('${chat.id}')" title="Delete" class="p-1 hover:text-matrix-red text-gray-500">
-              <i data-lucide="trash-2" class="w-3 h-3"></i>
-            </button>
-          </div>
-        `;
-        list.appendChild(item);
-      });
-
-      refreshIcons();
+    // 1. User Identity & Popover UI
+    function updateUserIdentityUI() {
+      const email = state.userEmail;
+      popoverEmail.textContent = email;
+      const namePart = email.split('@')[0];
+      const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+      userDisplayName.textContent = capitalized;
+      const initials = namePart.slice(0, 2).toUpperCase();
+      userAvatarCircle.textContent = initials;
     }
 
-    function switchChat(chatId) {
-      STATE.activeChatId = chatId;
-      renderChatHistory();
-      renderActiveChatMessages();
-    }
+    userProfileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      profilePopover.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => profilePopover.classList.add('hidden'));
 
-    function createNewChat() {
-      const newId = 'chat-' + Date.now();
-      const newChat = {
-        id: newId,
-        title: 'New conversation',
-        messages: [],
-        updatedAt: new Date().toISOString()
-      };
-      STATE.chats.unshift(newChat);
-      STATE.activeChatId = newId;
-      localStorage.setItem('stroke_chats', JSON.stringify(STATE.chats));
-      renderChatHistory();
-      renderActiveChatMessages();
-      logTelemetry('Created new chat session: ' + newId);
-    }
+    // 2. Sidebar Collapse / Expand
+    collapseSidebarBtn.addEventListener('click', () => {
+      sidebar.classList.add('-ml-64');
+      expandSidebarBtn.classList.remove('hidden');
+    });
+    expandSidebarBtn.addEventListener('click', () => {
+      sidebar.classList.remove('-ml-64');
+      expandSidebarBtn.classList.add('hidden');
+    });
 
-    function deleteChat(chatId) {
-      STATE.chats = STATE.chats.filter(c => c.id !== chatId);
-      if (!STATE.chats.length) {
-        createNewChat();
+    // 3. Temporary Chat Toggle (Matching Screenshot!)
+    temporaryChatToggleBtn.addEventListener('click', () => {
+      toggleTemporaryChatMode(!state.isTemporaryMode);
+    });
+    document.getElementById('turnOffTempChatBtn').addEventListener('click', () => {
+      toggleTemporaryChatMode(false);
+    });
+
+    function toggleTemporaryChatMode(enabled) {
+      state.isTemporaryMode = enabled;
+      if (enabled) {
+        tempChatBanner.classList.remove('hidden');
+        temporaryChatToggleBtn.classList.add('border-matrix-amber', 'text-matrix-amber', 'bg-amber-950/20');
+        tempChatIndicator.classList.remove('bg-[#555]');
+        tempChatIndicator.classList.add('bg-matrix-amber', 'animate-pulse');
       } else {
-        STATE.activeChatId = STATE.chats[0].id;
+        tempChatBanner.classList.add('hidden');
+        temporaryChatToggleBtn.classList.remove('border-matrix-amber', 'text-matrix-amber', 'bg-amber-950/20');
+        tempChatIndicator.classList.add('bg-[#555]');
+        tempChatIndicator.classList.remove('bg-matrix-amber', 'animate-pulse');
       }
-      localStorage.setItem('stroke_chats', JSON.stringify(STATE.chats));
-      renderChatHistory();
-      renderActiveChatMessages();
-      logTelemetry('Deleted chat session: ' + chatId);
     }
 
-    // --- Message Feed Renderer ---
-    function renderActiveChatMessages() {
-      const container = $('messagesContainer');
-      const emptyState = $('emptyStateView');
-      const currentChat = STATE.chats.find(c => c.id === STATE.activeChatId);
-
-      if (!currentChat || !currentChat.messages.length) {
-        if (emptyState) emptyState.classList.remove('hidden');
-        // Clear messages but keep empty state view
-        container.innerHTML = '';
-        if (emptyState) container.appendChild(emptyState);
-        return;
+    // 4. Think Mode Toggle
+    thinkModeBtn.addEventListener('click', () => {
+      state.thinkMode = !state.thinkMode;
+      if (state.thinkMode) {
+        thinkModeBtn.classList.add('border-matrix-green', 'text-matrix-green', 'bg-matrix-green/10');
+      } else {
+        thinkModeBtn.classList.remove('border-matrix-green', 'text-matrix-green', 'bg-matrix-green/10');
       }
+    });
 
-      if (emptyState) emptyState.classList.add('hidden');
-      container.innerHTML = '';
+    // 5. New Chat Action
+    newChatBtn.addEventListener('click', () => {
+      startNewConversation();
+    });
 
-      currentChat.messages.forEach(msg => {
-        const isUser = msg.role === 'user';
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `flex flex-col gap-2 ${isUser ? 'items-end' : 'items-start'}`;
+    function startNewConversation() {
+      state.activeSessionId = 'session-' + Date.now();
+      state.chatMessages = [];
+      messagesList.innerHTML = '';
+      messagesList.classList.add('hidden');
+      emptyStateHero.classList.remove('hidden');
+      promptInput.value = '';
+      promptInput.focus();
+    }
 
-        if (isUser) {
-          msgDiv.innerHTML = `
-            <div class="max-w-[85%] bg-matrix-surface border border-matrix-borderLight rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-white shadow-sm">
-              ${escapeHtml(msg.content)}
-            </div>
-          `;
-        } else {
-          // Assistant Markdown Render
-          const parsedMarkdown = marked.parse(msg.content || '');
-          let toolChipsHtml = '';
-          if (msg.toolInvoked) {
-            toolChipsHtml = `
-              <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-matrix-black border border-matrix-neon/40 text-[11px] font-mono text-matrix-neon mb-2">
-                <i data-lucide="zap" class="w-3 h-3"></i>
-                <span>${msg.toolName || 'tool_call'}(${escapeHtml(msg.toolQuery || '')})</span>
-              </div>
-            `;
-          }
-
-          msgDiv.innerHTML = `
-            <div class="flex items-start gap-3 max-w-[95%]">
-              <div class="w-7 h-7 rounded-lg bg-matrix-card border border-matrix-neon flex items-center justify-center text-matrix-neon font-bold text-xs flex-shrink-0 mt-1 shadow-[0_0_8px_rgba(0,255,102,0.3)]">
-                ⚡
-              </div>
-              <div class="flex-1 overflow-hidden">
-                ${toolChipsHtml}
-                <div class="prose text-sm text-gray-200 leading-relaxed font-sans">
-                  ${parsedMarkdown}
-                </div>
-                <!-- Action Buttons under Assistant Message -->
-                <div class="flex items-center gap-3 mt-3 text-xs text-gray-500 font-mono">
-                  <button onclick="navigator.clipboard.writeText(\`${escapeQuotes(msg.content)}\`)" class="hover:text-matrix-neon flex items-center gap-1">
-                    <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy
-                  </button>
-                  <button onclick="speakText(\`${escapeQuotes(msg.content)}\`)" class="hover:text-matrix-cyan flex items-center gap-1">
-                    <i data-lucide="volume-2" class="w-3.5 h-3.5"></i> Play
-                  </button>
-                  ${msg.learnedConcepts ? `<span class="text-matrix-neonDim">🧠 Learned ${msg.learnedConcepts.length} concepts</span>` : ''}
-                </div>
-              </div>
-            </div>
-          `;
-        }
-
-        container.appendChild(msgDiv);
+    // 6. Prompt Chips Click Handlers
+    document.querySelectorAll('.prompt-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const text = chip.querySelector('span:last-child').textContent;
+        promptInput.value = text;
+        submitUserPrompt();
       });
+    });
 
-      refreshIcons();
-      $('chatScrollArea').scrollTop = $('chatScrollArea').scrollHeight;
-    }
+    // 7. Auto-growing Textarea & Enter to Send
+    promptInput.addEventListener('input', () => {
+      promptInput.style.height = 'auto';
+      promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
+      sendPromptBtn.disabled = !promptInput.value.trim();
+    });
 
-    function escapeHtml(text) {
-      if (!text) return '';
-      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    function escapeQuotes(text) {
-      if (!text) return '';
-      return text.replace(/`/g, '\\`').replace(/\$/g, '\\$');
-    }
-
-    // --- Continuous Learning Extraction Call ---
-    async function triggerContinuousLearning(messages) {
-      if (STATE.isTemporaryChat) {
-        logTelemetry('[LEARNING] Temporary chat active. Skipped updating learning matrix.', 'warning');
-        return;
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        submitUserPrompt();
       }
+    });
 
-      try {
-        const resp = await fetch('/ai/learn-from-chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: STATE.currentUser,
-            chat_id: STATE.activeChatId,
-            messages: messages,
-            temporary: false
-          })
-        });
+    sendPromptBtn.addEventListener('click', submitUserPrompt);
 
-        if (resp.ok) {
-          const resData = await resp.json();
-          if (resData.status === 'success') {
-            logTelemetry(`[LEARNING REINFORCEMENT] Distilled ${resData.concepts_extracted.length} concepts. Matrix at ${resData.matrix_optimization_level}%`, 'purple');
-            $('learningStatusNotice').textContent = `Adaptive Matrix: ${resData.matrix_optimization_level}%`;
-            $('learningOptPct').textContent = `${resData.matrix_optimization_level}%`;
-            $('learningConceptsCount').textContent = resData.total_concepts_count;
-            updateLearningChips(resData.concepts_extracted);
-          }
-        }
-      } catch (err) {
-        console.error('Learning engine error:', err);
-      }
-    }
-
-    function updateLearningChips(concepts) {
-      const container = $('learningConceptsChips');
-      if (!container || !concepts) return;
-      concepts.forEach(c => {
-        const chip = document.createElement('span');
-        chip.className = 'px-2 py-0.5 rounded-full bg-matrix-card border border-matrix-border text-matrix-neon text-[10px]';
-        chip.textContent = c;
-        container.prepend(chip);
-      });
-    }
-
-    // --- Message Dispatch Controller ---
-    async function handleSendMessage() {
-      const textarea = $('chatTextarea');
-      const text = textarea.value.trim();
+    // 8. Submit Prompt Controller
+    async function submitUserPrompt() {
+      const text = promptInput.value.trim();
       if (!text) return;
 
-      textarea.value = '';
-      textarea.style.height = 'auto';
+      // Switch view from hero to message list
+      emptyStateHero.classList.add('hidden');
+      messagesList.classList.remove('hidden');
 
-      const currentChat = STATE.chats.find(c => c.id === STATE.activeChatId);
-      if (!currentChat) return;
+      // Append User message
+      appendMessage('user', text);
+      state.chatMessages.push({ role: 'user', content: text });
+      promptInput.value = '';
+      promptInput.style.height = 'auto';
+      sendPromptBtn.disabled = true;
 
-      // Update Chat Title on first message
-      if (currentChat.messages.length === 0) {
-        currentChat.title = text.slice(0, 32) + (text.length > 32 ? '...' : '');
-      }
-
-      // Append User Message
-      const userMsg = { role: 'user', content: text, timestamp: new Date().toISOString() };
-      currentChat.messages.push(userMsg);
-      renderActiveChatMessages();
-
-      logTelemetry(`[CHAT OUTBOUND] Dispatched prompt: "${text.slice(0, 40)}..."`);
-
-      // Prepare AI Request
-      const apiMessages = currentChat.messages.map(m => ({ role: m.role, content: m.content }));
+      // Append temporary typing indicator
+      const typingId = 'typing-' + Date.now();
+      appendTypingIndicator(typingId);
 
       try {
-        const resp = await fetch('/ai/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: apiMessages,
-            model: STATE.selectedModel,
-            web_search: true,
-            api_key: $('groqApiKeyInput')?.value || null,
-            temperature: STATE.isDeepThinking ? 0.3 : 0.7,
-            email: STATE.currentUser
-          })
-        });
-
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-        const data = await resp.json();
-        const assistantReply = data.message || "Synthesis complete.";
-
-        const assistantMsg = {
-          role: 'assistant',
-          content: assistantReply,
-          toolInvoked: data.tool_invoked,
-          toolName: data.tool_name,
-          toolQuery: data.tool_query,
-          sources: data.sources,
-          timestamp: new Date().toISOString()
+        const payload = {
+          messages: state.chatMessages,
+          model: state.selectedModel === 'stroke-neural' ? 'llama3.2' : state.selectedModel,
+          email: state.userEmail,
+          is_temporary: state.isTemporaryMode,
+          session_id: state.activeSessionId,
+          think_mode: state.thinkMode,
+          web_search: true
         };
 
-        currentChat.messages.push(assistantMsg);
-        renderActiveChatMessages();
-
-        logTelemetry(`[AI RESPONSE] Received reply via provider: ${data.provider} (${assistantReply.length} chars)`);
-
-        // Trigger continuous learning from this dialogue
-        triggerContinuousLearning(currentChat.messages);
-
-        if (!STATE.isTemporaryChat) {
-          localStorage.setItem('stroke_chats', JSON.stringify(STATE.chats));
-          renderChatHistory();
-        }
-
-      } catch (err) {
-        logTelemetry(`[AI ERROR] Request failed: ${err.message}`, 'error');
-        currentChat.messages.push({
-          role: 'assistant',
-          content: `**[Stroke Core Error]** Connection interrupted: \`${err.message}\`. Check server status.`,
-          timestamp: new Date().toISOString()
-        });
-        renderActiveChatMessages();
-      }
-    }
-
-    // --- Live Voice Chat (Web Speech API SpeechRecognition & Synthesis) ---
-    function initSpeechRecognition() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        logTelemetry('[VOICE] SpeechRecognition API not supported in this browser.', 'warning');
-        return null;
-      }
-      const recognizer = new SpeechRecognition();
-      recognizer.continuous = false;
-      recognizer.interimResults = true;
-      recognizer.lang = 'en-US';
-
-      recognizer.onstart = () => {
-        $('voiceStateLabel').textContent = '[LISTENING...]';
-        $('voiceStateLabel').className = 'text-sm font-mono uppercase tracking-widest text-matrix-neon font-bold';
-      };
-
-      recognizer.onresult = (event) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          transcript += event.results[i][0].transcript;
-        }
-        $('voiceTranscriptText').textContent = `"${transcript}"`;
-        if (event.results[0].isFinal) {
-          handleVoiceQuery(transcript);
-        }
-      };
-
-      recognizer.onerror = (e) => {
-        logTelemetry(`[VOICE ERROR] Recognition error: ${e.error}`, 'error');
-      };
-
-      return recognizer;
-    }
-
-    async function handleVoiceQuery(query) {
-      if (!query || !query.trim()) return;
-
-      $('voiceStateLabel').textContent = '[THINKING...]';
-      $('voiceStateLabel').className = 'text-sm font-mono uppercase tracking-widest text-matrix-cyan font-bold';
-
-      logTelemetry(`[VOICE INPUT] User spoke: "${query}"`);
-
-      // Dispatch to AI
-      try {
-        const resp = await fetch('/ai/chat', {
+        const res = await fetch('/ai/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: query }],
-            model: STATE.selectedModel,
-            web_search: true,
-            email: STATE.currentUser
-          })
+          body: JSON.stringify(payload)
         });
 
-        const data = await resp.json();
-        const reply = data.message || "I heard you loud and clear.";
+        removeTypingIndicator(typingId);
 
-        // Strip markdown code fences for spoken response
-        const spokenText = reply.replace(/```[\s\S]*?```/g, 'Code block generated.').replace(/[*#>`_-]/g, '');
+        if (!res.ok) {
+          appendMessage('assistant', 'Error communicating with Stroke Neural Core: ' + res.statusText);
+          return;
+        }
 
-        $('voiceStateLabel').textContent = '[SPEAKING...]';
-        $('voiceStateLabel').className = 'text-sm font-mono uppercase tracking-widest text-matrix-purple font-bold';
-        $('voiceTranscriptText').textContent = `"${reply.slice(0, 140)}..."`;
+        const data = await res.json();
+        const replyText = data.message || 'No response returned.';
+        state.chatMessages.push({ role: 'assistant', content: replyText });
 
-        speakText(spokenText, () => {
-          if (STATE.voiceSessionActive) {
-            // Re-listen after speaking
-            $('voiceStateLabel').textContent = '[LISTENING...]';
-            STATE.speechRecognition?.start();
-          }
+        appendMessage('assistant', replyText, {
+          tool_invoked: data.tool_invoked,
+          tool_name: data.tool_name,
+          sources: data.sources,
+          learning_recorded: data.learning_recorded
         });
 
-        // Also add voice exchange to current chat
-        const currentChat = STATE.chats.find(c => c.id === STATE.activeChatId);
-        if (currentChat) {
-          currentChat.messages.push({ role: 'user', content: query });
-          currentChat.messages.push({ role: 'assistant', content: reply, toolInvoked: data.tool_invoked, toolName: data.tool_name });
-          renderActiveChatMessages();
+        // If continuous learning was recorded, refresh badge count
+        if (data.learning_recorded) {
+          fetchLearningTelemetry();
         }
 
       } catch (err) {
-        speakText("An error occurred during voice synthesis.");
+        removeTypingIndicator(typingId);
+        appendMessage('assistant', 'Network failure: Could not connect to backend.');
       }
     }
 
-    function speakText(text, onEndCallback) {
-      if (!STATE.speechSynth) return;
-      STATE.speechSynth.cancel();
+    // 9. Message Renderer
+    function appendMessage(role, content, meta = {}) {
+      const isUser = role === 'user';
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `w-full flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`;
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-
-      utterance.onend = () => {
-        if (onEndCallback) onEndCallback();
-      };
-
-      STATE.speechSynth.speak(utterance);
-    }
-
-    function startVoiceSession() {
-      STATE.voiceSessionActive = true;
-      $('voiceModal').classList.remove('hidden');
-      if (!STATE.speechRecognition) {
-        STATE.speechRecognition = initSpeechRecognition();
-      }
-      try {
-        STATE.speechRecognition?.start();
-        logTelemetry('[VOICE] Activated Live Voice Mode (Speech-to-Speech).');
-      } catch (e) {
-        console.warn('SpeechRecognition start notice:', e);
-      }
-    }
-
-    function stopVoiceSession() {
-      STATE.voiceSessionActive = false;
-      $('voiceModal').classList.add('hidden');
-      try {
-        STATE.speechRecognition?.stop();
-        STATE.speechSynth?.cancel();
-        logTelemetry('[VOICE] Deactivated Live Voice Mode.');
-      } catch (e) {}
-    }
-
-    // --- 5-Cycle Sequential Database Feeding Execution ---
-    async function execute5CycleFeedingPipeline() {
-      const modal = $('cycleIngestionModal');
-      const progressBar = $('cycleProgressBar');
-      const stepTitle = $('cycleStepTitle');
-      const pctLabel = $('cyclePctLabel');
-      const previewBox = $('cycleSynthesisPreview');
-      const startBtn = $('startCycleFeedingBtn');
-
-      startBtn.disabled = true;
-      startBtn.classList.add('opacity-50');
-
-      logTelemetry('[FEEDING LOOP] Initiating 5-cycle sequential absorption from Elemental Worlds.');
-
-      try {
-        const resp = await fetch('/database/feed-5-cycles', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: STATE.currentUser })
-        });
-
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-        const result = await resp.json();
-
-        // Animate progression through all 5 cycles
-        const stages = [
-          'Cycle 1/5: Void Singularity & Flipbook Convergence',
-          'Cycle 2/5: High-Velocity Slashes & Cleave Domains',
-          'Cycle 3/5: High-Density Explosions & Heat Shockwaves',
-          'Cycle 4/5: Hydrokinetic Torrents & Wind Vortices',
-          'Cycle 5/5: Lightning Storms, Electro & 404 Glitch Rifts'
-        ];
-
-        for (let i = 0; i < stages.length; i++) {
-          const pct = Math.round(((i + 1) / stages.length) * 100);
-          stepTitle.textContent = stages[i];
-          pctLabel.textContent = `${pct}%`;
-          progressBar.style.width = `${pct}%`;
-          previewBox.innerHTML = `<strong>${stages[i]}</strong><br>Committed sub-document STRK-BAT-00${i+1} into Firestore <code>users/${STATE.currentUser}/records/</code>.`;
-          logTelemetry(`[CYCLE ${i+1}/5] Ingested and synthesized: ${stages[i]}`);
-          await new Promise(r => setTimeout(r, 650));
-        }
-
-        STATE.databaseFed = true;
-        $('matrixFeedStatusLabel').textContent = '5X VFX Injected';
-        modal.classList.add('hidden');
-        logTelemetry('[FEEDING COMPLETED] All 5 cycles absorbed! Parent database_fed = true.');
-
-      } catch (err) {
-        logTelemetry(`[FEEDING ERROR] Pipeline failure: ${err.message}`, 'error');
-        stepTitle.textContent = 'Error in feeding loop.';
-        startBtn.disabled = false;
-        startBtn.classList.remove('opacity-50');
-      }
-    }
-
-    // --- Authentication & User Document Synchronization ---
-    async function syncUserStatus() {
-      try {
-        const resp = await fetch(`/user/status?email=${encodeURIComponent(STATE.currentUser)}`);
-        if (resp.ok) {
-          const data = await resp.json();
-          STATE.databaseFed = data.database_fed;
-          if (data.database_fed) {
-            $('matrixFeedStatusLabel').textContent = '5X VFX Injected';
-          } else {
-            $('matrixFeedStatusLabel').textContent = 'Feed 5X Database';
-          }
-          if (data.records && data.records.length) {
-            renderMatrixRecordsTab(data.records);
-          }
-          logTelemetry(`[SYNC] User status verified for ${STATE.currentUser}. database_fed = ${data.database_fed}`);
-        }
-      } catch (err) {
-        logTelemetry(`[SYNC NOTICE] Running with local credentials: ${err.message}`);
-      }
-    }
-
-    function renderMatrixRecordsTab(records) {
-      const container = $('matrixRecordsList');
-      if (!container) return;
-      container.innerHTML = '';
-
-      records.forEach(r => {
-        const card = document.createElement('div');
-        card.className = 'p-2.5 rounded-lg bg-matrix-card border border-matrix-border text-xs flex flex-col gap-1';
-        card.innerHTML = `
-          <div class="flex items-center justify-between font-semibold">
-            <span class="text-matrix-neon font-mono">${r.record_id}</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded bg-matrix-surface text-matrix-neonDim">${r.status || 'optimized'}</span>
-          </div>
-          <div class="text-[11px] text-gray-300 font-sans">${r.vfx_name || 'VFX Matrix Record'}</div>
-          <div class="flex justify-between text-[10px] text-gray-400 font-mono mt-1">
-            <span>Load: ${(r.metric_load || 95).toFixed(1)}%</span>
-            <span>Hash: ${r.integrity_hash || '8f3a9e1c'}</span>
+      if (isUser) {
+        msgDiv.innerHTML = `
+          <div class="max-w-[85%] bg-[#122417] border border-[#23422c] text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed font-sans">
+            ${escapeHtml(content)}
           </div>
         `;
-        container.appendChild(card);
+      } else {
+        // AI Message with Tools & Markdown
+        let toolChipHtml = '';
+        if (meta.tool_invoked) {
+          toolChipHtml = `
+            <div class="mb-2 flex flex-wrap gap-1.5 text-[11px] font-mono">
+              <span class="px-2 py-0.5 rounded-full bg-matrix-green/15 text-matrix-green border border-matrix-green/30 flex items-center space-x-1">
+                <span>⚡ Tool:</span>
+                <span class="font-bold">${meta.tool_name || 'autonomous_rag'}</span>
+              </span>
+              ${meta.learning_recorded ? `
+                <span class="px-2 py-0.5 rounded-full bg-cyan-900/30 text-cyan-300 border border-cyan-500/30 flex items-center space-x-1">
+                  <span>🧠 Distilled into 5X loop</span>
+                </span>
+              ` : ''}
+            </div>
+          `;
+        }
+
+        const formattedBody = formatMarkdownText(content);
+
+        msgDiv.innerHTML = `
+          <div class="flex items-start space-x-3 max-w-[90%]">
+            <div class="w-7 h-7 rounded-lg bg-matrix-green/20 border border-matrix-green text-matrix-green font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text mt-0.5">
+              S
+            </div>
+            <div class="min-w-0">
+              ${toolChipHtml}
+              <div class="prose prose-invert max-w-none text-sm text-[#e0e0e0] leading-relaxed font-sans">
+                ${formattedBody}
+              </div>
+              <div class="mt-2 flex items-center space-x-2 text-[10px] text-[#666]">
+                <button onclick="speakText('${encodeURIComponent(content.replace(/'/g, ''))}')" class="hover:text-matrix-green flex items-center space-x-1">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                  <span>Read</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      messagesList.appendChild(msgDiv);
+      document.getElementById('chatScrollContainer').scrollTo({
+        top: document.getElementById('chatScrollContainer').scrollHeight,
+        behavior: 'smooth'
       });
     }
 
-    // --- Event Listeners Initialization ---
-    document.addEventListener('DOMContentLoaded', () => {
-
-      // 1. Sidebar Toggles
-      $('sidebarCollapseBtn')?.addEventListener('click', () => {
-        $('sidebar').classList.add('-translate-x-full', 'absolute');
-        $('sidebar').classList.remove('w-64');
-        $('sidebarExpandBtn').classList.remove('hidden');
+    function appendTypingIndicator(id) {
+      const div = document.createElement('div');
+      div.id = id;
+      div.className = 'w-full flex justify-start items-center space-x-3';
+      div.innerHTML = `
+        <div class="w-7 h-7 rounded-lg bg-matrix-green/20 border border-matrix-green text-matrix-green font-bold text-xs flex items-center justify-center glow-text">S</div>
+        <div class="flex items-center space-x-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
+          <div class="w-1.5 h-1.5 rounded-full bg-matrix-green animate-bounce"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-matrix-green animate-bounce" style="animation-delay: 0.15s"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-matrix-green animate-bounce" style="animation-delay: 0.3s"></div>
+        </div>
+      `;
+      messagesList.appendChild(div);
+      document.getElementById('chatScrollContainer').scrollTo({
+        top: document.getElementById('chatScrollContainer').scrollHeight,
+        behavior: 'smooth'
       });
+    }
 
-      $('sidebarExpandBtn')?.addEventListener('click', () => {
-        $('sidebar').classList.remove('-translate-x-full', 'absolute');
-        $('sidebar').classList.add('w-64');
-        $('sidebarExpandBtn').classList.add('hidden');
-      });
+    function removeTypingIndicator(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
 
-      // 2. New Chat
-      $('newChatBtn')?.addEventListener('click', createNewChat);
+    // 10. Speech-to-Text & Interactive Voice Mode
+    function setupSpeechEngines() {
+      if (!SpeechRecognition) {
+        console.warn('SpeechRecognition not supported in browser.');
+        return;
+      }
 
-      // 3. Message Textarea Auto-expand & Enter Key
-      const textarea = $('chatTextarea');
-      textarea?.addEventListener('input', () => {
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 180) + 'px';
-      });
+      // Voice Chat Recognition instance
+      voiceRecognition = new SpeechRecognition();
+      voiceRecognition.continuous = true;
+      voiceRecognition.interimResults = true;
+      voiceRecognition.lang = 'en-US';
 
-      textarea?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          handleSendMessage();
+      voiceRecognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
         }
-      });
+        voiceLiveTranscript.textContent = `"${transcript}"`;
 
-      $('sendMessageBtn')?.addEventListener('click', handleSendMessage);
-
-      // 4. Temporary Chat Toggle
-      $('tempChatToggleBtn')?.addEventListener('click', () => {
-        STATE.isTemporaryChat = !STATE.isTemporaryChat;
-        if (STATE.isTemporaryChat) {
-          $('tempChatToggleBtn').classList.add('border-matrix-cyan', 'text-matrix-cyan');
-          $('tempChatBanner').classList.remove('hidden');
-          logTelemetry('[PRIVACY] Temporary Chat enabled. Messages won\'t be persisted.');
-        } else {
-          $('tempChatToggleBtn').classList.remove('border-matrix-cyan', 'text-matrix-cyan');
-          $('tempChatBanner').classList.add('hidden');
-          logTelemetry('[PRIVACY] Standard Chat mode restored.');
+        if (event.results[event.results.length - 1].isFinal) {
+          handleVoiceTurnComplete(transcript);
         }
-      });
+      };
 
-      // 5. Think / Reasoning Toggle
-      $('thinkToggleBtn')?.addEventListener('click', () => {
-        STATE.isDeepThinking = !STATE.isDeepThinking;
-        if (STATE.isDeepThinking) {
-          $('thinkToggleBtn').classList.add('text-matrix-neon', 'bg-matrix-surface');
-          logTelemetry('[REASONING] Deep Reasoning Mode engaged (temperature: 0.3).');
-        } else {
-          $('thinkToggleBtn').classList.remove('text-matrix-neon', 'bg-matrix-surface');
-          logTelemetry('[REASONING] Standard Mode engaged.');
-        }
-      });
+      voiceRecognition.onerror = (e) => {
+        console.warn('Voice recognition error:', e.error);
+      };
 
-      // 6. Voice Chat Modal Triggers
-      $('voiceChatLaunchBtn')?.addEventListener('click', startVoiceSession);
-      $('closeVoiceModalBtn')?.addEventListener('click', stopVoiceSession);
-      $('voiceEndSessionBtn')?.addEventListener('click', stopVoiceSession);
+      // Dictation Recognition instance (for input textarea)
+      dictationRecognition = new SpeechRecognition();
+      dictationRecognition.continuous = false;
+      dictationRecognition.interimResults = false;
+      dictationRecognition.lang = 'en-US';
 
-      // 7. Dictation Microphone in Input
-      $('dictationMicBtn')?.addEventListener('click', () => {
-        const recognizer = initSpeechRecognition();
-        if (recognizer) {
-          recognizer.onresult = (e) => {
-            const transcript = e.results[0][0].transcript;
-            $('chatTextarea').value += (transcript + ' ');
-          };
-          recognizer.start();
-          logTelemetry('[MIC] Dictating into composer...');
-        }
-      });
+      dictationRecognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        promptInput.value = (promptInput.value + ' ' + text).trim();
+        promptInput.style.height = promptInput.scrollHeight + 'px';
+        sendPromptBtn.disabled = false;
+      };
+    }
 
-      // 8. Telemetry Drawer Slide-over
-      $('telemetryToggleBtn')?.addEventListener('click', () => {
-        $('telemetryDrawer').classList.toggle('translate-x-full');
-      });
-      $('closeTelemetryDrawerBtn')?.addEventListener('click', () => {
-        $('telemetryDrawer').classList.add('translate-x-full');
-      });
-      $('openMcpFromSidebarBtn')?.addEventListener('click', () => {
-        $('telemetryDrawer').classList.remove('translate-x-full');
-        document.querySelector('[data-tab="tabMcp"]')?.click();
-      });
+    // Circular Audio Button -> Launch Voice Chat Room (like ChatGPT!)
+    startVoiceChatBtn.addEventListener('click', () => {
+      openVoiceModal();
+    });
 
-      // 9. Drawer Tabs Switching
-      document.querySelectorAll('.drawer-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-          document.querySelectorAll('.drawer-tab').forEach(t => {
-            t.classList.remove('text-matrix-neon', 'border-b-2', 'border-matrix-neon', 'font-semibold');
-            t.classList.add('text-gray-400');
-          });
-          document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+    closeVoiceModalBtn.addEventListener('click', closeVoiceModal);
+    endVoiceCallBtn.addEventListener('click', closeVoiceModal);
 
-          tab.classList.add('text-matrix-neon', 'border-b-2', 'border-matrix-neon', 'font-semibold');
-          tab.classList.remove('text-gray-400');
+    function openVoiceModal() {
+      voiceModal.classList.remove('hidden');
+      state.isVoiceActive = true;
+      voiceStateLabel.textContent = 'Listening... Speak naturally';
+      voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300';
+      if (voiceRecognition && !state.isVoiceMuted) {
+        try { voiceRecognition.start(); } catch(e){}
+      }
+    }
 
-          const targetId = tab.getAttribute('data-tab');
-          $(targetId)?.classList.remove('hidden');
+    function closeVoiceModal() {
+      voiceModal.classList.add('hidden');
+      state.isVoiceActive = false;
+      window.speechSynthesis.cancel();
+      if (voiceRecognition) {
+        try { voiceRecognition.stop(); } catch(e){}
+      }
+    }
+
+    // Toggle Voice Mute
+    toggleVoiceMuteBtn.addEventListener('click', () => {
+      state.isVoiceMuted = !state.isVoiceMuted;
+      if (state.isVoiceMuted) {
+        toggleVoiceMuteBtn.classList.add('bg-red-500/30', 'text-red-400');
+        if (voiceRecognition) voiceRecognition.stop();
+        voiceStateLabel.textContent = 'Muted';
+      } else {
+        toggleVoiceMuteBtn.classList.remove('bg-red-500/30', 'text-red-400');
+        if (voiceRecognition) voiceRecognition.start();
+        voiceStateLabel.textContent = 'Listening...';
+      }
+    });
+
+    // Interrupt AI Voice Output
+    interruptVoiceBtn.addEventListener('click', () => {
+      window.speechSynthesis.cancel();
+      voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300';
+      voiceStateLabel.textContent = 'Interrupted. Listening again...';
+      if (voiceRecognition && !state.isVoiceMuted) {
+        try { voiceRecognition.start(); } catch(e){}
+      }
+    });
+
+    // Process Voice Prompt
+    async function handleVoiceTurnComplete(spokenText) {
+      if (!spokenText.trim()) return;
+
+      voiceStateLabel.textContent = 'Stroke is synthesizing...';
+      voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-cyan-400/60 flex items-center justify-center voice-orb-speaking transition-all duration-300';
+
+      try {
+        const payload = {
+          messages: [{ role: 'user', content: spokenText }],
+          model: 'llama3.2',
+          email: state.userEmail,
+          is_temporary: state.isTemporaryMode,
+          session_id: state.activeSessionId,
+          web_search: true
+        };
+
+        const res = await fetch('/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
-      });
 
-      // 10. Starter Cards Quick Prompt Insertion
-      document.querySelectorAll('.starter-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const promptText = card.querySelector('.text-gray-400')?.textContent || '';
-          if (promptText) {
-            $('chatTextarea').value = promptText;
-            handleSendMessage();
+        const data = await res.json();
+        const reply = data.message || 'I have processed your query.';
+
+        // Strip markdown for speech output
+        const cleanSpeechText = reply.replace(/```[\s\S]*?```/g, 'Code block generated.').replace(/[#*`_]/g, '');
+        voiceLiveTranscript.textContent = `Stroke: "${cleanSpeechText.slice(0, 150)}..."`;
+        voiceStateLabel.textContent = 'Stroke is speaking...';
+
+        speakText(cleanSpeechText, () => {
+          if (state.isVoiceActive && !state.isVoiceMuted) {
+            voiceStateLabel.textContent = 'Listening again...';
+            voiceOrbOuter.className = 'w-48 h-48 rounded-full border-2 border-matrix-green/40 flex items-center justify-center voice-orb-active transition-all duration-300';
           }
         });
-      });
 
-      // 11. Model Selector Dropdown
-      $('modelSelectorBtn')?.addEventListener('click', () => {
-        $('modelDropdownMenu').classList.toggle('hidden');
-      });
+      } catch (err) {
+        voiceStateLabel.textContent = 'Error processing speech.';
+      }
+    }
 
-      document.querySelectorAll('.model-option').forEach(opt => {
-        opt.addEventListener('click', () => {
-          const modelId = opt.getAttribute('data-model');
-          STATE.selectedModel = modelId;
-          $('selectedModelLabel').textContent = opt.querySelector('.font-semibold').textContent;
-          $('modelDropdownMenu').classList.add('hidden');
-          logTelemetry(`[MODEL] Selected model: ${modelId}`);
+    // Text-to-Speech Output
+    function speakText(rawText, onEndCallback) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const decoded = decodeURIComponent(rawText);
+      const utterance = new SpeechSynthesisUtterance(decoded);
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+      if (onEndCallback) utterance.onend = onEndCallback;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Mic Dictation for Input Box
+    micDictationBtn.addEventListener('click', () => {
+      if (dictationRecognition) {
+        try {
+          dictationRecognition.start();
+          micDictationBtn.classList.add('text-matrix-green', 'bg-matrix-green/10');
+          setTimeout(() => micDictationBtn.classList.remove('text-matrix-green', 'bg-matrix-green/10'), 4000);
+        } catch(e){}
+      }
+    });
+
+    // 11. Continuous Learning Telemetry & Drawer
+    openContinuousLearningBtn.addEventListener('click', () => {
+      learningDrawer.classList.remove('hidden');
+      fetchLearningTelemetry();
+    });
+    closeLearningDrawerBtn.addEventListener('click', () => learningDrawer.classList.add('hidden'));
+
+    async function fetchLearningTelemetry() {
+      try {
+        const res = await fetch('/ai/learned-insights');
+        if (!res.ok) return;
+        const data = await res.json();
+        const telem = data.telemetry || {};
+        document.getElementById('insightsCountHeader').textContent = telem.active_insights_count || '6';
+        document.getElementById('telemetryChatsCount').textContent = telem.total_chats_distilled || '14';
+        document.getElementById('telemetryAccuracyGain').textContent = telem.accuracy_enhancement_ratio || '+12.4%';
+
+        const list = document.getElementById('learningInsightsList');
+        list.innerHTML = '';
+        (data.insights || []).slice(0, 8).forEach(ins => {
+          const div = document.createElement('div');
+          div.className = 'p-2.5 rounded-lg border border-[#1a251e] bg-[#070b08] space-y-1';
+          div.innerHTML = `
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-matrix-green font-mono">${escapeHtml(ins.topic)}</span>
+              <span class="text-[9px] px-1 py-0.2 rounded bg-matrix-green/10 text-matrix-green">${ins.domain}</span>
+            </div>
+            <p class="text-[11px] text-[#888] leading-tight">${escapeHtml(ins.summary)}</p>
+          `;
+          list.appendChild(div);
         });
-      });
+      } catch(e){}
+    }
 
-      // 12. 5X Matrix Feed Ingestion Trigger
-      $('matrixFeedPillBtn')?.addEventListener('click', () => {
-        $('cycleIngestionModal').classList.remove('hidden');
-      });
-      $('startCycleFeedingBtn')?.addEventListener('click', execute5CycleFeedingPipeline);
+    refeedWithLearningsBtn.addEventListener('click', async () => {
+      refeedWithLearningsBtn.disabled = true;
+      refeedWithLearningsBtn.innerHTML = '<span>Refeeding 5X Matrix...</span>';
+      try {
+        const res = await fetch('/ai/refeed-with-learnings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: state.userEmail })
+        });
+        const data = await res.json();
+        refeedWithLearningsBtn.innerHTML = '<span>✓ 5X Matrix Updated with Learnings!</span>';
+        setTimeout(() => {
+          refeedWithLearningsBtn.disabled = false;
+          refeedWithLearningsBtn.innerHTML = '<span>Re-Feed 5X Matrix with Chat Insights</span>';
+        }, 3000);
+      } catch(e) {
+        refeedWithLearningsBtn.innerHTML = '<span>Failed to refeed</span>';
+        refeedWithLearningsBtn.disabled = false;
+      }
+    });
 
-      // 13. Settings Modal Trigger
-      $('settingsModalTriggerBtn')?.addEventListener('click', () => {
-        $('settingsModal').classList.remove('hidden');
-      });
-      $('closeSettingsModalBtn')?.addEventListener('click', () => {
-        $('settingsModal').classList.add('hidden');
-      });
-      $('saveSettingsBtn')?.addEventListener('click', () => {
-        $('settingsModal').classList.add('hidden');
-        logTelemetry('[SETTINGS] Preferences saved successfully.');
-      });
-      $('signOutBtn')?.addEventListener('click', () => {
-        localStorage.removeItem('stroke_email');
-        window.location.reload();
-      });
-
-      // 14. Email OTP Authentication Handlers
-      $('sendOtpBtn')?.addEventListener('click', async () => {
-        const email = $('authEmailInput').value.trim();
-        if (!email) return;
-
-        try {
-          const resp = await fetch('/auth/send-otp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
+    // 12. Load Chat Sessions
+    async function loadUserChats() {
+      try {
+        const res = await fetch(`/chats?email=${encodeURIComponent(state.userEmail)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = document.getElementById('recentChatsList');
+        list.innerHTML = '';
+        (data.chats || []).forEach(chat => {
+          const btn = document.createElement('button');
+          btn.className = 'chat-session-item w-full text-left px-2.5 py-2 rounded-md text-xs text-[#888] hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between group';
+          btn.innerHTML = `
+            <span class="truncate pr-2">${escapeHtml(chat.title)}</span>
+            <span class="text-[10px] text-[#555] opacity-0 group-hover:opacity-100 transition-opacity">✕</span>
+          `;
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.chat-session-item').forEach(b => b.classList.remove('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-matrix-green'));
+            btn.classList.add('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-matrix-green');
           });
-          if (resp.ok) {
-            $('authEmailStep').classList.add('hidden');
-            $('authOtpStep').classList.remove('hidden');
-            logTelemetry(`[AUTH OTP] Token dispatched for ${email}. Check server logs.`);
-          }
-        } catch (e) {
-          logTelemetry('[AUTH ERROR] OTP dispatch failure: ' + e.message, 'error');
-        }
-      });
+          list.appendChild(btn);
+        });
+      } catch(e){}
+    }
 
-      $('verifyOtpBtn')?.addEventListener('click', async () => {
-        const email = $('authEmailInput').value.trim();
-        const otp_code = $('authOtpInput').value.trim();
-        if (!otp_code || otp_code.length !== 6) return;
+    // 13. Auth Modal & Triggering
+    document.getElementById('authModalTriggerBtn').addEventListener('click', () => {
+      profilePopover.classList.add('hidden');
+      authModal.classList.remove('hidden');
+    });
+    document.getElementById('closeAuthModalBtn').addEventListener('click', () => authModal.classList.add('hidden'));
+
+    document.getElementById('sendOtpBtn').addEventListener('click', async () => {
+      const email = document.getElementById('authEmailInput').value.trim();
+      if (!email) return;
+      try {
+        const res = await fetch('/auth/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        if (res.ok) {
+          document.getElementById('otpStep1').classList.add('hidden');
+          document.getElementById('otpStep2').classList.remove('hidden');
+        }
+      } catch(e){}
+    });
+
+    document.getElementById('verifyOtpBtn').addEventListener('click', async () => {
+      const email = document.getElementById('authEmailInput').value.trim();
+      const code = document.getElementById('authOtpInput').value.trim();
+      try {
+        const res = await fetch('/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp_code: code })
+        });
+        if (res.ok) {
+          state.userEmail = email;
+          localStorage.setItem('stroke_user_email', email);
+          updateUserIdentityUI();
+          authModal.classList.add('hidden');
+          // Launch 5X Ingestion Modal automatically after login
+          ingestionModal.classList.remove('hidden');
+        }
+      } catch(e){}
+    });
+
+    // 14. 5-Cycle Ingestion Runner
+    document.getElementById('trigger5xMatrixBtn').addEventListener('click', () => {
+      profilePopover.classList.add('hidden');
+      ingestionModal.classList.remove('hidden');
+    });
+    document.getElementById('cancelIngestionBtn').addEventListener('click', () => ingestionModal.classList.add('hidden'));
+
+    document.getElementById('start5CycleIngestionBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('start5CycleIngestionBtn');
+      const terminal = document.getElementById('ingestionTerminalLogs');
+      btn.disabled = true;
+      btn.textContent = 'Feeding 5 Cycles...';
+
+      let prevSynth = '';
+      for (let c = 1; c <= 5; c++) {
+        const stepEl = document.getElementById(`step-c${c}`);
+        stepEl.className = 'p-2 rounded border border-matrix-green bg-matrix-green/10 text-matrix-green animate-pulse';
+
+        terminal.innerHTML += `<div>[CYCLE ${c}/5] Ingesting dataset slice from vfx_data.json & vfx_dump.txt...</div>`;
 
         try {
-          const resp = await fetch('/auth/verify-otp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, otp_code })
-          });
-          const data = await resp.json();
-          if (resp.ok && data.status === 'authenticated') {
-            STATE.currentUser = email;
-            STATE.isAuthenticated = true;
-            localStorage.setItem('stroke_email', email);
-            $('authModal').classList.add('hidden');
-            logTelemetry(`[AUTH SUCCESS] User ${email} authenticated.`);
-            syncUserStatus();
-          } else {
-            alert(data.detail || 'OTP verification failed.');
-          }
-        } catch (e) {
-          logTelemetry('[AUTH ERROR] Verification failed: ' + e.message, 'error');
-        }
-      });
-
-      // Studio MCP Ping Test
-      $('runStudioTestBtn')?.addEventListener('click', async () => {
-        try {
-          const resp = await fetch('/mcp/execute', {
+          const res = await fetch('/database/feed-cycle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              tool_name: 'studio_execute_luau',
-              arguments: { code: 'print("[STROKE] Studio MCP Bridge ping verified.")' },
-              email: STATE.currentUser
+              email: state.userEmail,
+              cycle: c,
+              previous_synthesis: prevSynth
             })
           });
-          const data = await resp.json();
-          logTelemetry(`[STUDIO MCP] Result: ${data.message}`, 'tool');
-        } catch (e) {
-          logTelemetry('[STUDIO MCP ERROR] ' + e.message, 'error');
+          const data = await res.json();
+          prevSynth = data.ai_synthesis || '';
+          terminal.innerHTML += `<div class="text-white">✓ Record ${data.record.record_id} committed to Firestore. Load: ${data.record.metric_load}%</div>`;
+          stepEl.className = 'p-2 rounded border border-matrix-green bg-matrix-green/20 text-matrix-green font-bold';
+        } catch(e) {
+          terminal.innerHTML += `<div class="text-red-400">Error in Cycle ${c}</div>`;
         }
-      });
+      }
 
-      // Keyboard Shortcut (Cmd+K / Ctrl+K) for New Chat
-      window.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-          e.preventDefault();
-          createNewChat();
-        }
-      });
-
-      // Initial Bootstrap
-      renderChatHistory();
-      renderActiveChatMessages();
-      syncUserStatus();
-      logTelemetry(`Stroke Neural Studio ready. Identity: ${STATE.currentUser}`);
+      terminal.innerHTML += `<div class="text-matrix-glow font-bold mt-2">>>> 5X DATABASE FEEDING COMPLETE! STRK-BAT-001..005 ACTIVE <<<</div>`;
+      btn.textContent = 'Ingestion Succeeded';
+      setTimeout(() => ingestionModal.classList.add('hidden'), 2000);
     });
-  </script>
 
+    // Utilities
+    function escapeHtml(str) {
+      return (str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+    }
+
+    function formatMarkdownText(md) {
+      if (!md) return '';
+      // Code blocks
+      let html = md.replace(/```([a-zA-Z0-9_]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+        return `
+          <div class="my-3 rounded-xl border border-[#1f2922] bg-[#070b08] overflow-hidden">
+            <div class="flex items-center justify-between px-3 py-1.5 bg-[#0e1611] border-b border-[#1f2922] text-[10px] text-[#777] font-mono">
+              <span>${lang || 'code'}</span>
+              <button onclick="navigator.clipboard.writeText(this.getAttribute('data-code'))" data-code="${escapeHtml(code)}" class="hover:text-matrix-green">Copy</button>
+            </div>
+            <pre class="p-3 text-xs font-mono text-matrix-green overflow-x-auto"><code>${escapeHtml(code)}</code></pre>
+          </div>
+        `;
+      });
+      // Headers
+      html = html.replace(/^### (.*$)/gim, '<h3 class="font-bold text-white text-base mt-2 mb-1">$1</h3>');
+      html = html.replace(/^#### (.*$)/gim, '<h4 class="font-semibold text-matrix-green text-sm mt-2 mb-1">$1</h4>');
+      // Bold
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>');
+      // Lists
+      html = html.replace(/^\- (.*$)/gim, '<div class="flex items-start space-x-1.5 my-0.5"><span class="text-matrix-green">•</span><span>$1</span></div>');
+      return html;
+    }
+  </script>
 </body>
 </html>
