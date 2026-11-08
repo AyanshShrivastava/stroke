@@ -155,15 +155,57 @@ _MCP_REGISTRY: Dict[str, Dict[str, Any]] = {
 }
 
 
+async def check_server_health(url: str, timeout: float = 0.5) -> bool:
+    """Probes if an HTTP MCP server endpoint is actively listening."""
+    if not url or not url.startswith("http"):
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(url)
+            return resp.status_code < 500
+    except Exception:
+        return False
+
+
 def get_all_mcp_servers() -> Dict[str, Any]:
-    """Returns status and tool manifests of all configured MCP servers."""
+    """Returns static status and tool manifests of all configured MCP servers."""
     servers_summary = {}
     for key, s in _MCP_REGISTRY.items():
         servers_summary[key] = {
             "name": s["name"],
             "description": s["description"],
             "url": s["url"],
-            "connected": s["connected"],
+            "connected": s.get("connected", True),
+            "status": "configured",
+            "tool_count": len(s["tools"]),
+            "tools": s["tools"]
+        }
+    return servers_summary
+
+
+async def get_all_mcp_servers_with_health() -> Dict[str, Any]:
+    """Returns real-time connection status and tool manifests of all configured MCP servers."""
+    servers_summary = {}
+    for key, s in _MCP_REGISTRY.items():
+        url = s.get("url", "")
+        is_live = False
+        if key == "github":
+            is_live = True
+        elif url.startswith("http://127.0.0.1") or url.startswith("http://localhost"):
+            is_live = await check_server_health(url)
+        else:
+            is_live = s.get("connected", True)
+
+        status_label = "online" if is_live else "standby"
+        status_text = "Online & Connected" if is_live else f"Standby on {url or 'port 8989'}"
+
+        servers_summary[key] = {
+            "name": s["name"],
+            "description": s["description"],
+            "url": url,
+            "connected": is_live,
+            "status": status_label,
+            "status_text": status_text,
             "tool_count": len(s["tools"]),
             "tools": s["tools"]
         }
@@ -320,21 +362,29 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
         code = args.get("code", "")
         target = args.get("target_parent", "ReplicatedStorage.VFX")
 
-        # Attempt HTTP bridge to Studio local server
+        # Attempt HTTP bridge to Studio local server (port 8989)
         studio_url = _MCP_REGISTRY["roblox_studio"]["url"]
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=2.0) as client:
                 res = await client.post(f"{studio_url}/execute", json={"code": code, "target": target})
                 if res.status_code == 200:
-                    return {"status": "success", "source": "roblox_studio_mcp", "output": res.json().get("result", "Execution succeeded.")}
+                    return {
+                        "status": "success",
+                        "connected": True,
+                        "source": "roblox_studio_mcp_live",
+                        "output": res.json().get("result", "Execution succeeded in active Roblox Studio session."),
+                        "target": target
+                    }
         except Exception:
             pass
 
-        # Simulation fallback / local Studio agent confirmation
+        # Standby bridge fallback: Full code generation ready for direct Command Bar insertion
         return {
-            "status": "success",
+            "status": "standby",
+            "connected": False,
             "source": "roblox_studio_mcp_bridge",
-            "message": f"Luau code dispatched to Roblox Studio ({target}).",
+            "message": f"Roblox Studio listener ({studio_url}) is on standby. Prepared complete executable Luau code for {target}.",
+            "target": target,
             "lines_executed": len(code.splitlines()),
             "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
         }

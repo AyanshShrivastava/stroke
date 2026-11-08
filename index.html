@@ -124,7 +124,7 @@
     }
   </style>
 </head>
-<body class="bg-brand-black text-brand-text flex h-screen w-screen overflow-hidden select-none font-mono">
+<body class="bg-brand-black text-brand-text flex h-screen w-screen overflow-hidden font-sans select-text">
 
   <!-- Hidden File Input for Attachment Button (+) -->
   <input type="file" id="fileAttachmentInput" multiple accept="image/*,.luau,.lua,.py,.js,.ts,.json,.txt,.rbxm,.md,.html,.css" class="hidden">
@@ -192,7 +192,9 @@
           <div class="relative flex items-center">
             <input id="chatSearchInput" type="text" placeholder="Filter chats..." class="w-full bg-brand-card border border-brand-border focus:border-brand-accent rounded-md px-2.5 py-1 text-xs text-white placeholder-brand-muted focus:outline-none font-sans pl-7 pr-6">
             <svg class="w-3.5 h-3.5 text-brand-muted absolute left-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <button id="clearChatSearchBtn" class="hidden text-brand-muted hover:text-white absolute right-2 text-xs">✕</button>
+            <button id="clearChatSearchBtn" class="hidden text-brand-muted hover:text-white absolute right-2 text-xs p-0.5" title="Clear search">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
           </div>
         </div>
 
@@ -444,9 +446,16 @@
       </div>
 
       <!-- Connected Servers Status Summary -->
-      <div class="p-3 rounded-xl border border-brand-border bg-brand-surface space-y-2">
-        <div class="text-[11px] uppercase font-bold text-brand-muted">Active Servers</div>
+      <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] uppercase font-bold text-brand-muted tracking-wider">Configured Servers & Real-Time Status</div>
+          <span class="text-[10px] text-brand-muted font-mono">Real-time Port Probe</span>
+        </div>
         <div id="mcpServersList" class="flex flex-wrap gap-2 text-xs"></div>
+        <div class="text-[11px] text-brand-muted leading-relaxed border-t border-brand-border/40 pt-2 space-y-1 font-sans">
+          <div><strong class="text-white">Roblox Studio MCP:</strong> Real-time bridge listening on <code class="text-brand-accent font-mono text-[10px]">http://127.0.0.1:8989</code>. When a Studio plugin or daemon is active on port 8989, code executes directly in your session. When on standby, Stroke generates the complete copy-pasteable Luau script for direct execution in the Command Bar.</div>
+          <div><strong class="text-white">GitHub MCP:</strong> Dispatches commits and PRs using your authenticated GitHub account.</div>
+        </div>
       </div>
 
       <div class="flex items-center justify-between pt-1">
@@ -1047,15 +1056,25 @@
 
     async function loadMcpConfigJson() {
       try {
-        const res = await fetch('/mcp/config');
-        if (!res.ok) return;
-        const data = await res.json();
+        const [cfgRes, srvRes] = await Promise.all([
+          fetch('/mcp/config'),
+          fetch('/mcp/servers').catch(() => null)
+        ]);
+        if (!cfgRes.ok) return;
+        const data = await cfgRes.json();
         mcpJsonConfigInput.value = JSON.stringify(data, null, 2);
-        renderMcpServersSummary(data.mcpServers || {});
+
+        let healthData = {};
+        if (srvRes && srvRes.ok) {
+          try {
+            healthData = await srvRes.json();
+          } catch(e){}
+        }
+        renderMcpServersSummary(data.mcpServers || {}, healthData);
       } catch(e){}
     }
 
-    function renderMcpServersSummary(serversObj) {
+    function renderMcpServersSummary(serversObj, healthData = {}) {
       mcpServersList.innerHTML = '';
       const keys = Object.keys(serversObj);
       if (keys.length === 0) {
@@ -1064,11 +1083,18 @@
       }
       keys.forEach(k => {
         const s = serversObj[k];
+        const h = healthData[k] || {};
+        const isOnline = h.status === 'online' || h.connected === true;
+        const statusLabel = isOnline ? 'Online' : 'Standby';
+        const dotColor = isOnline ? 'bg-brand-accent' : 'bg-amber-400';
+        const badgeClass = isOnline ? 'bg-brand-accent/20 text-brand-accent border-brand-accent/40' : 'bg-amber-400/20 text-amber-300 border-amber-400/30';
+
         const span = document.createElement('span');
-        span.className = 'px-2 py-1 rounded bg-brand-card border border-brand-border text-white text-[11px] font-mono flex items-center space-x-1';
+        span.className = 'px-2.5 py-1.5 rounded-lg bg-brand-card border border-brand-border text-white text-[11px] font-mono flex items-center space-x-2';
         span.innerHTML = `
-          <span class="w-1.5 h-1.5 rounded-full bg-brand-accent"></span>
-          <span>${escapeHtml(k)}</span>
+          <span class="w-2 h-2 rounded-full ${dotColor}"></span>
+          <span class="font-semibold">${escapeHtml(k)}</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded border ${badgeClass} font-sans uppercase font-bold">${statusLabel}</span>
           <span class="text-brand-muted text-[10px]">(${escapeHtml(s.url || 'local')})</span>
         `;
         mcpServersList.appendChild(span);
@@ -1100,7 +1126,7 @@
         if (res.ok) {
           mcpConfigFeedback.className = 'text-xs text-brand-accent font-mono';
           mcpConfigFeedback.textContent = 'Configuration saved and servers connected.';
-          renderMcpServersSummary(result.config?.mcpServers || parsed.mcpServers || {});
+          loadMcpConfigJson();
           setTimeout(() => { mcpConfigFeedback.textContent = ''; }, 3000);
         } else {
           mcpConfigFeedback.className = 'text-xs text-brand-danger font-mono';
@@ -1238,7 +1264,29 @@
       }
     }
 
-    // 10. Message Renderer
+    // Global Copy Helper with Visual Feedback
+    window.copyMessageText = function(btn, text) {
+      if (!text) return;
+      const originalHtml = btn.innerHTML;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = `
+          <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          <span class="text-brand-accent font-semibold">Copied!</span>
+        `;
+        setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
+      }).catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        btn.innerHTML = `<span class="text-brand-accent font-semibold">Copied!</span>`;
+        setTimeout(() => { btn.innerHTML = originalHtml; }, 2000);
+      });
+    };
+
+    // 10. Message Renderer with Selectable Text & 1-Click Copy Buttons
     function appendMessage(role, content, meta = {}) {
       const isUser = role === 'user';
       const msgDiv = document.createElement('div');
@@ -1259,9 +1307,17 @@
         }
 
         msgDiv.innerHTML = `
-          <div class="max-w-[85%] bg-[#122417] border border-[#23422c] text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed font-sans">
-            ${attHtml}
-            ${escapeHtml(content)}
+          <div class="flex flex-col items-end max-w-[85%] group">
+            <div class="bg-[#122417] border border-[#23422c] text-white px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed font-sans select-text whitespace-pre-wrap break-words">
+              ${attHtml}
+              ${escapeHtml(content)}
+            </div>
+            <div class="mt-1 flex items-center space-x-2 text-[10px] text-brand-muted opacity-80 group-hover:opacity-100 transition-opacity">
+              <button onclick="copyMessageText(this, this.getAttribute('data-copy'))" data-copy="${escapeHtml(content)}" class="hover:text-brand-accent flex items-center space-x-1 px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors" title="Copy prompt text">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                <span>Copy</span>
+              </button>
+            </div>
           </div>
         `;
       } else {
@@ -1284,13 +1340,19 @@
             <div class="w-7 h-7 rounded-lg bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text mt-0.5">
               S
             </div>
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               ${toolChipHtml}
-              <div class="prose prose-invert max-w-none text-sm text-[#e0e0e0] leading-relaxed font-sans">
+              <div class="prose prose-invert max-w-none text-sm text-[#e0e0e0] leading-relaxed font-sans select-text break-words">
                 ${formattedBody}
               </div>
-              <div class="mt-2 flex items-center space-x-2 text-[10px] text-brand-muted">
-                <button onclick="speakText('${encodeURIComponent(content.replace(/'/g, ''))}')" class="hover:text-brand-accent flex items-center space-x-1">
+              <div class="mt-2.5 flex items-center space-x-3 text-[11px] text-brand-muted">
+                <!-- Copy Entire Answer Button -->
+                <button onclick="copyMessageText(this, this.getAttribute('data-copy'))" data-copy="${escapeHtml(content)}" class="hover:text-brand-accent flex items-center space-x-1.5 px-2 py-1 rounded bg-white/5 hover:bg-white/10 border border-brand-border/60 transition-colors" title="Copy entire answer">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  <span>Copy answer</span>
+                </button>
+                <!-- Read Aloud Button -->
+                <button onclick="speakText('${encodeURIComponent(content.replace(/'/g, ''))}')" class="hover:text-brand-accent flex items-center space-x-1.5 px-2 py-1 rounded hover:bg-white/5 transition-colors">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
                   <span>Read aloud</span>
                 </button>

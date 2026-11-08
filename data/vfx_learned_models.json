@@ -163,5 +163,114 @@
     "god_tier_score": 9.83,
     "learned_dynamically": true,
     "learned_at": "2026-11-08T07:09:07.419188+00:00"
+  },
+  "GodTier_Elemental_hi_who_are_you": {
+    "name": "GodTier_Elemental_hi_who_are_you",
+    "domain": "Elemental",
+    "element": "Matrix",
+    "particle_emitters": [
+      {
+        "name": "Elemental_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 81,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://18462751521"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Elemental_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Elemental_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://18462751521",
+      "rbxassetid://13780268621"
+    ],
+    "snippet": "I'm Stroke, a Roblox game development and 3D visual effects (VFX) specialist. I'm here to assist with your questions and provide help with your Roblox Studio projects. I have a strong focus on Luau scripting, particle effects, beams, attachments, tweens, and game kinematics. Feel free to ask me anyt",
+    "god_tier_score": 9.44,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T07:35:07.594630+00:00"
+  },
+  "GodTier_Electro_can_you_build_top_tier_vfx": {
+    "name": "GodTier_Electro_can_you_build_top_tier_vfx",
+    "domain": "Electro",
+    "element": "Electro",
+    "particle_emitters": [
+      {
+        "name": "Electro_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 156,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://123456789"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Electro_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Electro_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://123456789"
+    ],
+    "snippet": "This code creates a basic weather system with a particle emitter and a beam emitter. The particle emitter emits red particles, and the beam emitter emits a red beam.\n\n**Adding Light and Sound Effects**\n\nWe'll add some light and sound effects to the weather system.",
+    "god_tier_score": 9.44,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T07:35:41.683265+00:00"
   }
 }

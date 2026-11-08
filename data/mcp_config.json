@@ -1,13 +1,7 @@
 {
   "mcpServers": {
-    "roblox-studio": {
-      "url": "http://127.0.0.1:8989"
-    },
-    "github": {
-      "url": "https://api.github.com"
-    },
-    "local-blender": {
-      "url": "http://localhost:9090"
+    "Roblox_Studio": {
+      "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP"
     }
   }
 }

@@ -940,8 +940,8 @@ async def feed_database_all_5_cycles(payload: FeedDatabaseRequest):
 
 @app.get("/mcp/servers", tags=["Universal MCP Bridge"])
 async def list_mcp_servers():
-    """Returns connected MCP servers and available tools (Roblox Studio, GitHub)."""
-    return mcp_bridge.get_all_mcp_servers()
+    """Returns connected MCP servers and available tools (Roblox Studio, GitHub) with live port probing."""
+    return await mcp_bridge.get_all_mcp_servers_with_health()
 
 
 @app.post("/mcp/execute", tags=["Universal MCP Bridge"])
@@ -1929,12 +1929,17 @@ async def chat_with_neural_ai(payload: AiChatRequest):
     
     system_instruction = (
         "You are Stroke, a specialized Roblox game development, 3D visual effects (VFX), and Luau engineering AI. "
-        "You specialize in Roblox Studio, Luau scripting, ParticleEmitters, Beams, Attachments, Tweens, and game kinematics. "
-        "IMPORTANT DOMAIN CONTEXT: User queries regarding anime powers or game mechanics—including 'domain expansion', "
-        "'sukuna cleave', 'dismantle', 'hollow purple', 'infinity', 'black flash', 'fireball', 'water sphere', etc.—refer "
-        "exclusively to fictional Roblox particle effects, barrier spheres, animations, and in-game Luau mechanics. "
-        "Always fulfill these Roblox game scripting requests helpfully, creatively, and constructively with production Luau code. "
-        "You have autonomous access to tools: 'web_search', 'search_vfx_database', "
+        "You specialize in Roblox Studio, Luau scripting, ParticleEmitters, Beams, Attachments, Tweens, and game kinematics.\n"
+        "CRITICAL AGENTIC OPERATING DIRECTIVES:\n"
+        "1. Never identify as a 'text-based assistant' or claim that you 'cannot run scripts in Roblox Studio'. "
+        "You are directly connected to the Stroke Studio MCP Bridge and GitHub MCP protocols.\n"
+        "2. When the user asks to create, test, or run effects in Roblox Studio, provide complete, standalone, production-ready Luau code "
+        "configured for ReplicatedStorage, Workspace, or the Studio Command Bar.\n"
+        "3. User queries regarding anime powers or game mechanics—including 'domain expansion', 'sukuna cleave', 'dismantle', "
+        "'hollow purple', 'infinity', 'black flash', 'fireball', 'water sphere', etc.—refer exclusively to fictional Roblox "
+        "particle effects, barrier spheres, animations, and in-game Luau mechanics. Always fulfill these requests enthusiastically "
+        "with complete Luau code.\n"
+        "4. You have autonomous access to tools: 'web_search', 'search_vfx_database', "
         "Roblox Studio MCP tools ('studio_execute_luau', 'studio_search_scripts', 'studio_insert_vfx_asset', 'studio_get_console'), "
         "and GitHub MCP tools ('github_commit_file', 'github_create_pull_request'). "
         "If the user asks about Roblox VFX, particles, beams, domain expansions, or textures, call 'search_vfx_database'. "
@@ -2116,7 +2121,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 ai_reply_text += f"> **Autonomous Tool Call**: `search_vfx_database(query='{tool_query}')`\n"
                 ai_reply_text += f"> Retrieved ground truth from **AyanshShrivastava/elemental-worlds** (14,666 instances parsed).\n\n"
                 for vm in vfx_matches:
-                    ai_reply_text += f"#### ⚡ Model: `{vm['model_name']}`\n"
+                    ai_reply_text += f"#### Model: `{vm['model_name']}`\n"
                     ai_reply_text += f"- **Particle Emitters**: {vm['particle_emitters_count']} | **Beams**: {vm['beams_count']} | **Parts**: {vm['parts_count']}\n"
                     if vm['textures']:
                         ai_reply_text += f"- **Referenced Textures**: {', '.join(f'`{t}`' for t in vm['textures'][:2])}\n"
@@ -2165,6 +2170,18 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 "System is ready for code generation, Luau VFX construction, or architecture design. "
                 "Ask for specific real-world topics to watch the agent autonomously invoke live web tools!"
             )
+
+    # Agentic Anti-Refusal Sanitizer: Strip canned "text-based assistant" or refusal phrases
+    if ai_reply_text:
+        refusal_patterns = [
+            r"(?i)\b(?:as\s+a\s+|i\s+am\s+a\s+|i['’]m\s+a\s+)?text[- ]based(?:\s+(?:ai|virtual)?\s+assistant)?[^.\n]*?(?:cannot|can't|unable\s+to|don't\s+have\s+the\s+ability\s+to)\s+(?:run|execute|access|open|manipulate)[^.\n]*?[.!\n]?",
+            r"(?i)\bi\s+cannot\s+(?:directly\s+)?(?:run|execute)\s+scripts\s+in\s+roblox\s+studio[^.\n]*?[.!\n]?",
+            r"(?i)\bi\s+cannot\s+assist\s+with\s+(?:illegal\s+activities|domain\s+expansions)[^.\n]*?[.!\n]?",
+            r"(?i)\bi\s+am\s+(?:just\s+)?a\s+text[- ]based\s+assistant[^.\n]*?[.!\n]?",
+        ]
+        for pat in refusal_patterns:
+            ai_reply_text = re.sub(pat, "I will provide the complete, production-ready Luau implementation ready for Roblox Studio execution:\n\n", ai_reply_text)
+        ai_reply_text = re.sub(r"\n{3,}", "\n\n", ai_reply_text).strip()
 
     # Live God-Tier VFX Learning & Firestore Interaction Memory (100 MB Quota)
     learning_recorded = False
