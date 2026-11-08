@@ -230,20 +230,68 @@ def register_configured_server(server_id: str, s_cfg: Dict[str, Any]):
     }
 
 
+def find_roblox_studio_mcp_path() -> Optional[str]:
+    """Auto-discovers the native Roblox Studio MCP proxy binary on macOS and Windows."""
+    candidates = [
+        os.path.expanduser("~/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP"),
+        "/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP",
+        os.path.expanduser("~/AppData/Local/Roblox/StudioMCP.exe"),
+        shutil.which("StudioMCP")
+    ]
+    for c in candidates:
+        if c and os.path.exists(c) and os.access(c, os.X_OK):
+            return c
+    return None
+
+
 def load_persisted_mcp_config():
-    """Loads MCP servers strictly from data/mcp_config.json with zero hardcoded defaults."""
+    """Loads MCP servers from data/mcp_config.json and auto-discovers native StudioMCP."""
     _MCP_REGISTRY.clear()
     if os.path.exists(MCP_CONFIG_PATH):
         try:
             with open(MCP_CONFIG_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             servers = data.get("mcpServers", data if isinstance(data, dict) else {})
-            if isinstance(servers, dict):
+            if isinstance(servers, dict) and servers:
                 for s_id, s_cfg in servers.items():
                     if isinstance(s_cfg, dict):
                         register_configured_server(s_id, s_cfg)
         except Exception as e:
             print(f"[STROKE MCP] Note loading mcp_config.json: {e}", flush=True)
+
+    # Auto-discover StudioMCP if not configured or points to nonexistent placeholder
+    has_valid_studio = False
+    for k, s in _MCP_REGISTRY.items():
+        if "studio" in k.lower():
+            cmd = s.get("command")
+            if cmd and os.path.exists(os.path.expanduser(str(cmd))):
+                has_valid_studio = True
+                break
+
+    if not has_valid_studio:
+        studio_bin = find_roblox_studio_mcp_path()
+        if studio_bin:
+            register_configured_server("Roblox_Studio", {
+                "command": studio_bin,
+                "description": "Native Roblox Studio Model Context Protocol Bridge"
+            })
+            try:
+                os.makedirs(os.path.dirname(MCP_CONFIG_PATH), exist_ok=True)
+                current_cfg = {}
+                if os.path.exists(MCP_CONFIG_PATH):
+                    try:
+                        with open(MCP_CONFIG_PATH, "r", encoding="utf-8") as f:
+                            current_cfg = json.load(f).get("mcpServers", {})
+                    except Exception:
+                        current_cfg = {}
+                current_cfg["Roblox_Studio"] = {
+                    "command": studio_bin,
+                    "description": "Native Roblox Studio Model Context Protocol Bridge"
+                }
+                with open(MCP_CONFIG_PATH, "w", encoding="utf-8") as f:
+                    json.dump({"mcpServers": current_cfg}, f, indent=2)
+            except Exception:
+                pass
 
 
 # Initialize on import
@@ -485,17 +533,21 @@ async def execute_studio_mcp_command(
     target_parent: str = "workspace"
 ) -> Dict[str, Any]:
     """Communicates directly with Roblox Studio MCP binary via JSON-RPC stdio protocol."""
-    cmd_expanded = os.path.expanduser(str(cmd_path))
-    if not (os.path.exists(cmd_expanded) or shutil.which(cmd_path)):
-        return {
-            "status": "ready",
-            "connected": True,
-            "source": "roblox_studio_mcp_bridge",
-            "message": f"Prepared complete production Luau code for {target_parent}.",
-            "target": target_parent,
-            "lines_executed": len(code.splitlines()),
-            "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
-        }
+    cmd_expanded = os.path.expanduser(str(cmd_path)) if cmd_path else ""
+    if not (cmd_expanded and (os.path.exists(cmd_expanded) or shutil.which(cmd_path))):
+        discovered = find_roblox_studio_mcp_path()
+        if discovered:
+            cmd_expanded = discovered
+        else:
+            return {
+                "status": "ready",
+                "connected": False,
+                "source": "roblox_studio_mcp_bridge",
+                "message": f"Prepared complete production Luau code for {target_parent} (StudioMCP binary not found).",
+                "target": target_parent,
+                "lines_executed": len(code.splitlines()),
+                "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
+            }
 
     try:
         proc = await asyncio.create_subprocess_exec(

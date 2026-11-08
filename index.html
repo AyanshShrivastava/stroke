@@ -218,6 +218,17 @@
           <span id="mcpConnectedCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">Connected</span>
         </button>
 
+        <div id="sidebarTerminalRow" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:bg-white/5 transition-colors cursor-default" title="Stroke private internal background terminal">
+          <span class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-brand-muted group-hover:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span>Terminal</span>
+          </span>
+          <span id="sidebarTerminalBadge" class="flex items-center space-x-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">
+            <span id="sidebarTerminalDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span id="sidebarTerminalStatus">Idle</span>
+          </span>
+        </div>
+
         <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-brand-text hover:text-white hover:bg-white/5 transition-colors">
           <svg class="w-4 h-4 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           <span>Settings</span>
@@ -316,9 +327,15 @@
         </div>
       </div>
 
-      <!-- Right: Temporary Chat Button + MCP Pill -->
+      <!-- Right: Terminal Status + Temporary Chat Button + MCP Pill -->
       <div class="flex items-center space-x-2 sm:space-x-3">
         
+        <!-- Private Terminal Status Indicator -->
+        <div id="topTerminalPill" class="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full border border-brand-border bg-brand-surface text-xs text-brand-muted hover:text-white transition-colors cursor-default" title="Private background terminal status">
+          <span id="topTerminalDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span id="topTerminalText" class="font-mono text-white text-[11px]">Terminal: Idle</span>
+        </div>
+
         <!-- Temporary Chat Toggle -->
         <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-amber text-xs text-brand-muted hover:text-white transition-all group" title="Temporary chat: Excluded from chat history">
           <svg class="w-3.5 h-3.5 text-brand-muted group-hover:text-brand-amber transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
@@ -415,11 +432,51 @@
           <!-- Right Action Controls -->
           <div class="flex items-center space-x-1.5 flex-shrink-0 pb-0.5">
             
-            <!-- Think Mode Toggle Button -->
-            <button id="thinkModeBtn" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium text-brand-muted hover:text-white border border-transparent hover:border-brand-border transition-all flex items-center space-x-1" title="Toggle deep reasoning mode">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-              <span>Think</span>
-            </button>
+            <!-- 4-Level Reasoning Depth Selector -->
+            <div class="relative">
+              <button id="reasoningLevelBtn" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium text-brand-muted hover:text-white border border-brand-border bg-white/5 hover:border-brand-accent/50 transition-all flex items-center space-x-1.5" title="AI Reasoning Depth: Low, Medium, High, Maximum">
+                <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                <span id="reasoningLevelLabel" class="text-white font-semibold uppercase text-[10px] tracking-wider">MEDIUM</span>
+                <svg class="w-3 h-3 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+
+              <!-- Reasoning Level Menu -->
+              <div id="reasoningLevelMenu" class="hidden absolute bottom-full mb-2 right-0 w-64 bg-brand-card border border-brand-border rounded-xl p-1.5 shadow-2xl z-50 space-y-1 font-sans">
+                <div class="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-brand-muted border-b border-brand-border/50">Reasoning Depth</div>
+                
+                <button type="button" data-level="low" class="reasoning-option w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex flex-col group">
+                  <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-brand-accent">
+                    <span>LOW</span>
+                    <span class="text-[9px] font-mono text-brand-muted">Fast</span>
+                  </div>
+                  <span class="text-[10px] text-brand-muted leading-tight mt-0.5">Rapid answers, minimal planning, quick edits</span>
+                </button>
+
+                <button type="button" data-level="medium" class="reasoning-option w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex flex-col group">
+                  <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-brand-accent">
+                    <span>MEDIUM</span>
+                    <span class="text-[9px] font-mono text-brand-accent">Balanced</span>
+                  </div>
+                  <span class="text-[10px] text-brand-muted leading-tight mt-0.5">Step-by-step breakdown & verification</span>
+                </button>
+
+                <button type="button" data-level="high" class="reasoning-option w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex flex-col group">
+                  <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-brand-accent">
+                    <span>HIGH</span>
+                    <span class="text-[9px] font-mono text-brand-muted">Deep Planning</span>
+                  </div>
+                  <span class="text-[10px] text-brand-muted leading-tight mt-0.5">File inspection & automated code testing</span>
+                </button>
+
+                <button type="button" data-level="maximum" class="reasoning-option w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex flex-col group">
+                  <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-brand-accent">
+                    <span>MAXIMUM</span>
+                    <span class="text-[9px] font-mono text-emerald-400">Autonomous</span>
+                  </div>
+                  <span class="text-[10px] text-brand-muted leading-tight mt-0.5">Staged changes, test runner & self-healing</span>
+                </button>
+              </div>
+            </div>
 
             <!-- Microphone Button: Speech-to-Text directly into textarea -->
             <button id="micDictationBtn" class="p-2 rounded-xl text-brand-muted hover:text-brand-accent hover:bg-white/5 transition-colors" title="Speech dictation">
@@ -814,7 +871,8 @@
     const state = {
       userEmail: localStorage.getItem('stroke_user_email') || null,
       isTemporaryMode: false,
-      thinkMode: false,
+      reasoningLevel: localStorage.getItem('stroke_reasoning_level') || 'medium',
+      thinkMode: (localStorage.getItem('stroke_reasoning_level') === 'high' || localStorage.getItem('stroke_reasoning_level') === 'maximum'),
       activeSessionId: 'session-' + Date.now(),
       selectedModel: 'llama3.2',
       temperature: 0.7,
@@ -841,7 +899,14 @@
     const temporaryChatToggleBtn = document.getElementById('temporaryChatToggleBtn');
     const tempChatBanner = document.getElementById('tempChatBanner');
     const tempChatIndicator = document.getElementById('tempChatIndicator');
-    const thinkModeBtn = document.getElementById('thinkModeBtn');
+    const reasoningLevelBtn = document.getElementById('reasoningLevelBtn');
+    const reasoningLevelLabel = document.getElementById('reasoningLevelLabel');
+    const reasoningLevelMenu = document.getElementById('reasoningLevelMenu');
+    const topTerminalPill = document.getElementById('topTerminalPill');
+    const topTerminalDot = document.getElementById('topTerminalDot');
+    const topTerminalText = document.getElementById('topTerminalText');
+    const sidebarTerminalDot = document.getElementById('sidebarTerminalDot');
+    const sidebarTerminalStatus = document.getElementById('sidebarTerminalStatus');
     const micDictationBtn = document.getElementById('micDictationBtn');
     const startVoiceChatBtn = document.getElementById('startVoiceChatBtn');
     const voiceModal = document.getElementById('voiceModal');
@@ -1077,15 +1142,97 @@
       }
     }
 
-    // 4. Think Mode
-    thinkModeBtn.addEventListener('click', () => {
-      state.thinkMode = !state.thinkMode;
-      if (state.thinkMode) {
-        thinkModeBtn.classList.add('border-brand-accent', 'text-brand-accent', 'bg-brand-accent/10');
-      } else {
-        thinkModeBtn.classList.remove('border-brand-accent', 'text-brand-accent', 'bg-brand-accent/10');
+    // 4. Reasoning Level Selector Controller
+    function applyReasoningLevel(level) {
+      const validLevels = ['low', 'medium', 'high', 'maximum'];
+      const cleanLevel = validLevels.includes(level) ? level : 'medium';
+      state.reasoningLevel = cleanLevel;
+      state.thinkMode = (cleanLevel === 'high' || cleanLevel === 'maximum');
+      localStorage.setItem('stroke_reasoning_level', cleanLevel);
+
+      if (reasoningLevelLabel) {
+        reasoningLevelLabel.textContent = cleanLevel.toUpperCase();
+      }
+
+      document.querySelectorAll('.reasoning-option').forEach(opt => {
+        const optLevel = opt.getAttribute('data-level');
+        if (optLevel === cleanLevel) {
+          opt.classList.add('bg-white/10', 'border-l-2', 'border-brand-accent');
+        } else {
+          opt.classList.remove('bg-white/10', 'border-l-2', 'border-brand-accent');
+        }
+      });
+    }
+
+    if (reasoningLevelBtn) {
+      reasoningLevelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (reasoningLevelMenu) {
+          reasoningLevelMenu.classList.toggle('hidden');
+        }
+      });
+    }
+
+    document.querySelectorAll('.reasoning-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const lvl = opt.getAttribute('data-level');
+        applyReasoningLevel(lvl);
+        if (reasoningLevelMenu) {
+          reasoningLevelMenu.classList.add('hidden');
+        }
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (reasoningLevelMenu && !reasoningLevelMenu.contains(e.target) && (!reasoningLevelBtn || !reasoningLevelBtn.contains(e.target))) {
+        reasoningLevelMenu.classList.add('hidden');
       }
     });
+
+    // Initialize reasoning level UI from persisted preference
+    applyReasoningLevel(state.reasoningLevel);
+
+    // Live Background Terminal Status Poller
+    async function updateTerminalLiveStatus() {
+      try {
+        const res = await fetch('/terminal/list');
+        if (res.ok) {
+          const data = await res.json();
+          const terms = data.terminals || [];
+          const runningCount = terms.filter(t => t.state === 'running' || t.has_active_process).length;
+          const totalCount = terms.length;
+
+          if (runningCount > 0) {
+            const txt = `Terminal: Running (${runningCount})`;
+            if (topTerminalText) topTerminalText.textContent = txt;
+            if (topTerminalDot) {
+              topTerminalDot.className = "w-2 h-2 rounded-full bg-amber-400 animate-pulse";
+            }
+            if (sidebarTerminalStatus) sidebarTerminalStatus.textContent = `Running (${runningCount})`;
+            if (sidebarTerminalDot) sidebarTerminalDot.className = "w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse";
+          } else if (totalCount > 0) {
+            const txt = `Terminal: ${totalCount} Active`;
+            if (topTerminalText) topTerminalText.textContent = txt;
+            if (topTerminalDot) {
+              topTerminalDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+            }
+            if (sidebarTerminalStatus) sidebarTerminalStatus.textContent = `${totalCount} Session(s)`;
+            if (sidebarTerminalDot) sidebarTerminalDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+          } else {
+            if (topTerminalText) topTerminalText.textContent = "Terminal: Idle";
+            if (topTerminalDot) {
+              topTerminalDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+            }
+            if (sidebarTerminalStatus) sidebarTerminalStatus.textContent = "Idle";
+            if (sidebarTerminalDot) sidebarTerminalDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+          }
+        }
+      } catch (err) {
+        // Background polling silent resilience
+      }
+    }
+    setInterval(updateTerminalLiveStatus, 4000);
+    updateTerminalLiveStatus();
 
     // 5. Search Chats Functionality
     searchChatsBtn.addEventListener('click', toggleChatSearch);
@@ -1552,6 +1699,7 @@
           email: state.userEmail,
           is_temporary: state.isTemporaryMode,
           session_id: state.activeSessionId,
+          reasoning_level: state.reasoningLevel,
           think_mode: state.thinkMode,
           attachments: attachments,
           web_search: true
@@ -1997,8 +2145,12 @@
         activeAction = "Grounding context via autonomous web search...";
       } else if (pLower.includes('commit') || pLower.includes('github') || pLower.includes('pull request')) {
         activeAction = "Connecting to GitHub MCP server...";
-      } else if (state.thinkMode) {
-        activeAction = "Deep Neural Reasoning in progress...";
+      } else if (state.reasoningLevel === 'maximum') {
+        activeAction = "Autonomous Staged Engineering & Multi-Check Verification in progress...";
+      } else if (state.reasoningLevel === 'high') {
+        activeAction = "Deep Planning & Code Inspection in progress...";
+      } else if (state.reasoningLevel === 'medium') {
+        activeAction = "Balanced Reasoning & Step Verification in progress...";
       }
 
       const div = document.createElement('div');

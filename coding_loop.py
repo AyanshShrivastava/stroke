@@ -1047,16 +1047,20 @@ class StrokeCodingLoop:
         else:
             badge = "COMPLETED WITH WARNINGS"
 
+        verification_incomplete = "YES (Compiler unverified or live runtime unverified)" if (runtime_status != "PASS" or not has_compiler_verified) else "NO"
+        tests_passed_status = "PASS" if test_status == "PASS" else ("FAIL" if test_status == "FAIL" else "NOT AVAILABLE")
+
         md = f"\n\n---\n\n### Stroke Verification & Quality Report\n"
         md += f"> **Status**: `{badge}` | **Engine**: Stroke Autonomous Coding Loop | **Iterations**: `{iterations}`\n\n"
 
         md += "#### Verification Status Matrix\n"
+        md += f"- Static Validation: {static_status}\n"
         md += f"- Syntax Compilation: {syntax_status}\n"
-        md += f"- Static Analysis: {static_status}\n"
         md += f"- API Validation: {api_status}\n"
         md += f"- Runtime Execution: {runtime_status}\n"
-        md += f"- Automated Tests: {test_status}\n"
-        md += f"- Performance Tests: {perf_status}\n\n"
+        md += f"- Automated Tests: {tests_passed_status}\n"
+        md += f"- Tests Passed: {tests_passed_status}\n"
+        md += f"- Verification Incomplete: {verification_incomplete}\n\n"
 
         md += "#### Execution Details\n"
         md += f"- **Compiler / Analyzer**: {compiler_used}\n"

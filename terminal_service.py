@@ -184,6 +184,7 @@ class TerminalSession:
         self.current_process: Optional[subprocess.Popen] = None
         self.last_exit_code: Optional[int] = None
         self.last_command: Optional[str] = None
+        self.last_command_info: Optional[Dict[str, Any]] = None
         self.last_duration_ms: Optional[float] = None
         self.pending_approval: Optional[Dict[str, Any]] = None
 
@@ -431,9 +432,25 @@ class TerminalSession:
             self._append_output("stdout", clean_stdout)
             self._append_output("stderr", clean_stderr)
 
+            # Context Protection: cap returned streams to prevent overwhelming LLM context
+            max_context_chars = 4000
+            model_stdout = clean_stdout
+            if len(clean_stdout) > max_context_chars:
+                model_stdout = clean_stdout[:max_context_chars] + f"\n\n[... Output truncated ({len(clean_stdout)} total bytes). Use terminal_read_output(tail_lines=N) to inspect more ...]"
+
+            model_stderr = clean_stderr
+            if len(clean_stderr) > max_context_chars:
+                model_stderr = clean_stderr[:max_context_chars] + f"\n\n[... Error output truncated ({len(clean_stderr)} total bytes) ...]"
+
             duration_ms = round((time.time() - start_time) * 1000, 2)
             self.last_exit_code = exit_code
             self.last_duration_ms = duration_ms
+            self.last_command_info = {
+                "command": command,
+                "args": list(args),
+                "timeout_sec": timeout,
+                "is_background": is_background
+            }
 
             return {
                 "session_id": self.session_id,
@@ -443,8 +460,10 @@ class TerminalSession:
                 "args": args,
                 "cwd": self.cwd,
                 "exit_code": exit_code,
-                "stdout": clean_stdout,
-                "stderr": clean_stderr,
+                "stdout": model_stdout,
+                "stderr": model_stderr,
+                "raw_stdout_bytes": len(clean_stdout.encode("utf-8")),
+                "raw_stderr_bytes": len(clean_stderr.encode("utf-8")),
                 "duration_ms": duration_ms,
                 "state": self.state,
                 "timed_out": timed_out,
@@ -497,10 +516,13 @@ class TerminalSession:
                 self.current_process = None
 
     def read_output(self, tail_lines: Optional[int] = None) -> List[str]:
-        """Returns the chronological captured output lines, optionally limited to tail."""
+        """Returns the chronological captured output lines, defaulting to last 50 lines to prevent overwhelming model context."""
         with self.lock:
-            if tail_lines and tail_lines > 0:
-                return list(self.output_lines)[-tail_lines:]
+            limit = tail_lines if (tail_lines is not None and tail_lines > 0) else 50
+            total = len(self.output_lines)
+            if total > limit:
+                truncated_notice = f"[... Output truncated: {total - limit} older lines omitted. Showing most recent {limit} lines ...]"
+                return [truncated_notice] + list(self.output_lines)[-limit:]
             return list(self.output_lines)
 
     def stop(self) -> Dict[str, Any]:
@@ -537,6 +559,24 @@ class TerminalSession:
             "state": "terminated",
             "process_killed": killed
         }
+
+    def restart(self) -> Dict[str, Any]:
+        """Terminates active process and restarts the last executed command with its original arguments."""
+        self.stop()
+        if not self.last_command_info:
+            return {
+                "session_id": self.session_id,
+                "status": "error",
+                "message": "No previous command executed in this session to restart."
+            }
+        info = self.last_command_info
+        self._append_output("system", f"RESTART: Re-executing '{info['command']}' {' '.join(str(a) for a in info['args'])}")
+        return self.execute_command(
+            command=info["command"],
+            args=info["args"],
+            timeout_sec=info["timeout_sec"],
+            is_background=info["is_background"]
+        )
 
     def get_status(self) -> Dict[str, Any]:
         """Returns the live status summary of the session."""
@@ -729,6 +769,23 @@ class TerminalManager:
         return cls.stop_terminal(session_id=session_id)
 
     @classmethod
+    def restart_terminal(cls, session_id: str) -> Dict[str, Any]:
+        """
+        Tool: restart_terminal / terminal_restart
+        Restarts the last command executed in the background session.
+        """
+        with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                return {"status": "error", "message": f"Session '{session_id}' not found."}
+            return session.restart()
+
+    @classmethod
+    def terminal_restart(cls, session_id: str) -> Dict[str, Any]:
+        """Tool: terminal_restart(session_id)"""
+        return cls.restart_terminal(session_id=session_id)
+
+    @classmethod
     def terminal_list_sessions(cls) -> List[Dict[str, Any]]:
         """Tool: terminal_list_sessions()"""
         return cls.list_terminals()
@@ -759,8 +816,8 @@ class TerminalManager:
 class ToolDispatcher:
     """
     Validates, routes, and executes internal AI tool invocations.
-    Works seamlessly with native OpenAI function schemas, JSON markdown blocks,
-    XML <tool_call> tags, and structured pythonic calls emitted by local LLMs.
+    Works seamlessly with native OpenAI function schemas, raw JSON strings,
+    JSON markdown blocks, XML <tool_call> tags, and structured pythonic calls emitted by local LLMs.
     """
     SUPPORTED_TOOLS = {
         "terminal_create_session",
@@ -768,12 +825,14 @@ class ToolDispatcher:
         "terminal_read_output",
         "terminal_get_status",
         "terminal_stop",
+        "terminal_restart",
         "terminal_list_sessions",
         "create_terminal",
         "run_command",
         "read_terminal_output",
         "get_terminal_status",
         "stop_terminal",
+        "restart_terminal",
         "list_terminals",
     }
 
@@ -814,6 +873,10 @@ class ToolDispatcher:
             session_id = args.get("session_id", "")
             return TerminalManager.terminal_stop(session_id=session_id)
 
+        elif name in ("terminal_restart", "restart_terminal"):
+            session_id = args.get("session_id", "")
+            return TerminalManager.terminal_restart(session_id=session_id)
+
         elif name in ("terminal_list_sessions", "list_terminals"):
             return {"terminals": TerminalManager.terminal_list_sessions()}
 
@@ -823,13 +886,31 @@ class ToolDispatcher:
     def parse_and_execute_calls(cls, text: str) -> List[Dict[str, Any]]:
         """
         Inspects raw LLM output for tool calling formats and executes them silently.
-        Supports JSON fences and <tool_call> XML blocks.
+        Supports raw JSON, JSON markdown blocks, and <tool_call> XML tags.
         """
         results = []
         if not text:
             return results
 
-        # 1. Parse JSON blocks with "tool" or "name"
+        # 1. Direct raw JSON parse
+        cleaned_text = text.strip()
+        if (cleaned_text.startswith("{") and cleaned_text.endswith("}")) or (cleaned_text.startswith("[") and cleaned_text.endswith("]")):
+            try:
+                data = json.loads(cleaned_text)
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if isinstance(item, dict):
+                        tool_name = item.get("tool") or item.get("name") or item.get("function")
+                        if tool_name in cls.SUPPORTED_TOOLS:
+                            args = item.get("parameters") or item.get("arguments") or item.get("args") or {}
+                            res = cls.dispatch(tool_name, args)
+                            results.append({"tool": tool_name, "arguments": args, "result": res})
+                if results:
+                    return results
+            except Exception:
+                pass
+
+        # 2. Parse JSON blocks with "tool" or "name"
         json_pattern = r"```(?:json)?\s*(\{[\s\S]*?\})\s*```"
         for match in re.finditer(json_pattern, text):
             try:
@@ -842,7 +923,7 @@ class ToolDispatcher:
             except Exception:
                 pass
 
-        # 2. Parse <tool_call> tags
+        # 3. Parse <tool_call> tags
         tag_pattern = r"<tool_call>\s*(\{[\s\S]*?\})\s*</tool_call>"
         for match in re.finditer(tag_pattern, text):
             try:
@@ -854,6 +935,20 @@ class ToolDispatcher:
                     results.append({"tool": tool_name, "arguments": args, "result": res})
             except Exception:
                 pass
+
+        # 4. Regex fallback: embedded JSON objects containing a supported tool name
+        if not results:
+            obj_pattern = r"\{[^{}]*?\"(?:name|tool|function)\"\s*:\s*\"([a-zA-Z0-9_-]+)\"[^{}]*?\}"
+            for match in re.finditer(obj_pattern, text):
+                try:
+                    tool_name = match.group(1)
+                    if tool_name in cls.SUPPORTED_TOOLS:
+                        data = json.loads(match.group(0))
+                        args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
+                        res = cls.dispatch(tool_name, args)
+                        results.append({"tool": tool_name, "arguments": args, "result": res})
+                except Exception:
+                    pass
 
         return results
 
@@ -958,6 +1053,23 @@ def get_terminal_openai_tool_schemas() -> List[Dict[str, Any]]:
             "function": {
                 "name": "terminal_stop",
                 "description": "Terminates any active running background process in the session and frees resources.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "The terminal session ID."
+                        }
+                    },
+                    "required": ["session_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "terminal_restart",
+                "description": "Restarts the last executed command in the background terminal session.",
                 "parameters": {
                     "type": "object",
                     "properties": {
