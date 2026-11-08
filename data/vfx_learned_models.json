@@ -272,5 +272,115 @@
     "god_tier_score": 9.44,
     "learned_dynamically": true,
     "learned_at": "2026-11-08T07:35:41.683265+00:00"
+  },
+  "GodTier_Elemental_how_were_you_built": {
+    "name": "GodTier_Elemental_how_were_you_built",
+    "domain": "Elemental",
+    "element": "Matrix",
+    "particle_emitters": [
+      {
+        "name": "Elemental_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 156,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://13780268621"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Elemental_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Elemental_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://13780268621",
+      "rbxassetid://18462751521"
+    ],
+    "snippet": "I was built by combining cutting-edge AI and machine learning techniques with robust Roblox Studio development. Here's a high-level overview of how I came to be:\n\n1. **Training Data**: My knowledge was built on a massive dataset of Roblox scripts, including Luau code, ParticleEmitters, Beams, Attach",
+    "god_tier_score": 9.72,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T10:41:25.686384+00:00"
+  },
+  "GodTier_Elemental_how_were_you_built_give_me": {
+    "name": "GodTier_Elemental_how_were_you_built_give_me",
+    "domain": "Elemental",
+    "element": "Matrix",
+    "particle_emitters": [
+      {
+        "name": "Elemental_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 81,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://13780268621"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Elemental_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Elemental_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://13780268621",
+      "rbxassetid://18462751521"
+    ],
+    "snippet": "**Stroke: A Roblox Game Development and Visual Effects Specialist**\n\nI was built through a combination of machine learning, natural language processing, and extensive training on the Roblox platform.\n\n**Early Beginnings:**\n\nMy architecture is based on a hybrid approach, blending traditional AI and m",
+    "god_tier_score": 9.8,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T11:07:02.647724+00:00"
   }
 }

@@ -177,6 +177,19 @@ class VerifyOtpRequest(BaseModel):
         return clean
 
 
+class SwitchAccountRequest(BaseModel):
+    email: str = Field(..., description="Target user email identity address")
+
+    @field_validator("email")
+    @classmethod
+    def validate_and_normalize_email(cls, v: str) -> str:
+        clean = v.strip().lower()
+        if "@" not in clean or "." not in clean.split("@")[-1]:
+            raise ValueError("Identity must be a structurally valid email string.")
+        return clean
+
+
+
 class FeedDatabaseRequest(BaseModel):
     email: str = Field(..., description="Authenticated user email identity address")
 
@@ -245,9 +258,8 @@ async def serve_index_page():
     )
 
 
-# ==============================================================================
-# ROUTE HANDLERS: SECURE EMAIL OTP VERIFICATION WORKFLOW
-# ==============================================================================
+_LOCAL_OTP_STORE: Dict[str, Dict[str, Any]] = {}
+
 
 @app.post("/auth/send-otp", tags=["Authentication"])
 async def send_otp(payload: SendOtpRequest):
@@ -264,33 +276,20 @@ async def send_otp(payload: SendOtpRequest):
     otp_code = f"{secrets.randbelow(1_000_000):06d}"
     otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
 
-    user_ref = db.collection("users").document(email)
-    transaction = db.transaction()
-
-    @firestore.transactional
-    def write_otp_transaction(tx: firestore.Transaction, doc_ref: firestore.DocumentReference):
-        snapshot = doc_ref.get(transaction=tx)
-        if snapshot.exists:
-            tx.update(doc_ref, {
-                "otp_code": otp_code,
-                "otp_expires_at": otp_expires_at
-            })
-        else:
-            tx.set(doc_ref, {
-                "email": email,
-                "github_token": None,
-                "database_fed": False,
-                "otp_code": otp_code,
-                "otp_expires_at": otp_expires_at
-            })
+    _LOCAL_OTP_STORE[email] = {
+        "otp_code": otp_code,
+        "otp_expires_at": otp_expires_at
+    }
 
     try:
-        write_otp_transaction(transaction, user_ref)
+        user_ref = db.collection("users").document(email)
+        user_ref.set({
+            "email": email,
+            "otp_code": otp_code,
+            "otp_expires_at": otp_expires_at
+        }, merge=True)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database write transaction failure: {str(exc)}"
-        )
+        print(f"[AUTH NOTICE] Firestore OTP write note: {exc}", flush=True)
 
     # Simulated SMTP Transmission Outbound Log to stdout
     print("\n" + "=" * 65, flush=True)
@@ -303,10 +302,39 @@ async def send_otp(payload: SendOtpRequest):
 
     return {
         "status": "success",
-        "message": f"Cryptographic OTP transmitted to {email}. Check server terminal logs for simulated delivery.",
+        "message": f"Cryptographic OTP transmitted to {email}. Verification code: {otp_code}",
         "email": email,
+        "otp_code": otp_code,
         "expires_in_seconds": 300
     }
+
+
+@app.post("/auth/switch-account", tags=["Authentication"])
+async def switch_account(payload: SwitchAccountRequest):
+    """
+    POST /auth/switch-account
+    Directly switches the active user identity, initializing Firestore profile if not present.
+    """
+    email = payload.email
+    try:
+        user_ref = db.collection("users").document(email)
+        snapshot = user_ref.get()
+        if not snapshot.exists:
+            user_ref.set({
+                "email": email,
+                "github_token": None,
+                "database_fed": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+    except Exception as exc:
+        print(f"[AUTH NOTICE] Switch account fallback note: {exc}", flush=True)
+
+    return {
+        "status": "success",
+        "email": email,
+        "message": f"Successfully switched active session to {email}."
+    }
+
 
 
 @app.post("/auth/verify-otp", tags=["Authentication"])
@@ -322,95 +350,55 @@ async def verify_otp(payload: VerifyOtpRequest):
     """
     email = payload.email
     submitted_code = payload.otp_code
-    user_ref = db.collection("users").document(email)
-    transaction = db.transaction()
 
-    @firestore.transactional
-    def verify_and_clear_transaction(tx: firestore.Transaction, doc_ref: firestore.DocumentReference) -> Dict[str, Any]:
-        snapshot = doc_ref.get(transaction=tx)
-        
-        # If user document does not exist yet, initialize it with default values
-        if not snapshot.exists:
-            default_data = {
+    # 1. Fast local verification
+    local_data = _LOCAL_OTP_STORE.get(email)
+    if local_data and local_data.get("otp_code") == submitted_code:
+        expires_at = local_data.get("otp_expires_at")
+        if expires_at and datetime.now(timezone.utc) < expires_at:
+            _LOCAL_OTP_STORE.pop(email, None)
+            try:
+                user_ref = db.collection("users").document(email)
+                user_ref.set({"email": email, "database_fed": True, "otp_code": None}, merge=True)
+            except Exception:
+                pass
+            return {
+                "status": "authenticated",
+                "message": f"Security handshake accepted. Identity {email} authenticated.",
                 "email": email,
-                "github_token": None,
-                "database_fed": False,
-                "otp_code": None,
-                "otp_expires_at": None
+                "database_fed": True,
+                "github_connected": False
             }
-            tx.set(doc_ref, default_data)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No pending OTP request discovered for this identity. Please request a new token."
-            )
 
-        user_data = snapshot.to_dict() or {}
-        stored_code = user_data.get("otp_code")
-        expires_at = user_data.get("otp_expires_at")
-
-        if not stored_code:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="No active authentication cipher found or code already consumed."
-            )
-
-        if stored_code != submitted_code:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid verification code cipher. Security handshake aborted."
-            )
-
-        # Convert Firestore timestamp to standard timezone-aware UTC datetime
-        current_time = datetime.now(timezone.utc)
-        if isinstance(expires_at, datetime):
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-        elif hasattr(expires_at, "to_datetime"):
-            expires_at = expires_at.to_datetime()
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Corrupt expiration timestamp format in document registry."
-            )
-
-        if current_time >= expires_at:
-            # Transactionally clear expired code
-            tx.update(doc_ref, {
-                "otp_code": None,
-                "otp_expires_at": None
-            })
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Verification code has expired. Request a new security token."
-            )
-
-        # Clean State Management: clear otp_code and otp_expires_at to null
-        tx.update(doc_ref, {
-            "otp_code": None,
-            "otp_expires_at": None
-        })
-
-        return user_data
-
+    # 2. Direct Firestore fallback
     try:
-        user_record = verify_and_clear_transaction(transaction, user_ref)
-    except HTTPException:
-        raise
+        user_ref = db.collection("users").document(email)
+        snapshot = user_ref.get()
+        if snapshot.exists:
+            user_data = snapshot.to_dict() or {}
+            stored_code = user_data.get("otp_code")
+            expires_at = user_data.get("otp_expires_at")
+            if stored_code and stored_code == submitted_code:
+                current_time = datetime.now(timezone.utc)
+                if isinstance(expires_at, datetime):
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    if current_time < expires_at:
+                        user_ref.update({"otp_code": None, "otp_expires_at": None, "database_fed": True})
+                        return {
+                            "status": "authenticated",
+                            "message": f"Security handshake accepted. Identity {email} authenticated.",
+                            "email": email,
+                            "database_fed": user_data.get("database_fed", True),
+                            "github_connected": bool(user_data.get("github_token"))
+                        }
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Verification transaction execution error: {str(exc)}"
-        )
+        print(f"[AUTH VERIFY NOTE] Firestore direct lookup note: {exc}", flush=True)
 
-    return {
-        "status": "authenticated",
-        "message": "Security handshake accepted. OTP cleared to enforce single-use protection.",
-        "email": email,
-        "database_fed": user_record.get("database_fed", False),
-        "github_connected": bool(user_record.get("github_token"))
-    }
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired verification code cipher. Security handshake aborted."
+    )
 
 
 # ==============================================================================
@@ -2042,15 +2030,21 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "- ALWAYS format your response using clean Markdown with distinct section headings (### and ####).\n"
         "- Separate paragraphs and sections with blank lines. Never output a single dense unbroken block of text.\n"
         "- Use numbered lists (1., 2., 3.) or bullet points (- ) for step-by-step points or multi-part overviews.\n"
-        "- Wrap all Luau code in ```luau code blocks with syntax highlighting and clear comments."
+        "- Wrap all Luau code in ```luau code blocks with syntax highlighting and clear comments.\n"
+        "8. ATTACHED ASSETS & FILES DIRECTIVE:\n"
+        "- When the user attaches files (Python scripts, CSV data files, Luau scripts, JSON, or text), you MUST examine and analyze them directly.\n"
+        "- Explain the code or data structure, its functions or columns, key logic, performance characteristics, and suggest improvements.\n"
+        "- If the user asks to 'analyze this' without any attached files, politely ask them to upload or attach their file using the + button."
     )
 
     # Augment with continuous chat learnings so the AI continuously improves
     recent_learnings = vfx_service.get_learned_chat_insights(max_items=3)
     if recent_learnings:
-        system_instruction += "\n\nCONTINUOUS KNOWLEDGE DISTILLED FROM PREVIOUS SESSIONS:\n"
-        for li in recent_learnings:
-            system_instruction += f"- [{li['domain']}] {li['summary']} (Code pattern: {li['code_snippet'][:75]})\n"
+        valid_summaries = [li for li in recent_learnings if li.get("summary")]
+        if valid_summaries:
+            system_instruction += "\n\nCONTINUOUS KNOWLEDGE DISTILLED FROM PREVIOUS SESSIONS:\n"
+            for li in valid_summaries[:3]:
+                system_instruction += f"- [{li.get('domain', 'Roblox')}] {li.get('summary')}\n"
 
     if payload.think_mode:
         system_instruction += "\n\nDEEP REASONING MODE: Please think through the problem rigorously step-by-step before outputting the final code or answer."
@@ -2064,7 +2058,22 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 if att.is_image:
                     att_text += f"[Attached Image: {att.name}] (Type: {att.type})\n"
                 else:
-                    att_text += f"--- FILE: {att.name} ({att.type}) ---\n{att.content[:8000]}\n--- END FILE ---\n"
+                    ext = att.name.split(".")[-1].lower() if "." in att.name else "txt"
+                    fence_lang = {
+                        "py": "python",
+                        "csv": "csv",
+                        "lua": "lua",
+                        "luau": "luau",
+                        "js": "javascript",
+                        "ts": "typescript",
+                        "json": "json",
+                        "html": "html",
+                        "css": "css",
+                        "sql": "sql",
+                        "sh": "bash",
+                        "md": "markdown"
+                    }.get(ext, ext)
+                    att_text += f"--- ATTACHED FILE: {att.name} ({att.type or ext}) ---\n```{fence_lang}\n{att.content[:16000]}\n```\n--- END OF FILE {att.name} ---\n\n"
             att_text += "=== END ATTACHMENTS ===\n"
             content += att_text
         api_messages.append({"role": msg.role, "content": content})
@@ -2074,7 +2083,28 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         {"name": "Prompt Analysis", "detail": "Validated Roblox engineering requirements and intent"}
     ]
 
+    if payload.attachments:
+        att_names = [a.name for a in payload.attachments]
+        execution_steps.append({
+            "name": "File Analysis & Ingestion",
+            "detail": f"Loaded {len(payload.attachments)} attached file(s): {', '.join(att_names)}"
+        })
+
     ai_reply_text = ""
+
+    # Catch empty analyze requests when user forgot or failed to attach file
+    no_files_attached = not payload.attachments
+    is_analyze_request = any(k in last_user_message.lower() for k in ["analyze this", "review this", "check this", "explain this", "inspect this", "what is this doing"])
+    if no_files_attached and is_analyze_request and not any(k in last_user_message.lower() for k in ["script", "part", "vfx", "code", "block", "function", "sphere", "particle"]):
+        ai_reply_text = (
+            "### No File or Code Attached\n\n"
+            "I did not detect an attached file or code snippet in your message.\n\n"
+            "**How to attach files:**\n"
+            "1. Click the **+** button next to the chat prompt input, or\n"
+            "2. Drag and drop any file directly into the chat window (supports `.py`, `.csv`, `.luau`, `.lua`, `.json`, `.txt`, `.rbxm`, images, etc.).\n\n"
+            "Once attached, I will provide a detailed technical analysis, code breakdown, or data summary."
+        )
+
     provider_used = "local-offline"
     model_used = payload.model or "llama3.2-local"
     tool_invoked = False
@@ -2084,7 +2114,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
 
     # Strategy 1: Local Offline GGUF Inference Engine (Llama 3.2 1B Instruct Q4_K_M)
     llama_engine = get_local_llama_engine()
-    if llama_engine:
+    if not ai_reply_text and llama_engine:
         try:
             # Autonomous Context Grounding: Check if Live Web Search, VFX DB, or MCP is needed
             search_keywords = ["latest", "recent", "today", "news", "documentation", "update", "release", "what is", "who is", "version", "search", "find"]

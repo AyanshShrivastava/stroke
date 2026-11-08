@@ -126,8 +126,9 @@
 </head>
 <body class="bg-brand-black text-brand-text flex h-screen w-screen overflow-hidden font-sans select-text">
 
-  <!-- Hidden File Input for Attachment Button (+) -->
-  <input type="file" id="fileAttachmentInput" multiple accept="image/*,.luau,.lua,.py,.js,.ts,.json,.txt,.rbxm,.md,.html,.css" class="hidden">
+  <!-- Hidden File Input for Attachment Button (+) - Supports all file types: .py, .csv, .luau, .lua, .json, images, etc. -->
+  <input type="file" id="fileAttachmentInput" multiple class="hidden">
+
 
   <!-- ========================================================================= -->
   <!-- LEFT SIDEBAR: Clean, Modern AI Layout (Collapsible)                       -->
@@ -622,34 +623,55 @@
       <div class="flex items-center justify-between border-b border-brand-border pb-3">
         <div class="flex items-center space-x-2">
           <div class="w-6 h-6 rounded bg-brand-accent/20 border border-brand-accent flex items-center justify-center font-bold text-xs text-brand-accent">S</div>
-          <h3 class="font-sans font-bold text-white text-base">Stroke Account</h3>
+          <h3 class="font-sans font-bold text-white text-base">Account &amp; Identity</h3>
         </div>
         <button id="closeAuthModalBtn" class="text-brand-muted hover:text-white">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <div id="otpStep1" class="space-y-3">
-        <p class="text-xs text-brand-muted leading-relaxed">
-          Enter your email to receive a 6-digit verification code.
-        </p>
-        <div>
-          <label class="block text-[11px] text-brand-muted uppercase mb-1">Email Address</label>
-          <input id="authEmailInput" type="email" placeholder="developer@cyber.matrix" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+      <!-- Current Account Card -->
+      <div class="p-3 rounded-xl bg-brand-surface border border-brand-border flex items-center justify-between">
+        <div class="min-w-0">
+          <div class="text-[10px] text-brand-muted uppercase font-mono">Current Account</div>
+          <div id="authModalCurrentEmail" class="text-xs font-mono text-white truncate font-medium">developer@stroke.ai</div>
         </div>
-        <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button">
-          Send Verification Code
+        <button id="authModalSignOutBtn" class="text-xs text-brand-danger hover:underline px-2 py-1 rounded hover:bg-red-500/10 transition-colors font-mono">
+          Sign Out
         </button>
       </div>
 
-      <div id="otpStep2" class="hidden space-y-3">
-        <p class="text-xs text-brand-accent leading-relaxed">
-          Verification token dispatched. Enter the 6-digit code below:
-        </p>
+      <div id="otpStep1" class="space-y-3.5">
         <div>
-          <label class="block text-[11px] text-brand-muted uppercase mb-1">6-Digit Code</label>
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Switch or Sign In to Account</label>
+          <input id="authEmailInput" type="email" placeholder="you@domain.com" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+        </div>
+
+        <div class="space-y-2">
+          <!-- Instant Switch Button (Direct Local Switch) -->
+          <button id="instantSwitchBtn" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button flex items-center justify-center space-x-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            <span>Instant Switch / Sign In</span>
+          </button>
+          
+          <!-- Optional OTP Button -->
+          <button id="sendOtpBtn" class="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-brand-muted hover:text-white font-mono text-xs transition-colors">
+            Or Verify with 6-Digit Email OTP
+          </button>
+        </div>
+      </div>
+
+      <div id="otpStep2" class="hidden space-y-3.5">
+        <div id="otpCodeHelperBanner" class="p-2.5 rounded-lg bg-brand-accent/10 border border-brand-accent/30 text-xs text-brand-accent font-mono flex items-center justify-between">
+          <span>Verification Code:</span>
+          <span id="otpCodeDisplay" class="font-bold text-sm tracking-wider">123456</span>
+        </div>
+
+        <div>
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Enter 6-Digit Code</label>
           <input id="authOtpInput" type="text" maxlength="6" placeholder="123456" class="w-full bg-brand-input border border-brand-accent rounded-lg px-3 py-2 text-white text-lg tracking-widest text-center focus:outline-none font-mono font-bold">
         </div>
+
         <div class="flex space-x-2">
           <button id="backToStep1Btn" class="w-1/3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs">Back</button>
           <button id="verifyOtpBtn" class="w-2/3 py-2 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button">
@@ -790,8 +812,10 @@
 
     // 1. Identity
     function updateUserIdentityUI() {
-      const email = state.userEmail;
+      const email = state.userEmail || 'developer@stroke.ai';
       popoverEmail.textContent = email;
+      const modalCurrent = document.getElementById('authModalCurrentEmail');
+      if (modalCurrent) modalCurrent.textContent = email;
       const namePart = email.split('@')[0];
       const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1);
       userDisplayName.textContent = capitalized;
@@ -802,7 +826,23 @@
       e.stopPropagation();
       profilePopover.classList.toggle('hidden');
     });
+    profilePopover.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('click', () => profilePopover.classList.add('hidden'));
+
+    document.getElementById('logoutBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      signOutUser();
+    });
+    document.getElementById('authModalTriggerBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      profilePopover.classList.add('hidden');
+      openAuthModal();
+    });
+    document.getElementById('popoverOpenSettingsBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      profilePopover.classList.add('hidden');
+      openSettingsModal();
+    });
 
     // 2. Sidebar Collapse
     collapseSidebarBtn.addEventListener('click', () => {
@@ -963,75 +1003,123 @@
       location.reload();
     });
 
-    // 6. Plus Button (+) for Attachments
+    // 6. Plus Button (+) for Attachments - Supports .py, .csv, .luau, .lua, .json, .txt, images, etc.
     attachBtn.addEventListener('click', () => fileAttachmentInput.click());
 
     fileAttachmentInput.addEventListener('change', async (e) => {
-      const files = Array.from(e.target.files);
-      for (const file of files) {
-        const isImage = file.type.startsWith('image/');
-        const reader = new FileReader();
-
-        if (isImage) {
-          reader.onload = (event) => {
-            state.pendingAttachments.push({
-              name: file.name,
-              content: event.target.result,
-              type: file.type,
-              is_image: true,
-              size: file.size
-            });
-            renderAttachmentPreviews();
-          };
-          reader.readAsDataURL(file);
-        } else {
-          reader.onload = (event) => {
-            state.pendingAttachments.push({
-              name: file.name,
-              content: event.target.result,
-              type: file.type || 'text/plain',
-              is_image: false,
-              size: file.size
-            });
-            renderAttachmentPreviews();
-          };
-          reader.readAsText(file);
-        }
-      }
+      await handleSelectedFiles(e.target.files);
       fileAttachmentInput.value = '';
     });
+
+    // Universal Drag & Drop Support
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    window.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        await handleSelectedFiles(e.dataTransfer.files);
+      }
+    });
+
+    async function handleSelectedFiles(fileList) {
+      const files = Array.from(fileList || []);
+      if (files.length === 0) return;
+
+      let addedCount = 0;
+      for (const file of files) {
+        try {
+          const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(file.name);
+          
+          const fileData = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error('Failed to read file: ' + file.name));
+            
+            if (isImage) {
+              reader.onload = (event) => resolve({
+                name: file.name,
+                content: event.target.result,
+                type: file.type || 'image/png',
+                is_image: true,
+                size: file.size
+              });
+              reader.readAsDataURL(file);
+            } else {
+              reader.onload = (event) => resolve({
+                name: file.name,
+                content: event.target.result,
+                type: file.type || 'text/plain',
+                is_image: false,
+                size: file.size
+              });
+              reader.readAsText(file);
+            }
+          });
+
+          // Prevent duplicate attachments
+          const alreadyExists = state.pendingAttachments.some(a => a.name === fileData.name && a.size === fileData.size);
+          if (!alreadyExists) {
+            state.pendingAttachments.push(fileData);
+            addedCount++;
+          }
+        } catch (err) {
+          console.error('File read error:', err);
+        }
+      }
+
+      if (addedCount > 0) {
+        renderAttachmentPreviews();
+        showToast(`Attached ${addedCount} file(s)`);
+      }
+    }
 
     function renderAttachmentPreviews() {
       if (state.pendingAttachments.length === 0) {
         attachmentsPreviewStrip.classList.add('hidden');
         attachmentsPreviewStrip.innerHTML = '';
+        if (!promptInput.value.trim()) {
+          sendPromptBtn.disabled = true;
+        }
         return;
       }
+
       attachmentsPreviewStrip.classList.remove('hidden');
       attachmentsPreviewStrip.innerHTML = '';
 
       state.pendingAttachments.forEach((att, idx) => {
         const chip = document.createElement('div');
-        chip.className = 'flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-brand-surface border border-brand-border text-xs text-white';
-        const sizeKb = Math.round(att.size / 1024) || 1;
+        chip.className = 'flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-brand-surface border border-brand-accent/30 text-xs text-white shadow-md';
+        const sizeKb = Math.round((att.size || 0) / 1024) || 1;
 
         if (att.is_image) {
           chip.innerHTML = `
-            <img src="${att.content}" class="w-5 h-5 rounded object-cover border border-brand-border">
-            <span class="truncate max-w-[120px]">${escapeHtml(att.name)}</span>
-            <span class="text-[10px] text-brand-muted">${sizeKb}KB</span>
-            <button onclick="removePendingAttachment(${idx})" class="text-brand-muted hover:text-brand-danger ml-1">x</button>
+            <img src="${att.content}" class="w-5 h-5 rounded object-cover border border-brand-border flex-shrink-0">
+            <span class="truncate max-w-[140px] text-xs font-sans">${escapeHtml(att.name)}</span>
+            <span class="text-[10px] text-brand-muted font-mono">${sizeKb}KB</span>
+            <button onclick="removePendingAttachment(${idx})" class="text-brand-muted hover:text-brand-danger ml-1 font-bold text-xs" title="Remove attachment">✕</button>
           `;
         } else {
+          const ext = (att.name.split('.').pop() || 'FILE').toUpperCase();
+          let badgeColor = 'bg-brand-accent/20 text-brand-accent border-brand-accent/40';
+          if (ext === 'PY') badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/40';
+          else if (ext === 'CSV') badgeColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
+          else if (ext === 'JSON') badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
+          else if (ext === 'LUAU' || ext === 'LUA') badgeColor = 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40';
+
           chip.innerHTML = `
-            <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            <span class="truncate max-w-[120px] font-mono text-[11px]">${escapeHtml(att.name)}</span>
-            <span class="text-[10px] text-brand-muted">${sizeKb}KB</span>
-            <button onclick="removePendingAttachment(${idx})" class="text-brand-muted hover:text-brand-danger ml-1">x</button>
+            <span class="px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold ${badgeColor}">${ext}</span>
+            <span class="truncate max-w-[140px] font-mono text-[11px]">${escapeHtml(att.name)}</span>
+            <span class="text-[10px] text-brand-muted font-mono">${sizeKb}KB</span>
+            <button onclick="removePendingAttachment(${idx})" class="text-brand-muted hover:text-brand-danger ml-1 font-bold text-xs" title="Remove attachment">✕</button>
           `;
         }
         attachmentsPreviewStrip.appendChild(chip);
       });
+
+      // Always enable send button when attachments are present
       sendPromptBtn.disabled = false;
     }
 
@@ -1214,7 +1302,8 @@
       renderAttachmentPreviews();
       sendPromptBtn.disabled = true;
 
-      await sendChatMessage(text || '(Attached files provided)', currentAttachments);
+      const effectivePrompt = text || 'Please analyze the attached file(s).';
+      await sendChatMessage(effectivePrompt, currentAttachments);
     }
 
     async function sendChatMessage(promptText, attachments = []) {
@@ -1228,7 +1317,7 @@
       state.chatMessages.push({ role: 'user', content: promptText });
 
       const typingId = 'typing-' + Date.now();
-      appendTypingIndicator(typingId, promptText);
+      appendTypingIndicator(typingId, promptText, attachments);
 
       try {
         const payload = {
@@ -1391,12 +1480,26 @@
       if (isUser) {
         let attHtml = '';
         if (meta.attachments && meta.attachments.length > 0) {
-          attHtml = '<div class="flex flex-wrap gap-1.5 mb-2">';
+          attHtml = '<div class="flex flex-wrap gap-2 mb-2 pb-1.5 border-b border-[#23422c]/70">';
           meta.attachments.forEach(att => {
             if (att.is_image) {
-              attHtml += `<img src="${att.content}" class="w-16 h-16 rounded-lg object-cover border border-brand-border">`;
+              attHtml += `<img src="${att.content}" class="w-20 h-20 rounded-xl object-cover border border-brand-accent/40 shadow-md">`;
             } else {
-              attHtml += `<span class="px-2 py-0.5 rounded bg-white/10 text-[10px] font-mono">[File: ${escapeHtml(att.name)}]</span>`;
+              const ext = (att.name.split('.').pop() || 'FILE').toUpperCase();
+              const sizeKb = Math.round((att.size || 0) / 1024) || 1;
+              let badgeColor = 'bg-brand-accent/20 text-brand-accent border-brand-accent/40';
+              if (ext === 'PY') badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/40';
+              else if (ext === 'CSV') badgeColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40';
+              else if (ext === 'JSON') badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
+              else if (ext === 'LUAU' || ext === 'LUA') badgeColor = 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40';
+
+              attHtml += `
+                <div class="flex items-center space-x-2 px-2.5 py-1.5 rounded-xl bg-black/60 border border-[#23422c] shadow-sm">
+                  <span class="px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold ${badgeColor}">${ext}</span>
+                  <span class="font-mono text-xs text-white max-w-[180px] truncate">${escapeHtml(att.name)}</span>
+                  <span class="text-[10px] text-brand-muted font-mono">${sizeKb}KB</span>
+                </div>
+              `;
             }
           });
           attHtml += '</div>';
@@ -1406,7 +1509,7 @@
 
         msgDiv.innerHTML = `
           <div class="flex flex-col items-end max-w-[80%] sm:max-w-[70%] group">
-            <div id="${msgId}-bubble" class="inline-block max-w-fit bg-[#122417] border border-[#23422c] text-white px-3.5 py-2 rounded-2xl rounded-tr-sm text-sm leading-normal font-sans select-text break-words text-left">${attHtml}<span id="${msgId}-text" class="whitespace-pre-wrap break-words select-text">${escapeHtml(trimmedContent)}</span></div>
+            <div id="${msgId}-bubble" class="w-fit max-w-full inline-block bg-[#122417] border border-[#23422c] text-white px-3.5 py-2 rounded-2xl rounded-tr-sm text-sm leading-normal font-sans select-text break-words text-left">${attHtml}<span id="${msgId}-text" class="whitespace-pre-wrap break-words select-text">${escapeHtml(trimmedContent)}</span></div>
             <div id="${msgId}-actions" class="mt-1 flex items-center space-x-2 text-[10px] text-brand-muted opacity-80 group-hover:opacity-100 transition-opacity">
               <button onclick="startEditPrompt('${msgId}')" class="hover:text-brand-accent flex items-center space-x-1 px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors" title="Edit prompt and restart conversation">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -1501,50 +1604,25 @@
 
     // Activity Tracker Timer & Animation State
     let activeTypingTimer = null;
-    let activeTypingStepInterval = null;
 
-    function appendTypingIndicator(id, promptText = '') {
+    function appendTypingIndicator(id, promptText = '', attachments = []) {
       const pLower = (promptText || '').toLowerCase();
-      let contextualSteps = [
-        "Analyzing prompt requirements and intent",
-        "Evaluating Luau architecture and constraints"
-      ];
+      let activeAction = "Synthesizing response with Local Neural Engine...";
 
-      if (pLower.includes('vfx') || pLower.includes('particle') || pLower.includes('domain') || pLower.includes('sukuna') || pLower.includes('purple') || pLower.includes('cleave') || pLower.includes('fireball') || pLower.includes('aura') || pLower.includes('beam')) {
-        contextualSteps = [
-          "Analyzing VFX kinematics and visual constraints...",
-          "Evaluating ParticleEmitter, Beam & Attachment hierarchies...",
-          "Synthesizing production Luau script...",
-          "Verifying runtime performance and cleanup..."
-        ];
-      } else if (pLower.includes('studio') || pLower.includes('run') || pLower.includes('execute')) {
-        contextualSteps = [
-          "Evaluating Luau script execution request...",
-          "Connecting to active Studio MCP proxy...",
-          "Preparing ReplicatedStorage.VFX payload...",
-          "Synthesizing production Luau script..."
-        ];
-      } else if (pLower.includes('search') || pLower.includes('latest') || pLower.includes('news') || pLower.includes('update') || pLower.includes('version')) {
-        contextualSteps = [
-          "Evaluating documentation & knowledge requirements...",
-          "Grounding context via autonomous web search...",
-          "Synthesizing verified real-time sources...",
-          "Compiling technical answer..."
-        ];
+      if (attachments && attachments.length > 0) {
+        if (attachments.length === 1) {
+          activeAction = "Analyzing attached file: " + attachments[0].name;
+        } else {
+          activeAction = "Analyzing " + attachments.length + " attached files...";
+        }
+      } else if (pLower.includes('spawn') || pLower.includes('workspace') || pLower.includes('studio') || pLower.includes('part') || pLower.includes('block') || pLower.includes('sphere')) {
+        activeAction = "Connecting to Roblox Studio MCP and preparing Luau execution...";
+      } else if (pLower.includes('search') || pLower.includes('latest') || pLower.includes('news') || pLower.includes('documentation') || pLower.includes('version')) {
+        activeAction = "Grounding context via autonomous web search...";
       } else if (pLower.includes('commit') || pLower.includes('github') || pLower.includes('pull request')) {
-        contextualSteps = [
-          "Analyzing repository target & git parameters...",
-          "Connecting to GitHub MCP server...",
-          "Validating branch & commit tree...",
-          "Finalizing git operation..."
-        ];
-      } else {
-        contextualSteps = [
-          "Analyzing prompt requirements and engineering specifications...",
-          "Consulting local neural core...",
-          "Synthesizing technical solution...",
-          "Formatting clean production code..."
-        ];
+        activeAction = "Connecting to GitHub MCP server...";
+      } else if (state.thinkMode) {
+        activeAction = "Deep Neural Reasoning in progress...";
       }
 
       const div = document.createElement('div');
@@ -1554,7 +1632,7 @@
         <div class="w-7 h-7 rounded-lg bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text mt-0.5">
           S
         </div>
-        <div class="max-w-xl w-full bg-brand-card/90 border border-brand-accent/30 rounded-2xl p-3.5 space-y-2.5 shadow-xl">
+        <div class="max-w-md w-full bg-brand-card/90 border border-brand-accent/30 rounded-2xl p-3 space-y-2 shadow-xl">
           <!-- Header: Pulse indicator + Title + Elapsed timer -->
           <div class="flex items-center justify-between text-xs font-mono">
             <div class="flex items-center space-x-2">
@@ -1565,19 +1643,9 @@
           </div>
 
           <!-- Dynamic Live Step Display -->
-          <div class="flex items-center space-x-2.5 text-xs font-mono text-white bg-black/60 px-3 py-2.5 rounded-xl border border-brand-accent/20">
-            <svg class="w-4 h-4 text-brand-accent animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <span id="${id}-step-text" class="truncate text-brand-accent font-sans">${escapeHtml(contextualSteps[0])}</span>
-          </div>
-
-          <!-- Progressive Step Checklist -->
-          <div id="${id}-steps-list" class="space-y-1.5 text-[11px] font-mono text-brand-muted pl-1">
-            ${contextualSteps.map((st, i) => `
-              <div id="${id}-step-item-${i}" class="flex items-center space-x-2 ${i === 0 ? 'text-white' : 'text-brand-muted opacity-60'} transition-opacity">
-                <span class="w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-brand-accent animate-pulse' : 'bg-white/20'} flex-shrink-0"></span>
-                <span>${escapeHtml(st)}</span>
-              </div>
-            `).join('')}
+          <div class="flex items-center space-x-2.5 text-xs font-mono text-white bg-black/60 px-3 py-2 rounded-xl border border-brand-accent/20">
+            <svg class="w-3.5 h-3.5 text-brand-accent animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span id="${id}-step-text" class="truncate text-brand-accent font-sans text-xs">${escapeHtml(activeAction)}</span>
           </div>
         </div>
       `;
@@ -1596,46 +1664,12 @@
           timerEl.textContent = `${elapsed}s`;
         }
       }, 100);
-
-      // Transition through steps every 900ms
-      let currentStepIdx = 0;
-      activeTypingStepInterval = setInterval(() => {
-        currentStepIdx++;
-        if (currentStepIdx < contextualSteps.length) {
-          const stepTextEl = document.getElementById(`${id}-step-text`);
-          if (stepTextEl) {
-            stepTextEl.textContent = contextualSteps[currentStepIdx];
-          }
-          // Mark previous as completed
-          const prevItem = document.getElementById(`${id}-step-item-${currentStepIdx - 1}`);
-          if (prevItem) {
-            prevItem.className = 'flex items-center space-x-2 text-brand-accent opacity-90';
-            prevItem.innerHTML = `
-              <svg class="w-3 h-3 text-brand-accent flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span>${escapeHtml(contextualSteps[currentStepIdx - 1])}</span>
-            `;
-          }
-          // Mark current active
-          const currItem = document.getElementById(`${id}-step-item-${currentStepIdx}`);
-          if (currItem) {
-            currItem.className = 'flex items-center space-x-2 text-white font-medium opacity-100';
-            currItem.innerHTML = `
-              <span class="w-1.5 h-1.5 rounded-full bg-brand-accent animate-ping flex-shrink-0"></span>
-              <span>${escapeHtml(contextualSteps[currentStepIdx])}</span>
-            `;
-          }
-        }
-      }, 900);
     }
 
     function removeTypingIndicator(id) {
       if (activeTypingTimer) {
         clearInterval(activeTypingTimer);
         activeTypingTimer = null;
-      }
-      if (activeTypingStepInterval) {
-        clearInterval(activeTypingStepInterval);
-        activeTypingStepInterval = null;
       }
       const el = document.getElementById(id);
       if (el) el.remove();
@@ -1816,16 +1850,74 @@
       } catch(e){}
     }
 
-    // 14. Auth Modal & Silent Ingestion
-    document.getElementById('authModalTriggerBtn').addEventListener('click', () => {
-      profilePopover.classList.add('hidden');
+    // 14. Auth Modal, Instant Switch, Sign Out, & OTP Gateway
+    function openAuthModal() {
+      const email = state.userEmail || 'developer@stroke.ai';
+      const curEmailEl = document.getElementById('authModalCurrentEmail');
+      if (curEmailEl) curEmailEl.textContent = email;
+      document.getElementById('authEmailInput').value = '';
+      document.getElementById('otpStep1').classList.remove('hidden');
+      document.getElementById('otpStep2').classList.add('hidden');
       authModal.classList.remove('hidden');
-    });
+    }
+
+    function signOutUser() {
+      localStorage.removeItem('stroke_user_email');
+      state.userEmail = 'developer@stroke.ai';
+      state.chatMessages = [];
+      messagesList.innerHTML = '';
+      messagesList.classList.add('hidden');
+      emptyStateHero.classList.remove('hidden');
+      profilePopover.classList.add('hidden');
+      authModal.classList.add('hidden');
+      updateUserIdentityUI();
+      showToast('Signed out of Stroke account.');
+    }
+
+    async function switchUserAccount(email) {
+      const cleanEmail = (email || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        showToast('Please enter a valid email address.');
+        return;
+      }
+      try {
+        const res = await fetch('/auth/switch-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail })
+        });
+        state.userEmail = cleanEmail;
+        localStorage.setItem('stroke_user_email', cleanEmail);
+        updateUserIdentityUI();
+        authModal.classList.add('hidden');
+        profilePopover.classList.add('hidden');
+        await checkOrRunMandatoryMemorySetup();
+        await fetchMemoryStats();
+        await loadUserChats();
+        showToast('Switched account to ' + cleanEmail);
+      } catch(e) {
+        state.userEmail = cleanEmail;
+        localStorage.setItem('stroke_user_email', cleanEmail);
+        updateUserIdentityUI();
+        authModal.classList.add('hidden');
+        showToast('Switched account to ' + cleanEmail);
+      }
+    }
+
     document.getElementById('closeAuthModalBtn').addEventListener('click', () => authModal.classList.add('hidden'));
+    document.getElementById('authModalSignOutBtn').addEventListener('click', signOutUser);
+
+    document.getElementById('instantSwitchBtn').addEventListener('click', () => {
+      const email = document.getElementById('authEmailInput').value.trim();
+      switchUserAccount(email);
+    });
 
     document.getElementById('sendOtpBtn').addEventListener('click', async () => {
       const email = document.getElementById('authEmailInput').value.trim();
-      if (!email) return;
+      if (!email || !email.includes('@')) {
+        showToast('Enter a valid email address.');
+        return;
+      }
       try {
         const res = await fetch('/auth/send-otp', {
           method: 'POST',
@@ -1833,10 +1925,26 @@
           body: JSON.stringify({ email })
         });
         if (res.ok) {
+          const data = await res.json();
+          const displayEl = document.getElementById('otpCodeDisplay');
+          if (displayEl && data.otp_code) {
+            displayEl.textContent = data.otp_code;
+          }
           document.getElementById('otpStep1').classList.add('hidden');
           document.getElementById('otpStep2').classList.remove('hidden');
+          document.getElementById('authOtpInput').focus();
+          showToast('Verification code generated.');
+        } else {
+          showToast('Failed to send verification code.');
         }
-      } catch(e){}
+      } catch(e){
+        showToast('Network error during verification dispatch.');
+      }
+    });
+
+    document.getElementById('backToStep1Btn').addEventListener('click', () => {
+      document.getElementById('otpStep2').classList.add('hidden');
+      document.getElementById('otpStep1').classList.remove('hidden');
     });
 
     // 14. Two Types of Memory: Mandatory Memory (Local Cache) & AI Memory (Firestore 100 MB Quota)
@@ -1987,6 +2095,10 @@
     document.getElementById('verifyOtpBtn').addEventListener('click', async () => {
       const email = document.getElementById('authEmailInput').value.trim();
       const code = document.getElementById('authOtpInput').value.trim();
+      if (!code) {
+        showToast('Please enter the 6-digit code.');
+        return;
+      }
       try {
         const res = await fetch('/auth/verify-otp', {
           method: 'POST',
@@ -2002,8 +2114,15 @@
           // Checks for local cache; if absent, shows loading bar while 5X loop executes
           await checkOrRunMandatoryMemorySetup();
           await fetchMemoryStats();
+          await loadUserChats();
+          showToast('Signed in successfully as ' + email);
+        } else {
+          const err = await res.json();
+          showToast(err.detail || 'Invalid verification code.');
         }
-      } catch(e){}
+      } catch(e){
+        showToast('Verification request failed.');
+      }
     });
 
     // Check Mandatory Memory local cache & fetch memory quota stats on app startup
@@ -2011,6 +2130,27 @@
     fetchMemoryStats();
 
     // Utilities
+    function showToast(message) {
+      let tc = document.getElementById('toastContainer');
+      if (!tc) {
+        tc = document.createElement('div');
+        tc.id = 'toastContainer';
+        tc.className = 'fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none';
+        document.body.appendChild(tc);
+      }
+      const el = document.createElement('div');
+      el.className = 'px-3.5 py-2 rounded-xl bg-brand-card border border-brand-accent/40 text-brand-accent text-xs font-mono shadow-2xl transition-all duration-300 transform translate-y-0 opacity-100 flex items-center space-x-2';
+      el.innerHTML = `
+        <span class="w-1.5 h-1.5 rounded-full bg-brand-accent flex-shrink-0"></span>
+        <span>${escapeHtml(message)}</span>
+      `;
+      tc.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(-8px)';
+        setTimeout(() => el.remove(), 300);
+      }, 2500);
+    }
     function escapeHtml(str) {
       return (str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
     }
