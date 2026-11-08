@@ -1,5 +1,41 @@
 [
   {
+    "id": "CTX-1794142991",
+    "timestamp": 1794142991.663529,
+    "prompt": "write a luau script for a fireball particle emitter",
+    "language": "luau",
+    "passed_checks_count": 3,
+    "untested_count": 2,
+    "verified": true,
+    "iterations": 1,
+    "user_email": "anonymous",
+    "summary": "Verified luau solution with 3 passing checks."
+  },
+  {
+    "id": "CTX-1794142741",
+    "timestamp": 1794142741.353531,
+    "prompt": "Optimize particle emitters for mobile",
+    "language": "lua",
+    "passed_checks_count": 3,
+    "untested_count": 2,
+    "verified": true,
+    "iterations": 1,
+    "user_email": "nibisha.neha@gmail.com",
+    "summary": "Verified lua solution with 3 passing checks."
+  },
+  {
+    "id": "CTX-1794142709",
+    "timestamp": 1794142709.51649,
+    "prompt": "hi",
+    "language": "lua",
+    "passed_checks_count": 2,
+    "untested_count": 1,
+    "verified": true,
+    "iterations": 1,
+    "user_email": "anonymous",
+    "summary": "Verified lua solution with 2 passing checks."
+  },
+  {
     "id": "CTX-1794142658",
     "timestamp": 1794142658.667895,
     "prompt": "Write a python script to calculate fibonacci numbers",

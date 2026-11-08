@@ -210,10 +210,10 @@
       <button id="userProfileBtn" class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors text-left group">
         <div class="flex items-center space-x-2.5 min-w-0">
           <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text">
-            NN
+            ?
           </div>
           <div class="min-w-0">
-            <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Developer</div>
+            <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Sign In</div>
             <div id="userTierLabel" class="text-[10px] text-brand-muted font-mono">Local Llama 3.2</div>
           </div>
         </div>
@@ -224,7 +224,7 @@
       <div id="profilePopover" class="hidden absolute bottom-20 left-3 right-3 bg-brand-card border border-brand-border rounded-xl p-2.5 shadow-2xl z-50 space-y-2">
         <div class="px-2 py-1.5 border-b border-brand-border">
           <div class="text-[10px] text-brand-muted uppercase">Signed In As</div>
-          <div id="popoverEmail" class="text-xs text-brand-accent truncate font-mono">developer@cyber.matrix</div>
+          <div id="popoverEmail" class="text-xs text-brand-accent truncate font-mono">Not signed in</div>
         </div>
 
         <!-- Mandatory Memory Display (Local Cache) -->
@@ -600,7 +600,7 @@
         <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-2">
           <div class="text-xs font-semibold text-white">Identity</div>
           <div class="flex items-center justify-between text-xs">
-            <span id="settingsEmailText" class="font-mono text-brand-muted truncate">developer@cyber.matrix</span>
+            <span id="settingsEmailText" class="font-mono text-brand-muted truncate">Not signed in</span>
             <button id="settingsSignOutBtn" class="text-red-400 hover:text-red-300 text-xs">Sign Out</button>
           </div>
         </div>
@@ -634,9 +634,9 @@
       <div class="p-3 rounded-xl bg-brand-surface border border-brand-border flex items-center justify-between">
         <div class="min-w-0">
           <div class="text-[10px] text-brand-muted uppercase font-mono">Current Account</div>
-          <div id="authModalCurrentEmail" class="text-xs font-mono text-white truncate font-medium">developer@stroke.ai</div>
+          <div id="authModalCurrentEmail" class="text-xs font-mono text-white truncate font-medium">Not signed in</div>
         </div>
-        <button id="authModalSignOutBtn" class="text-xs text-brand-danger hover:underline px-2 py-1 rounded hover:bg-red-500/10 transition-colors font-mono">
+        <button id="authModalSignOutBtn" class="hidden text-xs text-brand-danger hover:underline px-2 py-1 rounded hover:bg-red-500/10 transition-colors font-mono">
           Sign Out
         </button>
       </div>
@@ -726,7 +726,7 @@
   <!-- ========================================================================= -->
   <script>
     const state = {
-      userEmail: localStorage.getItem('stroke_user_email') || 'developer@cyber.matrix',
+      userEmail: localStorage.getItem('stroke_user_email') || null,
       isTemporaryMode: false,
       thinkMode: false,
       activeSessionId: 'session-' + Date.now(),
@@ -808,23 +808,55 @@
       loadUserChats();
       setupSpeechEngines();
       loadMcpConfigJson();
+      if (!state.userEmail) {
+        openAuthModal();
+      }
     });
 
     // 1. Identity
     function updateUserIdentityUI() {
-      const email = state.userEmail || 'developer@stroke.ai';
-      popoverEmail.textContent = email;
+      const email = state.userEmail;
+      const popoverEmail = document.getElementById('popoverEmail');
       const modalCurrent = document.getElementById('authModalCurrentEmail');
-      if (modalCurrent) modalCurrent.textContent = email;
-      const namePart = email.split('@')[0];
-      const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-      userDisplayName.textContent = capitalized;
-      userAvatarCircle.textContent = namePart.slice(0, 2).toUpperCase();
+      const modalSignOut = document.getElementById('authModalSignOutBtn');
+      const popoverLogoutBtn = document.getElementById('logoutBtn');
+      const authTriggerBtn = document.getElementById('authModalTriggerBtn');
+      const settingsEmail = document.getElementById('settingsEmailText');
+      const userDisplayName = document.getElementById('userDisplayName');
+      const userAvatarCircle = document.getElementById('userAvatarCircle');
+
+      if (email) {
+        if (popoverEmail) popoverEmail.textContent = email;
+        if (settingsEmail) settingsEmail.textContent = email;
+        if (modalCurrent) modalCurrent.textContent = email;
+        if (modalSignOut) modalSignOut.classList.remove('hidden');
+        if (popoverLogoutBtn) popoverLogoutBtn.classList.remove('hidden');
+        if (authTriggerBtn) authTriggerBtn.innerHTML = '<span>Switch Account</span>';
+
+        const namePart = email.split('@')[0];
+        const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+        if (userDisplayName) userDisplayName.textContent = capitalized;
+        if (userAvatarCircle) userAvatarCircle.textContent = namePart.slice(0, 2).toUpperCase();
+      } else {
+        if (popoverEmail) popoverEmail.textContent = 'Not signed in';
+        if (settingsEmail) settingsEmail.textContent = 'Not signed in';
+        if (modalCurrent) modalCurrent.textContent = 'Not signed in';
+        if (modalSignOut) modalSignOut.classList.add('hidden');
+        if (popoverLogoutBtn) popoverLogoutBtn.classList.add('hidden');
+        if (authTriggerBtn) authTriggerBtn.innerHTML = '<span>Sign In / Switch Account</span>';
+
+        if (userDisplayName) userDisplayName.textContent = 'Sign In';
+        if (userAvatarCircle) userAvatarCircle.textContent = '?';
+      }
     }
 
     userProfileBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      profilePopover.classList.toggle('hidden');
+      if (!state.userEmail) {
+        openAuthModal();
+      } else {
+        profilePopover.classList.toggle('hidden');
+      }
     });
     profilePopover.addEventListener('click', (e) => e.stopPropagation());
     document.addEventListener('click', () => profilePopover.classList.add('hidden'));
@@ -957,10 +989,10 @@
     function openSettingsModal() {
       profilePopover.classList.add('hidden');
       settingsModal.classList.remove('hidden');
-      settingsEmailText.textContent = state.userEmail;
+      settingsEmailText.textContent = state.userEmail || 'Not signed in';
       settingsTempSlider.value = state.temperature;
       settingsTempValText.textContent = state.temperature.toFixed(2);
-      const cacheKey = 'stroke_mandatory_vfx_cache_' + (state.userEmail || 'developer@cyber.matrix');
+      const cacheKey = 'stroke_mandatory_vfx_cache_' + (state.userEmail || 'guest');
       const hasCache = !!localStorage.getItem(cacheKey);
       settingsCacheBadge.textContent = hasCache ? 'Active (Cached)' : 'Not Cached';
       settingsCacheBadge.className = hasCache ? 'text-[10px] font-mono text-brand-accent' : 'text-[10px] font-mono text-brand-muted';
@@ -991,7 +1023,7 @@
     });
 
     settingsClearCacheBtn.addEventListener('click', () => {
-      const email = state.userEmail || 'developer@cyber.matrix';
+      const email = state.userEmail || 'guest';
       localStorage.removeItem('stroke_mandatory_vfx_cache_' + email);
       settingsCacheBadge.textContent = 'Cache Cleared';
       settingsCacheBadge.className = 'text-[10px] font-mono text-red-400';
@@ -999,8 +1031,7 @@
 
     settingsSignOutBtn.addEventListener('click', () => {
       closeSettingsModal();
-      localStorage.removeItem('stroke_user_email');
-      location.reload();
+      signOutUser();
     });
 
     // 6. Plus Button (+) for Attachments - Supports .py, .csv, .luau, .lua, .json, .txt, images, etc.
@@ -1963,15 +1994,20 @@
 
     // 13. Chats Loader
     async function loadUserChats() {
+      const list = document.getElementById('recentChatsList');
+      if (!state.userEmail) {
+        if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">Sign in to view chats.</div>';
+        state.allChats = [];
+        return;
+      }
       try {
         const res = await fetch(`/chats?email=${encodeURIComponent(state.userEmail)}`);
         if (!res.ok) return;
         const data = await res.json();
-        const list = document.getElementById('recentChatsList');
-        list.innerHTML = '';
+        if (list) list.innerHTML = '';
         state.allChats = data.chats || [];
         if (state.allChats.length === 0) {
-          list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">No chats yet.</div>';
+          if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">No chats yet.</div>';
           return;
         }
         state.allChats.forEach(chat => {
@@ -2018,10 +2054,21 @@
 
     // 14. Auth Modal, Instant Switch, Sign Out, & OTP Gateway
     function openAuthModal() {
-      const email = state.userEmail || 'developer@stroke.ai';
+      const email = state.userEmail;
       const curEmailEl = document.getElementById('authModalCurrentEmail');
-      if (curEmailEl) curEmailEl.textContent = email;
-      document.getElementById('authEmailInput').value = '';
+      const curSignOutBtn = document.getElementById('authModalSignOutBtn');
+      if (email) {
+        if (curEmailEl) curEmailEl.textContent = email;
+        if (curSignOutBtn) curSignOutBtn.classList.remove('hidden');
+      } else {
+        if (curEmailEl) curEmailEl.textContent = 'Not signed in';
+        if (curSignOutBtn) curSignOutBtn.classList.add('hidden');
+      }
+      const emailInput = document.getElementById('authEmailInput');
+      if (emailInput) {
+        emailInput.value = '';
+        setTimeout(() => emailInput.focus(), 100);
+      }
       document.getElementById('otpStep1').classList.remove('hidden');
       document.getElementById('otpStep2').classList.add('hidden');
       authModal.classList.remove('hidden');
@@ -2029,14 +2076,18 @@
 
     function signOutUser() {
       localStorage.removeItem('stroke_user_email');
-      state.userEmail = 'developer@stroke.ai';
+      state.userEmail = null;
       state.chatMessages = [];
+      state.allChats = [];
+      const list = document.getElementById('recentChatsList');
+      if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">Sign in to view chats.</div>';
       messagesList.innerHTML = '';
       messagesList.classList.add('hidden');
       emptyStateHero.classList.remove('hidden');
       profilePopover.classList.add('hidden');
       authModal.classList.add('hidden');
       updateUserIdentityUI();
+      openAuthModal();
       showToast('Signed out of Stroke account.');
     }
 
@@ -2047,27 +2098,23 @@
         return;
       }
       try {
-        const res = await fetch('/auth/switch-account', {
+        await fetch('/auth/switch-account', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: cleanEmail })
         });
-        state.userEmail = cleanEmail;
-        localStorage.setItem('stroke_user_email', cleanEmail);
-        updateUserIdentityUI();
-        authModal.classList.add('hidden');
-        profilePopover.classList.add('hidden');
-        await checkOrRunMandatoryMemorySetup();
-        await fetchMemoryStats();
-        await loadUserChats();
-        showToast('Switched account to ' + cleanEmail);
       } catch(e) {
-        state.userEmail = cleanEmail;
-        localStorage.setItem('stroke_user_email', cleanEmail);
-        updateUserIdentityUI();
-        authModal.classList.add('hidden');
-        showToast('Switched account to ' + cleanEmail);
+        console.warn('Backend switch-account endpoint note:', e);
       }
+      state.userEmail = cleanEmail;
+      localStorage.setItem('stroke_user_email', cleanEmail);
+      updateUserIdentityUI();
+      authModal.classList.add('hidden');
+      profilePopover.classList.add('hidden');
+      await checkOrRunMandatoryMemorySetup();
+      await fetchMemoryStats();
+      await loadUserChats();
+      showToast('Signed in as ' + cleanEmail);
     }
 
     document.getElementById('closeAuthModalBtn').addEventListener('click', () => authModal.classList.add('hidden'));
@@ -2077,6 +2124,16 @@
       const email = document.getElementById('authEmailInput').value.trim();
       switchUserAccount(email);
     });
+
+    const authEmailInputEl = document.getElementById('authEmailInput');
+    if (authEmailInputEl) {
+      authEmailInputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          switchUserAccount(authEmailInputEl.value.trim());
+        }
+      });
+    }
 
     document.getElementById('sendOtpBtn').addEventListener('click', async () => {
       const email = document.getElementById('authEmailInput').value.trim();

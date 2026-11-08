@@ -272,5 +272,115 @@
     "god_tier_score": 9.47,
     "learned_dynamically": true,
     "learned_at": "2026-11-08T12:06:55.636838+00:00"
+  },
+  "GodTier_Elemental_Optimize_particle_emitters_f": {
+    "name": "GodTier_Elemental_Optimize_particle_emitters_f",
+    "domain": "Elemental",
+    "element": "Matrix",
+    "particle_emitters": [
+      {
+        "name": "Elemental_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 117,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://18462751521"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Elemental_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Elemental_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://18462751521",
+      "rbxassetid://13780268621"
+    ],
+    "snippet": "-- Example of reducing particle count on mobile\nlocal particleEmitter = script.Parent:FindFirstChild(\"ParticleEmitter\")\n\nif particleEmitter then\n    local particleCount = 1000\n    local resolution = 128x128\n    particleEmitter:SpawnParticleEmitter(particleCount, resolution)\nelse\n    print(\"ParticleEmitter not found\")\nend",
+    "god_tier_score": 9.69,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T12:59:01.354355+00:00"
+  },
+  "GodTier_Fire_write_a_luau_script_for_a_fi": {
+    "name": "GodTier_Fire_write_a_luau_script_for_a_fi",
+    "domain": "Fire",
+    "element": "Fire",
+    "particle_emitters": [
+      {
+        "name": "Fire_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 129,
+          "Lifetime": [
+            0.15,
+            0.35
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": "rbxassetid://13780268621"
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Fire_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Fire_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [
+      "rbxassetid://13780268621",
+      "rbxassetid://18462751521"
+    ],
+    "snippet": "```luau\n-- Create a new particle emitter in the workspace\nlocal emitter = Instance.new(\"ParticleEmitter\")\nemitter.Parent = workspace\n\n-- Set emitter properties\nemitter.Size = Vector3.new(1, 1, 1)\nemitter.Color = Color3.new(1, 0, 0) -- Red\nemitter.Rotation = Rotator.new(30, 0, 0) -- Rotate particles ",
+    "god_tier_score": 9.62,
+    "learned_dynamically": true,
+    "learned_at": "2026-11-08T13:03:11.664239+00:00"
   }
 }

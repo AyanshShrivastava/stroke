@@ -1,7 +1,33 @@
 {
-  "total_chats_learned": 5,
-  "last_updated": "2026-11-08T00:00:00Z",
+  "total_chats_learned": 7,
+  "last_updated": "2026-11-08T13:03:11.664698+00:00",
   "insights": [
+    {
+      "id": "INS-GOD-FIRE-007",
+      "domain": "Fire",
+      "element": "Fire",
+      "model_name": "GodTier_Fire_write_a_luau_script_for_a_fi",
+      "topic": "God-Tier Fire Mastery: 'GodTier_Fire_write_a_luau_script_for_a_fi'",
+      "summary": "Distilled top-tier Fire kinematics with 2 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "```luau\n-- Create a new particle emitter in the workspace\nlocal emitter = Instance.new(\"ParticleEmitter\")\nemitter.Parent = workspace\n\n-- Set emitter properties\nemitter.Size = Vector3.new(1, 1, 1)\nemitter.Color = Color3.new(1, 0, 0) -- Red\nemitter.Rotation = Rotator.new(30, 0, 0) -- Rotate particles ",
+      "impact_score": 9.62,
+      "source_tool": "vfx_kinematics_lookup",
+      "contributor": "anon***",
+      "created_at": "2026-11-08T13:03:11.664649+00:00"
+    },
+    {
+      "id": "INS-GOD-ELEM-006",
+      "domain": "Elemental",
+      "element": "Matrix",
+      "model_name": "GodTier_Elemental_Optimize_particle_emitters_f",
+      "topic": "God-Tier Elemental Mastery: 'GodTier_Elemental_Optimize_particle_emitters_f'",
+      "summary": "Distilled top-tier Elemental kinematics with 2 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "-- Example of reducing particle count on mobile\nlocal particleEmitter = script.Parent:FindFirstChild(\"ParticleEmitter\")\n\nif particleEmitter then\n    local particleCount = 1000\n    local resolution = 128x128\n    particleEmitter:SpawnParticleEmitter(particleCount, resolution)\nelse\n    print(\"ParticleE",
+      "impact_score": 9.69,
+      "source_tool": "vfx_kinematics_lookup",
+      "contributor": "nibi***",
+      "created_at": "2026-11-08T12:59:01.354998+00:00"
+    },
     {
       "id": "INS-VOID-01",
       "domain": "Void",
