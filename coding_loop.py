@@ -485,18 +485,16 @@ class RobloxDomainTestRunner:
         if has_get_service:
             passed_checks.append("Roblox Service Resolution (Proper game:GetService() usage)")
         
-        # 3. Domain Check: Hitbox Detection
-        p_lower = prompt.lower()
-        is_hitbox_request = any(k in p_lower for k in ["hitbox", "hit box", "hit detection", "melee", "combat", "damage detection", "cleave", "slash"])
-        
-        if is_hitbox_request:
-            # Check spatial query or raycast methodology
-            has_spatial_query = any(q in code for q in [
-                "GetPartsInPart", "GetPartBoundsInBox", "GetPartBoundsInRadius",
-                "workspace:Raycast", "WorldRoot:Raycast", "OverlapParams"
-            ])
-            has_touched = ".Touched:Connect" in code or ".Touched:connect" in code
+        # 3. Domain Check: Hitbox & Combat Detection (Driven by code AST and APIs, not prompt keywords)
+        has_spatial_query = any(q in code for q in [
+            "GetPartsInPart", "GetPartBoundsInBox", "GetPartBoundsInRadius",
+            "workspace:Raycast", "WorldRoot:Raycast", "OverlapParams"
+        ])
+        has_touched = ".Touched:Connect" in code or ".Touched:connect" in code
+        has_damage_call = ":TakeDamage" in code
+        has_combat_logic = has_spatial_query or has_touched or has_damage_call or "HumanoidRootPart" in code
 
+        if has_combat_logic:
             has_spatial_blocking_error = any(
                 ("Workspace" in f.get("message", "") and "Unresolved Global" in f.get("message", ""))
                 or ("Fake API Implementation" in f.get("message", "") and any(term in f.get("message", "") for term in ["OverlapParams", "GetPartBoundsInBox", "GetPartsInPart", "GetPartBoundsInRadius"]))
@@ -523,19 +521,41 @@ class RobloxDomainTestRunner:
                     "suggestion": "Implement OverlapParams and workspace:GetPartBoundsInBox for robust server-side detection."
                 })
 
-            # Check Debounce / Multi-Hit Protection (CRITICAL for hitboxes)
-            has_debounce = any(w in code.lower() for w in [
+            # Check Debounce / Multi-Hit Protection (CRITICAL for combat/hitboxes)
+            has_debounce_identifier = any(w in code.lower() for w in [
                 "debounce", "cooldown", "hittargets", "hit_characters", "hitcharacters",
-                "damagedtargets", "alreadyhit", "hits[", "hitplayers"
+                "damagedtargets", "alreadyhit", "hits[", "hitplayers", "activehitboxes", "hitdebounce"
             ])
             has_single_invocation_debounce = any("Single-Invocation Debounce Only" in f.get("message", "") for f in failed_checks)
 
-            if has_debounce:
+            # Genuine debounce requires BOTH:
+            # 1. A condition guard checking hit/debounce state
+            has_debounce_guard = bool(
+                re.search(r'\bnot\s+[a-zA-Z0-9_.]*?(?:hit|debounce)[a-zA-Z0-9_.]*?\s*(?:\[|\b)', code, re.IGNORECASE)
+                or re.search(r'if\s+.*?\bnot\s+[a-zA-Z0-9_.]*?(?:hit|debounce)', code, re.IGNORECASE)
+                or re.search(r'\([a-zA-Z0-9_.]+\s*-\s*[a-zA-Z0-9_.]+\)\s*>=?\s*[a-zA-Z0-9_.]+', code)
+                or re.search(r'if\s+debounce\s+then\s+return\b', code, re.IGNORECASE)
+            )
+            # 2. A state mutation updating the hit state
+            has_debounce_mutation = bool(
+                re.search(r'[a-zA-Z0-9_.]*?(?:hit|debounce)[^=\n]*?=\s*(?:true|false|os\.clock|tick|now|currentTime|time)', code, re.IGNORECASE)
+            )
+
+            has_effective_debounce = has_debounce_identifier and has_debounce_guard and has_debounce_mutation
+
+            if has_effective_debounce:
                 if has_single_invocation_debounce:
                     passed_checks.append("Single-Query Limb Deduplication (Filters multiple character limbs during a single spatial query)")
                     untested_limitations.append("Hitbox uses single-invocation debounce table; repeated calls across frames will re-damage the same target without persistent cooldown.")
                 else:
                     passed_checks.append("Multi-Hit Debounce Protection (Persistent debounce table or cooldown prevents damage spam across frames)")
+            elif has_debounce_identifier and (not has_debounce_guard or not has_debounce_mutation):
+                failed_checks.append({
+                    "type": "error",
+                    "line": 1,
+                    "message": "Ineffective Debounce Logic: A debounce variable or table was declared, but the code fails to both guard hits ('if not hitTargets[char]') AND mutate state ('hitTargets[char] = true'). Targets take continuous damage.",
+                    "suggestion": "Implement both a conditional guard and state mutation on target hit."
+                })
             else:
                 failed_checks.append({
                     "type": "error",
@@ -621,62 +641,40 @@ class RobloxDomainTestRunner:
             elif not has_spatial_blocking_error:
                 passed_checks.append("Partless Spatial Query Architecture (Uses spatial queries directly without instantiating physical Part instances)")
 
-            # Domain Untested Limitations
             untested_limitations.extend([
                 "Multiplayer replication lag: Network ping between high-latency clients and server cannot be tested statically.",
                 "Custom R15/R6 avatar scaling: Box bounds may vary with player bundle sizes (e.g., Anthro vs standard R15).",
                 "Physics simulation: Actual part penetration depends on live Roblox engine collision groups."
             ])
 
-        # 4. Domain Check: VFX & Particle Effects
-        is_vfx_request = any(k in p_lower for k in ["vfx", "particle", "beam", "domain expansion", "cleave", "aura", "fireball", "shockwave"])
-        is_optimization_request = any(k in p_lower for k in ["optimize", "optimization", "mobile", "performance", "fps", "budget", "lag"])
+        # 4. Domain Check: VFX & Particle Effects (Driven by code AST)
+        has_particles = "ParticleEmitter" in code or "Beam" in code or "Highlight" in code or "Trail" in code
+        has_attachments = "Attachment" in code
 
-        if is_vfx_request and not is_hitbox_request:
-            has_particles = "ParticleEmitter" in code or "Beam" in code or "Highlight" in code
-            has_attachments = "Attachment" in code
-            if has_particles:
-                passed_checks.append("Visual Effect Emitter Architecture (Configures ParticleEmitters, Beams, or Highlights)")
+        if has_particles and not has_combat_logic:
+            passed_checks.append("Visual Effect Emitter Architecture (Configures ParticleEmitters, Beams, or Highlights)")
             if has_attachments:
                 passed_checks.append("Attachment Anchoring (Emitters parented to valid Attachment points)")
 
-            if is_optimization_request:
-                has_rate_control = any(k in code for k in [".Rate", "Rate =", "math.clamp", "TouchEnabled"])
-                has_lifetime_budget = any(k in code for k in [".Lifetime", "Lifetime =", "NumberRange.new"])
-                has_burst_or_toggle = any(k in code for k in [":Emit", ".Enabled = false", "Enabled = false", ":Clear"])
-                has_mobile_branch = any(k in code for k in ["TouchEnabled", "UserInputService", "isMobile", "mobile"])
+            has_rate_control = any(k in code for k in [".Rate", "Rate =", "math.clamp", "TouchEnabled"])
+            has_lifetime_budget = any(k in code for k in [".Lifetime", "Lifetime =", "NumberRange.new"])
+            has_burst_or_toggle = any(k in code for k in [":Emit", ".Enabled = false", "Enabled = false", ":Clear"])
+            has_mobile_branch = any(k in code for k in ["TouchEnabled", "UserInputService", "isMobile", "mobile"])
 
-                if has_rate_control:
-                    passed_checks.append("Mobile Emission Rate Budgeting (Throttles particles per second to prevent mobile fill-rate drops)")
-                else:
-                    is_fatal = not (has_lifetime_budget or has_burst_or_toggle)
-                    failed_checks.append({
-                        "type": "error" if is_fatal else "warning",
-                        "line": 1,
-                        "message": "Particle emitter optimization must explicitly throttle emitter.Rate for mobile clients (e.g. emitter.Rate = isMobile and 15 or 50).",
-                        "suggestion": "Set 'emitter.Rate = isMobile and 15 or 50' or use math.clamp to restrict emission."
-                    })
-
-                if "Destroy()" in code and not (has_rate_control or has_lifetime_budget or has_burst_or_toggle):
-                    failed_checks.append({
-                        "type": "error",
-                        "line": 1,
-                        "message": "Calling :Destroy() does not optimize particle emitters. Configure properties like .Rate, .Lifetime, or call :Emit(count).",
-                        "suggestion": "Throttle emitter.Rate and constrict emitter.Lifetime for mobile LOD."
-                    })
-
-                if has_lifetime_budget:
-                    passed_checks.append("Particle Lifetime Constriction (Reduces active on-screen particle lifetime to minimize overdraw)")
-                if has_burst_or_toggle:
-                    passed_checks.append("Demand-Driven Emission (Uses :Emit(count) or toggles .Enabled to prevent continuous background draw calls)")
-                if has_mobile_branch:
-                    passed_checks.append("Platform Capability Detection (Uses UserInputService.TouchEnabled to adapt VFX for mobile)")
+            if has_rate_control:
+                passed_checks.append("Mobile Emission Rate Budgeting (Throttles particles per second to prevent mobile fill-rate drops)")
+            if has_lifetime_budget:
+                passed_checks.append("Particle Lifetime Constriction (Reduces active on-screen particle lifetime to minimize overdraw)")
+            if has_burst_or_toggle:
+                passed_checks.append("Demand-Driven Emission (Uses :Emit(count) or toggles .Enabled to prevent continuous background draw calls)")
+            if has_mobile_branch:
+                passed_checks.append("Platform Capability Detection (Uses UserInputService.TouchEnabled to adapt VFX for mobile)")
 
             untested_limitations.append("GPU rendering framerate impact under 100+ simultaneous particle emitters.")
 
-        # 5. Domain Check: Creator Store & Architecture (House, Buildings, Models)
-        is_structure_request = any(k in p_lower for k in ["house", "building", "structure", "creator store", "toolbox", "architecture", "cabin", "cottage"])
-        if is_structure_request and not is_hitbox_request and not is_vfx_request:
+        # 5. Domain Check: 3D Structures & Assemblies (Driven by code AST)
+        has_structures = bool(re.search(r'Instance\.new\(["\'](Part|MeshPart|Model|TrussPart|WedgePart)["\']\)', code)) and not has_combat_logic and not has_particles
+        if has_structures:
             has_insert = "InsertService" in code or "GetObjects" in code
             has_parts = "Instance.new(\"Part\")" in code or "Instance.new('Part')" in code or "Instance.new(\"Model\")" in code
             has_anchored = ".Anchored = true" in code or "Anchored = true" in code

@@ -1,5 +1,58 @@
 {
-  "total_chats_learned": 0,
-  "last_updated": "2026-11-09T06:29:47.541484+00:00",
-  "insights": []
+  "total_chats_learned": 4,
+  "last_updated": "2026-11-09T07:06:05.011636+00:00",
+  "insights": [
+    {
+      "id": "INS-GOD-ELEC-004",
+      "domain": "Electro",
+      "element": "Electro",
+      "model_name": "GodTier_Electro_Create_a_purple_lightning_VF",
+      "topic": "God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'",
+      "summary": "Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "-- Purple Lightning Custom Emitter\nlocal host = Instance.new('Part')\nhost.Name = 'PurpleLightningHost'\nhost.Anchored = true\nhost.Parent = workspace\n\nlocal emitter = Instance.new('ParticleEmitter')\nemitter.Rate = 45\nemitter.Color = ColorSequence.new(Color3.fromRGB(180, 0, 255))\nemitter.Lifetime = Num",
+      "impact_score": 8.0,
+      "source_tool": "direct",
+      "contributor": "anon***",
+      "created_at": "2026-11-09T07:05:48.470950+00:00"
+    },
+    {
+      "id": "INS-GOD-ELEC-003",
+      "domain": "Electro",
+      "element": "Electro",
+      "model_name": "GodTier_Electro_Create_a_purple_lightning_VF",
+      "topic": "God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'",
+      "summary": "Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "-- Purple Lightning Custom Emitter\nlocal host = Instance.new('Part')\nhost.Name = 'PurpleLightningHost'\nhost.Anchored = true\nhost.Parent = workspace\n\nlocal emitter = Instance.new('ParticleEmitter')\nemitter.Rate = 45\nemitter.Color = ColorSequence.new(Color3.fromRGB(180, 0, 255))\nemitter.Lifetime = Num",
+      "impact_score": 8.0,
+      "source_tool": "direct",
+      "contributor": "anon***",
+      "created_at": "2026-11-09T07:05:18.004467+00:00"
+    },
+    {
+      "id": "INS-GOD-ELEC-002",
+      "domain": "Electro",
+      "element": "Electro",
+      "model_name": "GodTier_Electro_Create_a_purple_lightning_VF",
+      "topic": "God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'",
+      "summary": "Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "-- Purple Lightning Custom Emitter\nlocal host = Instance.new('Part')\nhost.Name = 'PurpleLightningHost'\nhost.Anchored = true\nhost.Parent = workspace\n\nlocal emitter = Instance.new('ParticleEmitter')\nemitter.Rate = 45\nemitter.Color = ColorSequence.new(Color3.fromRGB(180, 0, 255))\nemitter.Lifetime = Num",
+      "impact_score": 8.0,
+      "source_tool": "direct",
+      "contributor": "anon***",
+      "created_at": "2026-11-09T07:03:16.023692+00:00"
+    },
+    {
+      "id": "INS-GOD-ELEC-001",
+      "domain": "Electro",
+      "element": "Electro",
+      "model_name": "GodTier_Electro_Create_a_purple_lightning_VF",
+      "topic": "God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'",
+      "summary": "Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.",
+      "code_snippet": "-- Purple Lightning Custom Emitter\nlocal host = Instance.new('Part')\nhost.Name = 'PurpleLightningHost'\nhost.Anchored = true\nhost.Parent = workspace\n\nlocal emitter = Instance.new('ParticleEmitter')\nemitter.Rate = 45\nemitter.Color = ColorSequence.new(Color3.fromRGB(180, 0, 255))\nemitter.Lifetime = Num",
+      "impact_score": 8.0,
+      "source_tool": "direct",
+      "contributor": "anon***",
+      "created_at": "2026-11-09T07:02:04.335645+00:00"
+    }
+  ]
 }

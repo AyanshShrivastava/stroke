@@ -372,12 +372,22 @@ def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = ""
 
     # Extract Luau code snippet
     code_match = re.search(r"```(?:luau|lua)?\n([\s\S]{1,1200}?)\n```", reply)
-    extracted_code = code_match.group(1).strip() if code_match else reply[:300]
+    if not code_match:
+        return None
+    extracted_code = code_match.group(1).strip()
 
-    # Extract all texture asset IDs
+    # Validate Luau syntax statically before learning
+    try:
+        from coding_loop import LuauSyntaxValidator
+        syntax_issues = LuauSyntaxValidator.check_syntax(extracted_code)
+        if any(i.get("type") == "error" for i in syntax_issues):
+            print(f"[STROKE VFX FILTER] Interaction code has syntax errors. Skipped database learning.", flush=True)
+            return None
+    except Exception as v_err:
+        pass
+
+    # Extract all texture asset IDs directly from actual code
     textures_found = set(re.findall(r"rbxassetid://\d+", reply))
-    if not textures_found:
-        textures_found = {"rbxassetid://13780268621", "rbxassetid://18462751521"}
 
     # Generate Model Name for the database
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", prompt[:28]).strip("_") or f"Ability_{secrets.token_hex(3)}"
@@ -397,7 +407,7 @@ def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = ""
 
     # 4. Deterministic quality calculation based on real technical criteria:
     calc_score = 0.0
-    if code_match and len(extracted_code) > 80:
+    if len(extracted_code) > 80:
         calc_score += 3.0
     if any(inst in extracted_code for inst in ["ParticleEmitter", "Beam", "Trail", "Attachment"]):
         calc_score += 2.0
@@ -405,10 +415,8 @@ def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = ""
         calc_score += 1.5
     if any(seq in extracted_code for seq in ["ColorSequence", "NumberSequence", "NumberRange"]):
         calc_score += 1.5
-    if textures_found and any(t != "rbxassetid://13780268621" for t in textures_found):
+    if textures_found:
         calc_score += 2.0
-    else:
-        calc_score += 1.0
     quality_score = round(min(10.0, max(5.0, calc_score)), 2)
 
     # Build structural model for database
@@ -424,7 +432,7 @@ def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = ""
                     "Lifetime": actual_lifetime,
                     "Drag": actual_drag,
                     "Acceleration": [0, 20, 0] if domain == "Slash" else [0, 0, 0],
-                    "Texture": list(textures_found)[0]
+                    "Texture": list(textures_found)[0] if textures_found else ""
                 }
             }
         ],
@@ -847,48 +855,113 @@ def generate_vfx_5x_records() -> List[Dict[str, Any]]:
 
 
 def search_vfx_database(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
-    """Performs search across the 14,666 instances and 4.4MB dump from JSON & TXT only."""
+    """
+    Performs semantic search across the verified VFX dataset.
+    Uses token-level relevance, elemental concept embeddings/associations,
+    and property matching rather than naive exact substring matching.
+    Never manufactures fake results.
+    """
     cache = load_vfx_database()
     models = cache.get("models", {})
-    q = query.strip().lower()
+    if not query or not models:
+        return []
 
-    results = []
+    q_raw = query.strip().lower()
+    stop_words = {"a", "an", "the", "in", "on", "at", "to", "for", "of", "with", "by", "from", "and", "or", "is", "it", "this", "that", "me", "i", "you", "my", "your", "make", "create", "build", "generate", "show", "how", "what", "please"}
+    q_tokens = [w for w in re.findall(r"[a-z0-9]+", q_raw) if len(w) > 1 and w not in stop_words]
+    if not q_tokens:
+        q_tokens = [q_raw]
+
+    # Semantic concept expansion mappings
+    CONCEPT_SYNONYMS = {
+        "lightning": {"electro", "lightning", "storm", "thunder", "sparks", "arc", "electric", "shock", "voltage", "current"},
+        "electro": {"electro", "lightning", "storm", "thunder", "sparks", "arc", "electric", "shock"},
+        "electric": {"electro", "lightning", "storm", "thunder", "sparks", "arc", "electric", "shock"},
+        "thunder": {"electro", "lightning", "storm", "thunder", "sparks", "arc", "electric"},
+        "sparks": {"electro", "lightning", "sparks", "spark", "arc", "particle"},
+        "fire": {"fire", "flame", "blaze", "thermal", "ember", "burn", "explosion", "meteor", "inferno", "heat", "scorch"},
+        "flame": {"fire", "flame", "blaze", "thermal", "ember", "burn", "inferno"},
+        "water": {"aqua", "water", "bubble", "wave", "ocean", "stream", "splash", "tsunami", "hydro", "liquid"},
+        "aqua": {"aqua", "water", "bubble", "wave", "ocean", "stream", "splash"},
+        "void": {"void", "purple", "singularity", "hollow", "space", "dark", "abyss", "gravity", "rift", "black"},
+        "purple": {"void", "purple", "hollow", "singularity", "violet", "amethyst", "lavender"},
+        "slash": {"slash", "blade", "sword", "cut", "cleave", "slice", "dismantle", "katana", "slashes", "slices"},
+        "cleave": {"slash", "blade", "cut", "cleave", "dismantle", "sukuna", "slices"},
+        "wind": {"wind", "vortex", "tornado", "cyclone", "gust", "air", "breeze", "storm"},
+        "beam": {"beam", "laser", "ray", "ribbon", "trail", "line", "energy"},
+        "aura": {"aura", "glow", "energy", "barrier", "field", "shield", "domain", "burst"},
+        "explosion": {"explosion", "burst", "blast", "impact", "detonate", "shockwave", "bomb"}
+    }
+
+    expanded_concepts = set(q_tokens)
+    for t in q_tokens:
+        if t in CONCEPT_SYNONYMS:
+            expanded_concepts.update(CONCEPT_SYNONYMS[t])
+
+    scored_candidates = []
+
     for name, m in models.items():
         name_lower = name.lower()
-        matched = False
-        match_reason = ""
+        score = 0.0
+        match_reasons = []
 
-        if q in name_lower:
-            matched = True
-            match_reason = f"Model name match: '{name}'"
-        else:
-            for pe in m["particle_emitters"]:
-                pename = pe.get("name", "").lower()
-                if q in pename:
-                    matched = True
-                    match_reason = f"ParticleEmitter match: '{pe.get('name')}' in {name}"
-                    break
+        # 1. Exact query match in model name
+        if q_raw in name_lower:
+            score += 0.6
+            match_reasons.append(f"Model name contains '{q_raw}'")
 
-        if matched:
-            pe_count = len(m["particle_emitters"])
-            beam_count = len(m["beams"])
-            sample_tex = list(m["textures"])[:3]
-            snippet = extract_raw_snippet_for_model(name, max_lines=8)
+        # 2. Token overlap with model name
+        name_tokens = set(re.findall(r"[a-z0-9]+", name_lower))
+        direct_token_overlap = set(q_tokens).intersection(name_tokens)
+        if direct_token_overlap:
+            score += 0.25 * len(direct_token_overlap)
+            match_reasons.append(f"Name tokens match: {', '.join(direct_token_overlap)}")
 
-            results.append({
+        # 3. Semantic concept overlap with model name
+        semantic_name_overlap = expanded_concepts.intersection(name_tokens)
+        if semantic_name_overlap and not direct_token_overlap:
+            score += 0.20 * min(len(semantic_name_overlap), 3)
+            match_reasons.append(f"Semantic concept match: {', '.join(list(semantic_name_overlap)[:3])}")
+
+        # 4. Emitter and beam inspection
+        pe_names = [pe.get("name", "").lower() for pe in m.get("particle_emitters", [])]
+        pe_matched = []
+        for pename in pe_names:
+            pename_tokens = set(re.findall(r"[a-z0-9]+", pename))
+            if set(q_tokens).intersection(pename_tokens):
+                pe_matched.append(pename)
+            elif expanded_concepts.intersection(pename_tokens):
+                pe_matched.append(pename)
+        if pe_matched:
+            score += 0.20 * min(len(pe_matched), 2)
+            match_reasons.append(f"Emitter match: {', '.join(pe_matched[:2])}")
+
+        # 5. Raw snippet inspection
+        snippet = extract_raw_snippet_for_model(name, max_lines=8)
+        snippet_lower = snippet.lower()
+        for t in q_tokens:
+            if t in snippet_lower and t not in name_lower:
+                score += 0.08
+                match_reasons.append(f"Snippet mentions '{t}'")
+                break
+
+        if score >= 0.15:
+            pe_count = len(m.get("particle_emitters", []))
+            beam_count = len(m.get("beams", []))
+            sample_tex = list(m.get("textures", []))[:3]
+            scored_candidates.append({
                 "model_name": name,
-                "match_reason": match_reason,
+                "score": round(score, 3),
+                "match_reason": "; ".join(match_reasons[:2]),
                 "particle_emitters_count": pe_count,
                 "beams_count": beam_count,
-                "parts_count": len(m["parts"]),
+                "parts_count": len(m.get("parts", [])),
                 "textures": sample_tex,
                 "snippet": snippet
             })
 
-            if len(results) >= max_results:
-                break
-
-    return results
+    scored_candidates.sort(key=lambda x: x["score"], reverse=True)
+    return scored_candidates[:max_results]
 
 
 def get_vfx_database_stats() -> Dict[str, Any]:

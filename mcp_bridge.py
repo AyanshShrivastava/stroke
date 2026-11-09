@@ -114,6 +114,10 @@ def get_github_tools() -> List[Dict[str, Any]]:
                     "commit_message": {
                         "type": "string",
                         "description": "Descriptive git commit message."
+                    },
+                    "confirmed": {
+                        "type": "boolean",
+                        "description": "Explicit user authorization to write/commit to the repository. Must be true to execute commit."
                     }
                 },
                 "required": ["repo", "path", "content", "commit_message"]
@@ -822,6 +826,17 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
         path = args.get("path") or args.get("file_path") or args.get("filepath") or ""
         content = args.get("content") or args.get("code") or ""
         msg = args.get("commit_message") or args.get("message") or args.get("msg") or "update via Stroke AI"
+
+        if not args.get("confirmed", False):
+            return {
+                "status": "requires_confirmation",
+                "tool": "github_commit_file",
+                "repo": repo,
+                "path": path,
+                "commit_message": msg,
+                "message": f"Confirmation Required: External GitHub write requested to repository '{repo}' for path '{path}'. Please confirm execution before proceeding.",
+                "requires_confirmation": True
+            }
 
         token = user_github_token or os.getenv("GITHUB_TOKEN")
         if token:

@@ -342,19 +342,13 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
         finally:
             proc.kill()
 
-    def test_10_luau_synthesis_duplicate_guards_and_beams(self):
-        """Verify Luau synthesis creates FindFirstChild guards and valid dual-attachment Beams."""
-        # 1. House construction duplicate guards
-        house_code, _ = main.synthesize_studio_luau_for_prompt("build a modular house")
-        self.assertIn("FindFirstChild", house_code)
-        self.assertIn("existingHouse:Destroy()", house_code)
-
-        # 2. Beams and Trails with dual attachments
-        beam_code, _ = main.synthesize_studio_luau_for_prompt("spawn energy beam and trail")
-        self.assertIn("Attachment0", beam_code)
-        self.assertIn("Attachment1", beam_code)
-        self.assertIn("ColorSequence.new", beam_code)
-        self.assertIn("NumberSequence.new", beam_code)
+    def test_10_model_driven_architecture_no_hardcoded_synthesis(self):
+        """Verify hardcoded synthesis and keyword routing functions have been removed in favor of model-driven generation."""
+        self.assertFalse(hasattr(main, "synthesize_studio_luau_for_prompt"), "synthesize_studio_luau_for_prompt must be deleted")
+        self.assertFalse(hasattr(main, "is_studio_execution_request"), "is_studio_execution_request must be deleted")
+        self.assertFalse(hasattr(main, "is_casual_greeting"), "is_casual_greeting must be deleted")
+        self.assertFalse(hasattr(main, "is_identity_query"), "is_identity_query must be deleted")
+        self.assertFalse(hasattr(main, "should_trigger_web_search"), "should_trigger_web_search must be deleted")
 
     # ==========================================================================
     # 5. TOOL DISPATCHER AUDIT
