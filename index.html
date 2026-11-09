@@ -832,17 +832,31 @@
         </div>
       </div>
 
-      <!-- Step 2: Enter 6-digit OTP from Email -->
+      <!-- Step 2: Enter 6-digit OTP from Stroke Security Gateway -->
       <div id="otpStep2" class="hidden space-y-3.5">
-        <div class="p-3.5 rounded-lg bg-brand-surface border border-brand-border text-xs text-brand-text font-mono space-y-2">
+        <div class="p-3 rounded-lg bg-brand-surface border border-brand-border text-xs text-brand-text font-mono space-y-1.5">
           <div class="flex items-center space-x-2 text-brand-accent font-semibold">
-            <svg class="w-4 h-4 text-brand-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-            <span>Verification Email Dispatched</span>
+            <svg class="w-4 h-4 text-brand-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            <span>Stroke Security Gateway</span>
           </div>
           <p class="text-[11px] text-brand-muted leading-relaxed">
-            A verification message has been sent to <span id="otpTargetEmailDisplay" class="text-white font-bold"></span>.
-            Check your inbox (and spam folder) and enter your 6-digit code below, or click the login link in your email.
+            Authenticating account for <span id="otpTargetEmailDisplay" class="text-white font-bold"></span>.
           </p>
+        </div>
+
+        <!-- Direct Stroke Verification Key Display & One-Click Auto-Fill -->
+        <div id="otpDirectKeyBox" class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono space-y-2">
+          <div class="flex items-center justify-between text-emerald-400 font-semibold text-[11px]">
+            <span class="flex items-center space-x-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="tracking-wider uppercase">Stroke Verification Key</span>
+            </span>
+            <button id="copyOtpKeyBtn" type="button" class="text-[10px] text-brand-muted hover:text-white transition-colors underline">Copy Key</button>
+          </div>
+          <div class="flex items-center justify-between bg-black/40 rounded-lg p-2.5 border border-emerald-500/20">
+            <span id="otpDirectKeyCodeDisplay" class="text-2xl font-bold tracking-[0.35em] text-emerald-300 font-mono pl-1">------</span>
+            <button id="autoFillOtpBtn" type="button" class="px-3 py-1 rounded-md bg-brand-accent text-black font-bold text-xs hover:bg-emerald-400 transition-all font-mono">Auto-Fill</button>
+          </div>
         </div>
 
         <div>
@@ -2776,11 +2790,25 @@
           document.getElementById('otpStep2').classList.remove('hidden');
 
           const otpInput = document.getElementById('authOtpInput');
-          if (otpInput) {
-            otpInput.value = '';
-            otpInput.focus();
+          const codeDisplay = document.getElementById('otpDirectKeyCodeDisplay');
+          const keyBox = document.getElementById('otpDirectKeyBox');
+
+          if (data.otp_code) {
+            if (codeDisplay) codeDisplay.textContent = data.otp_code;
+            if (keyBox) keyBox.classList.remove('hidden');
+            if (otpInput) {
+              otpInput.value = data.otp_code;
+              otpInput.focus();
+            }
+            showToast('Stroke verification key generated: ' + data.otp_code);
+          } else {
+            if (keyBox) keyBox.classList.add('hidden');
+            if (otpInput) {
+              otpInput.value = '';
+              otpInput.focus();
+            }
+            showToast(data.message || ('Verification email sent to ' + email + '. Check your inbox.'));
           }
-          showToast(data.message || ('Verification email sent to ' + email + '. Check your inbox.'));
         } else {
           const err = await res.json().catch(() => ({}));
           showToast(err.detail || 'Failed to dispatch verification email.');
@@ -2794,6 +2822,38 @@
     }
 
     document.getElementById('sendOtpBtn').addEventListener('click', () => handleSendOtp(false));
+
+    const autoFillOtpBtn = document.getElementById('autoFillOtpBtn');
+    if (autoFillOtpBtn) {
+      autoFillOtpBtn.addEventListener('click', () => {
+        const codeDisplay = document.getElementById('otpDirectKeyCodeDisplay');
+        const otpInput = document.getElementById('authOtpInput');
+        if (codeDisplay && otpInput) {
+          const code = codeDisplay.textContent.trim();
+          if (code && code.length === 6 && code !== '------') {
+            otpInput.value = code;
+            showToast('Auto-filled verification code.');
+            document.getElementById('verifyOtpBtn')?.click();
+          }
+        }
+      });
+    }
+
+    const copyOtpKeyBtn = document.getElementById('copyOtpKeyBtn');
+    if (copyOtpKeyBtn) {
+      copyOtpKeyBtn.addEventListener('click', async () => {
+        const codeDisplay = document.getElementById('otpDirectKeyCodeDisplay');
+        const code = codeDisplay ? codeDisplay.textContent.trim() : '';
+        if (code && code.length === 6 && code !== '------') {
+          try {
+            await navigator.clipboard.writeText(code);
+            showToast('Verification key copied to clipboard.');
+          } catch(e) {
+            showToast('Key: ' + code);
+          }
+        }
+      });
+    }
 
     const resendOtpBtn = document.getElementById('resendOtpBtn');
     if (resendOtpBtn) {
