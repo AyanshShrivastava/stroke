@@ -64,6 +64,12 @@ from coding_loop import (
 )
 import terminal_service
 from terminal_service import TerminalManager, get_terminal_tools_schema, get_terminal_openai_tool_schemas, ToolDispatcher
+import paths_service
+import backup_service
+import workspace_service
+import file_service
+import model_download_service
+import isolated_workspace
 
 # ==============================================================================
 # CONFIGURATION & ENVIRONMENT VARIABLES
@@ -279,11 +285,86 @@ class RunCommandPayload(BaseModel):
     arguments: Optional[List[str]] = Field(default_factory=list, description="Alias for args")
     timeout_sec: Optional[int] = Field(20, description="Process timeout in seconds")
     is_background: Optional[bool] = Field(False, description="True to launch background daemon process")
+    approved: Optional[bool] = Field(False, description="True if explicitly authorized by user confirmation")
 
 
 class TerminalApprovalPayload(BaseModel):
     approval_id: str = Field(..., description="Approval token from a requires_approval decision")
     approved: bool = Field(..., description="True to authorize execution, False to deny")
+
+
+class FsListPayload(BaseModel):
+    dir_path: Optional[str] = Field(".", description="Target directory")
+    recursive: Optional[bool] = Field(False, description="Scan subdirectories recursively")
+    max_depth: Optional[int] = Field(3, description="Maximum directory depth")
+    include_hidden: Optional[bool] = Field(False, description="Include hidden files")
+
+
+class FsReadPayload(BaseModel):
+    file_path: str = Field(..., description="File path to read")
+    start_line: Optional[int] = Field(None, description="Starting line (1-indexed)")
+    end_line: Optional[int] = Field(None, description="Ending line (1-indexed)")
+
+
+class FsReadMultiplePayload(BaseModel):
+    file_paths: List[str] = Field(..., description="List of file paths to read")
+
+
+class FsCreatePayload(BaseModel):
+    file_path: str = Field(..., description="Target file path")
+    content: str = Field(..., description="Initial file text content")
+    overwrite: Optional[bool] = Field(False, description="True to allow replacement with backup")
+    task_id: Optional[str] = Field("api_create", description="Audit task identifier")
+
+
+class FsEditPayload(BaseModel):
+    file_path: str = Field(..., description="Target file path")
+    new_content: str = Field(..., description="Replacement text content")
+    task_id: Optional[str] = Field("api_edit", description="Audit task identifier")
+    description: Optional[str] = Field("File edited via Stroke API", description="Edit explanation")
+
+
+class FsCreateDirPayload(BaseModel):
+    dir_path: str = Field(..., description="Directory path to create")
+
+
+class FsSearchPayload(BaseModel):
+    workspace_path: Optional[str] = Field(".", description="Workspace root path")
+    pattern: Optional[str] = Field("*", description="Filename pattern")
+    max_results: Optional[int] = Field(200, description="Max matches")
+
+
+class FsSearchContentPayload(BaseModel):
+    workspace_path: Optional[str] = Field(".", description="Workspace root path")
+    query: str = Field(..., description="Text query or regex pattern")
+    is_regex: Optional[bool] = Field(False, description="True if query is a regular expression")
+    file_pattern: Optional[str] = Field("*", description="Filename pattern")
+    max_matches: Optional[int] = Field(150, description="Max matches")
+
+
+class FsInspectPayload(BaseModel):
+    file_path: str = Field(..., description="File path to inspect")
+
+
+class FsPatchPayload(BaseModel):
+    file_path: str = Field(..., description="File path to patch")
+    patch_diff: str = Field(..., description="Unified diff patch content")
+    task_id: Optional[str] = Field("api_patch", description="Audit task identifier")
+
+
+class FsDiffPayload(BaseModel):
+    file_path: str = Field(..., description="File path")
+    comparison_content: str = Field(..., description="Proposed content")
+
+
+class WorkspaceApprovePayload(BaseModel):
+    path: str = Field(..., description="Directory path to approve")
+    label: Optional[str] = Field(None, description="Optional label for the workspace")
+
+
+class ModelDownloadPayload(BaseModel):
+    model_id: str = Field("llama-3.2-1b", description="Model identifier to download")
+
 
 
 # ==============================================================================
@@ -309,12 +390,17 @@ _OAUTH_STATE_REGISTRY: Dict[str, Dict[str, Any]] = {}
 _FAILED_OTP_ATTEMPTS: Dict[str, Dict[str, Any]] = {}
 
 # Application-level encryption for sensitive tokens in Firestore
+# Derived dynamically from machine identity and secure local vault key (no hardcoded fallback key)
 _STROKE_ENCRYPTION_KEY = os.getenv("STROKE_ENCRYPTION_KEY")
 if not _STROKE_ENCRYPTION_KEY:
-    _key_material = hashlib.sha256(b"stroke_firestore_token_vault_key_2026").digest()
-    _STROKE_ENCRYPTION_KEY = base64.urlsafe_b64encode(_key_material).decode("utf-8")
-
-_FERNET = Fernet(_STROKE_ENCRYPTION_KEY.encode("utf-8") if isinstance(_STROKE_ENCRYPTION_KEY, str) else _STROKE_ENCRYPTION_KEY)
+    try:
+        import github_service
+        _FERNET = github_service._get_or_create_vault_cipher()
+    except Exception:
+        _derived = hashlib.sha256(str(uuid.getnode()).encode("utf-8") + b":stroke_vault").digest()
+        _FERNET = Fernet(base64.urlsafe_b64encode(_derived))
+else:
+    _FERNET = Fernet(_STROKE_ENCRYPTION_KEY.encode("utf-8") if isinstance(_STROKE_ENCRYPTION_KEY, str) else _STROKE_ENCRYPTION_KEY)
 
 def encrypt_token(plain_token: Optional[str]) -> Optional[str]:
     """Encrypts sensitive tokens (e.g. GitHub PATs) before storing in Firestore."""
@@ -1471,6 +1557,67 @@ async def save_mcp_configuration(payload: McpConfigPayload):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+
+@app.get("/mcp/tools", tags=["Universal MCP Bridge"])
+async def list_all_mcp_tools():
+    """
+    GET /mcp/tools
+    Returns the comprehensive catalog of tools across Roblox Studio, GitHub, and external MCP servers.
+    """
+    return {
+        "status": "success",
+        "roblox_studio_tools": mcp_bridge.get_roblox_studio_tools(),
+        "github_tools": mcp_bridge.get_github_tools(),
+        "all_schemas": mcp_bridge.get_all_mcp_ai_tool_schemas()
+    }
+
+
+# ==============================================================================
+# ROUTE HANDLERS: GITHUB PERSONAL ACCESS TOKEN (PAT) MANAGEMENT
+# ==============================================================================
+
+class GitHubTokenPayload(BaseModel):
+    token: str = Field(..., description="GitHub Personal Access Token (classic or fine-grained)")
+
+
+@app.get("/github/status", tags=["GitHub Integration"])
+async def get_github_pat_status():
+    """
+    GET /github/status
+    Inspects GitHub PAT status, verifying credentials, user identity, and rate limits.
+    """
+    import github_service
+    return await github_service.verify_pat_connection()
+
+
+@app.post("/github/token", tags=["GitHub Integration"])
+async def store_github_pat(payload: GitHubTokenPayload):
+    """
+    POST /github/token
+    Safely encrypts and stores GitHub PAT in the local machine-specific token vault.
+    """
+    import github_service
+    clean_token = payload.token.strip()
+    if not clean_token:
+        raise HTTPException(status_code=400, detail="Token cannot be empty.")
+    success = github_service.save_github_token(clean_token)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save token to secure vault.")
+    return await github_service.verify_pat_connection(clean_token)
+
+
+@app.delete("/github/token", tags=["GitHub Integration"])
+async def delete_github_pat():
+    """
+    DELETE /github/token
+    Deletes the stored GitHub PAT from the encrypted vault.
+    """
+    import github_service
+    github_service.clear_stored_github_token()
+    return {"status": "success", "message": "GitHub Personal Access Token cleared."}
+
+
+
 # ==============================================================================
 # ROUTE HANDLERS: NOTES AI & LUAU COPILOT
 # ==============================================================================
@@ -2008,27 +2155,56 @@ async def get_ai_status():
     except Exception:
         ollama_online = False
 
-    return {
-        "engine": "local_offline_gguf",
-        "local_model": {
-            "name": "Llama-3.2-1B-Instruct",
-            "format": "GGUF Q4_K_M",
-            "file": DEFAULT_GGUF_NAME,
-            "installed": local_installed,
-            "size_mb": local_size_mb,
-            "path": DEFAULT_GGUF_PATH
-        },
-        "llama_cpp_installed": llama_cpp_ready,
-        "llama_cpp_hardware_accelerated": gpu_offload_supported,
-        "gpu_offload_supported": gpu_offload_supported,
-        "ollama": {
-            "online": ollama_online,
-            "models": local_ollama_models
-        },
-        "web_search_available": True,
-        "mcp_connected": True,
-        "requires_api_key": False
-    }
+        # Dynamic MCP connectivity check
+        mcp_active = False
+        try:
+            from mcp_client import global_mcp_registry
+            mcp_active = any(c.is_active() for c in global_mcp_registry.clients.values())
+            if not mcp_active:
+                mcp_active = any(s.get("connected", False) for s in mcp_bridge._MCP_REGISTRY.values())
+        except Exception:
+            mcp_active = any(s.get("connected", False) for s in mcp_bridge._MCP_REGISTRY.values())
+
+        # Dynamic network / web search connectivity probe
+        web_search_online = False
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.5)
+            if sock.connect_ex(("1.1.1.1", 53)) == 0:
+                web_search_online = True
+            sock.close()
+        except Exception:
+            web_search_online = False
+
+        github_configured = False
+        try:
+            import github_service
+            github_configured = bool(github_service.get_stored_github_token())
+        except Exception:
+            github_configured = False
+
+        return {
+            "engine": "local_offline_gguf",
+            "local_model": {
+                "name": "Llama-3.2-1B-Instruct",
+                "format": "GGUF Q4_K_M",
+                "file": DEFAULT_GGUF_NAME,
+                "installed": local_installed,
+                "size_mb": local_size_mb,
+                "path": DEFAULT_GGUF_PATH
+            },
+            "llama_cpp_installed": llama_cpp_ready,
+            "llama_cpp_hardware_accelerated": gpu_offload_supported,
+            "gpu_offload_supported": gpu_offload_supported,
+            "ollama": {
+                "online": ollama_online,
+                "models": local_ollama_models
+            },
+            "web_search_available": web_search_online,
+            "mcp_connected": mcp_active,
+            "github_configured": github_configured,
+            "requires_api_key": False
+        }
 
 
 @app.post("/ai/model/download", tags=["Neural AI & Search"])
@@ -2717,7 +2893,15 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                 "detail": f"Inference via Llama 3.2 1B Instruct (Reasoning: {reasoning_level.upper()}, Tools max turns: {max_tool_turns})"
             })
 
-            agent_tools = get_active_ai_tools_schema(web_search_enabled=getattr(payload, 'web_search', True))
+            # Two-tier dynamic tool selection: select the 6-8 most relevant tools for Llama 3.2 1B
+            agent_tools = mcp_bridge.select_active_tools_for_query(
+                last_user_message,
+                history=final_messages,
+                max_tools=8
+            )
+            if not getattr(payload, 'web_search', True):
+                agent_tools = [t for t in agent_tools if t.get("function", {}).get("name") != "web_search"]
+
             current_agent_messages = list(final_messages)
             tool_turn_count = 0
 
@@ -3206,7 +3390,8 @@ async def run_command_endpoint(payload: RunCommandPayload):
             command=cmd,
             args=args,
             timeout_sec=payload.timeout_sec or 20,
-            is_background=payload.is_background or False
+            is_background=payload.is_background or False,
+            approved=bool(payload.approved)
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -3273,6 +3458,287 @@ async def terminal_tools_schema_endpoint():
     Returns JSON schemas for internal AI tool calling.
     """
     return {"tools": get_terminal_tools_schema()}
+
+
+@app.get("/terminal/output/delta", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
+async def get_terminal_output_delta(
+    session_id: str = Query(..., description="Unique terminal session ID"),
+    since_seq: int = Query(0, description="Sequence number of last seen output line")
+):
+    """
+    GET /terminal/output/delta
+    Returns incremental output lines appended since sequence number for real-time UI streaming.
+    """
+    return TerminalManager.terminal_read_output_delta(session_id=session_id, since_seq=since_seq)
+
+
+# ==============================================================================
+# NON-DESTRUCTIVE USER FILE SYSTEM & WORKSPACE REST API
+# ==============================================================================
+
+@app.post("/fs/list", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_list_endpoint(payload: FsListPayload):
+    """Lists files and directories inside an approved workspace."""
+    try:
+        return file_service.list_directory(
+            payload.dir_path or ".",
+            recursive=bool(payload.recursive),
+            max_depth=payload.max_depth or 3,
+            include_hidden=bool(payload.include_hidden)
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/read", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_read_endpoint(payload: FsReadPayload):
+    """Reads content from an approved user file with optional line range."""
+    try:
+        return file_service.read_file(payload.file_path, start_line=payload.start_line, end_line=payload.end_line)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=404, detail=str(fnf))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/read-multiple", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_read_multiple_endpoint(payload: FsReadMultiplePayload):
+    """Reads multiple files in an approved workspace simultaneously."""
+    try:
+        return file_service.read_multiple_files(payload.file_paths)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/create", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_create_endpoint(payload: FsCreatePayload):
+    """Creates a new file in an approved workspace."""
+    try:
+        return file_service.create_file(
+            payload.file_path,
+            payload.content,
+            overwrite=bool(payload.overwrite),
+            task_id=payload.task_id or "api_create"
+        )
+    except FileExistsError as fee:
+        raise HTTPException(status_code=409, detail=str(fee))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/edit", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_edit_endpoint(payload: FsEditPayload):
+    """Safely edits an existing file with automatic pre-modification version backup."""
+    try:
+        return file_service.edit_file(
+            payload.file_path,
+            payload.new_content,
+            task_id=payload.task_id or "api_edit",
+            description=payload.description or "File edited via Stroke API"
+        )
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=404, detail=str(fnf))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/create-dir", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_create_dir_endpoint(payload: FsCreateDirPayload):
+    """Creates a directory in an approved workspace."""
+    try:
+        return file_service.create_directory(payload.dir_path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/search", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_search_endpoint(payload: FsSearchPayload):
+    """Searches for files matching a filename wildcard pattern."""
+    try:
+        return file_service.search_files(
+            payload.workspace_path or ".",
+            pattern=payload.pattern or "*",
+            max_results=payload.max_results or 200
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/search-content", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_search_content_endpoint(payload: FsSearchContentPayload):
+    """Searches inside file contents across an approved workspace."""
+    try:
+        return file_service.search_in_files(
+            payload.workspace_path or ".",
+            query=payload.query,
+            is_regex=bool(payload.is_regex),
+            file_pattern=payload.file_pattern or "*",
+            max_matches=payload.max_matches or 150
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/inspect", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_inspect_endpoint(payload: FsInspectPayload):
+    """Retrieves deep metadata, SHA-256 hash, and backup count for a file."""
+    try:
+        return file_service.inspect_file(payload.file_path)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=404, detail=str(fnf))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/apply-patch", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_apply_patch_endpoint(payload: FsPatchPayload):
+    """Applies a unified diff patch to an existing file with automatic backup."""
+    try:
+        return file_service.apply_patch(payload.file_path, payload.patch_diff, task_id=payload.task_id or "api_patch")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/diff", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_diff_endpoint(payload: FsDiffPayload):
+    """Generates a unified diff comparing current file content against proposed content."""
+    try:
+        return file_service.compare_file_versions(payload.file_path, payload.comparison_content)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/fs/inspect-workspace", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_inspect_workspace_endpoint(payload: Optional[FsSearchPayload] = None):
+    """Generates an architectural overview of an approved workspace."""
+    try:
+        ws = (payload.workspace_path if payload else None) or "."
+        return file_service.inspect_workspace(ws)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ==============================================================================
+# WORKSPACES & OS FOLDER PICKER
+# ==============================================================================
+
+@app.get("/workspace/list-approved", dependencies=[Depends(verify_terminal_access)], tags=["Workspaces"])
+async def workspace_list_approved_endpoint():
+    """Lists all approved workspace roots."""
+    return {"status": "success", "workspaces": workspace_service.list_approved_workspaces()}
+
+
+@app.post("/workspace/approve", dependencies=[Depends(verify_terminal_access)], tags=["Workspaces"])
+async def workspace_approve_endpoint(payload: WorkspaceApprovePayload):
+    """Registers a project folder into the approved workspaces registry."""
+    try:
+        return workspace_service.approve_workspace(payload.path, payload.label)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/workspace/pick-native", dependencies=[Depends(verify_terminal_access)], tags=["Workspaces"])
+async def workspace_pick_native_endpoint():
+    """Spawns the operating system's native directory picker dialog without administrator privileges."""
+    selected = workspace_service.pick_native_folder()
+    if selected:
+        info = workspace_service.approve_workspace(selected)
+        return {"status": "success", "selected_path": selected, "workspace": info}
+    return {"status": "cancelled", "selected_path": None}
+
+
+# ==============================================================================
+# VERSION BACKUPS & RECOVERY
+# ==============================================================================
+
+@app.get("/backups/history", dependencies=[Depends(verify_terminal_access)], tags=["Backups"])
+async def backups_history_endpoint(file_path: Optional[str] = Query(None)):
+    """Lists historical backups, optionally filtered by file path."""
+    return {"status": "success", "backups": backup_service.list_backups(file_path)}
+
+
+@app.get("/backups/{backup_id}/compare", dependencies=[Depends(verify_terminal_access)], tags=["Backups"])
+async def backups_compare_endpoint(backup_id: str):
+    """Returns a unified diff between a backup and the current file state."""
+    try:
+        return backup_service.compare_backup_to_current(backup_id)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=404, detail=str(fnf))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/backups/{backup_id}/restore", dependencies=[Depends(verify_terminal_access)], tags=["Backups"])
+async def backups_restore_endpoint(backup_id: str):
+    """Safely restores a backup, taking an automatic pre-restore safety snapshot first."""
+    try:
+        return backup_service.restore_backup(backup_id)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=404, detail=str(fnf))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ==============================================================================
+# MODEL DOWNLOAD SYSTEM (USER-LEVEL, RESUME, SHA-256)
+# ==============================================================================
+
+@app.get("/models/status", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
+async def models_status_endpoint():
+    """Returns active model downloads, disk locations, and progress states."""
+    return {
+        "status": "success",
+        "models_dir": paths_service.get_models_dir(),
+        "tasks": model_download_service.get_all_download_status()
+    }
+
+
+@app.post("/models/download", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
+async def models_download_endpoint(payload: ModelDownloadPayload):
+    """Starts or resumes a background model download with byte-level progress."""
+    try:
+        return model_download_service.start_model_download(payload.model_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/models/pause", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
+async def models_pause_endpoint(payload: ModelDownloadPayload):
+    """Pauses an active model download."""
+    return model_download_service.pause_model_download(payload.model_id)
+
+
+@app.post("/models/resume", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
+async def models_resume_endpoint(payload: ModelDownloadPayload):
+    """Resumes a paused model download using HTTP Range requests."""
+    return model_download_service.resume_model_download(payload.model_id)
+
+
+@app.post("/models/cancel", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
+async def models_cancel_endpoint(payload: ModelDownloadPayload):
+    """Cancels a model download."""
+    return model_download_service.cancel_model_download(payload.model_id)
+
+
+# ==============================================================================
+# SYSTEM & ELEVATION AUDIT
+# ==============================================================================
+
+@app.get("/system/elevation-status", tags=["System Audit"])
+async def system_elevation_status_endpoint():
+    """Returns whether Stroke is executing with non-root user permissions and warns if elevated."""
+    return paths_service.get_elevation_status()
+
+
+@app.get("/system/paths", tags=["System Audit"])
+async def system_paths_endpoint():
+    """Returns Stroke's per-user application, models, backups, and download paths."""
+    return {
+        "status": "success",
+        "directories": paths_service.ensure_user_directories(),
+        "is_elevated": paths_service.is_elevated_privilege()
+    }
+
 
 
 # ==============================================================================

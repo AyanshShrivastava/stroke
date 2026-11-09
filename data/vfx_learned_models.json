@@ -1,6 +1,71 @@
 {
   "TestEffect": {
     "model_name": "TestEffect",
-    "registered_at": "2026-11-09 07:06:05.011498+00:00"
+    "registered_at": "2026-11-09 11:39:29.622186+00:00"
+  },
+  "GodTier_Electro_Create_a_purple_lightning_VF": {
+    "name": "GodTier_Electro_Create_a_purple_lightning_VF",
+    "domain": "Electro",
+    "element": "Electro",
+    "particle_emitters": [
+      {
+        "name": "Electro_PrimaryMatrixEmitter",
+        "properties": {
+          "Rate": 45,
+          "Lifetime": [
+            0.2,
+            0.5
+          ],
+          "Drag": 5.0,
+          "Acceleration": [
+            0,
+            0,
+            0
+          ],
+          "Texture": ""
+        }
+      }
+    ],
+    "beams": [
+      {
+        "name": "Electro_CurvedRibbonBeam",
+        "properties": {
+          "CurveSize0": -4.5,
+          "CurveSize1": 5.2,
+          "TextureSpeed": 1.75
+        }
+      }
+    ],
+    "parts": [
+      {
+        "name": "Electro_AnchorPart"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "RootAttachment0"
+      },
+      {
+        "name": "RootAttachment1"
+      }
+    ],
+    "textures": [],
+    "snippet": "-- Purple Lightning Custom Emitter\nlocal host = Instance.new('Part')\nhost.Name = 'PurpleLightningHost'\nhost.Anchored = true\nhost.Parent = workspace\n\nlocal emitter = Instance.new('ParticleEmitter')\nemitter.Rate = 45\nemitter.Color = ColorSequence.new(Color3.fromRGB(180, 0, 255))\nemitter.Lifetime = NumberRange.new(0.2, 0.5)\nemitter.Speed = NumberRange.new(10, 20)\nemitter.SpreadAngle = Vector2.new(180, 180)\nemitter.Parent = host\n\n-- Wait for the emitter to finish processing particles\nhost:WaitForChild('Emitter').WaitForChild('Particles').WaitForChild('Emit')\n\n-- Debounce the emitter to prevent excessive particle emission\nlocal function debouncedEmit()\n    local task = host:WaitForChild('Emitter').WaitForChild('Particles').WaitForChild('Emit')\n    task:Wait()\nend\n\nhost:WaitForChild('Emitter').WaitForChild('Particles').WaitForChild('Emit').OnEvent = debouncedEmit\n\n-- Optional: Add a cleanup function to remove the emitter when the host is destroyed\nlocal function cleanup()\n    host:Destroy()\nend\nhost:Destroy = cleanup",
+    "god_tier_score": 8.0,
+    "is_verified_luau": true,
+    "source_provenance": {
+      "origin": "user_session",
+      "prompt_slug": "Create_a_purple_lightning_VF",
+      "tool_used": "direct",
+      "contributor": "anon***",
+      "verified_criteria": [
+        "luau_code_block",
+        "instance_construction",
+        "resource_cleanup",
+        "dynamic_sequences"
+      ]
+    },
+    "learned_dynamically": true,
+    "learned_at": "2026-11-09T11:39:40.595249+00:00"
   }
 }

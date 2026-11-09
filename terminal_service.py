@@ -107,7 +107,8 @@ GIT_ALLOWED_SUBCOMMANDS = {"status", "diff", "log", "branch", "show", "rev-parse
 GIT_APPROVAL_SUBCOMMANDS = {"push", "commit", "reset", "clean", "checkout", "revert", "rebase", "merge"}
 
 DESTRUCTIVE_COMMANDS = {
-    "rm", "del", "rmdir", "unlink", "format", "dd", "mkfs", "chmod", "chown", "sudo", "su", "kill", "pkill"
+    "rm", "del", "rmdir", "unlink", "format", "dd", "mkfs", "chmod", "chown", "sudo", "su", "kill", "pkill",
+    "erase", "remove-item", "shred", "wipe"
 }
 
 PACKAGE_MANAGERS = {"npm", "pip", "pip3", "cargo", "bun", "pnpm", "yarn"}
@@ -143,12 +144,11 @@ def is_allowed_workspace_root(target_path: str) -> bool:
     return False
 
 
-def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
+def evaluate_command_security(command: str, args: List[str], is_ai_initiated: bool = False) -> Tuple[str, str]:
     """
     Evaluates whether a command is safe for routine background execution,
     requires explicit user confirmation, or is strictly denied.
-    Enforces sandbox security: arbitrary code execution via interpreters (-c, -e)
-    and raw shells (sh, bash, zsh) are gated behind explicit approval.
+    Enforces Stroke's Absolute No-Delete Policy for AI commands.
     Returns (decision, rationale).
     """
     clean_cmd = os.path.basename(command).lower()
@@ -157,41 +157,58 @@ def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
     if clean_cmd.endswith(".exe"):
         clean_cmd = clean_cmd[:-4]
 
-    # 1. Deny dangerous root/privilege commands
+    # 1. Deny dangerous root/privilege commands (Zero Administrator Policy)
     if clean_cmd in ("sudo", "su", "dd", "mkfs"):
-        return SecurityDecision.DENIED, f"Privileged command '{clean_cmd}' is prohibited by Stroke security policy."
+        return SecurityDecision.DENIED, f"Privileged command '{clean_cmd}' is prohibited by Stroke security policy (Zero Administrator Policy)."
 
-    # 2. Check arbitrary code execution in interpreters (-c, -e, --eval)
+    # 2. Check destructive deletion utilities (Absolute No-Delete Policy)
+    if clean_cmd in DESTRUCTIVE_COMMANDS:
+        if is_ai_initiated:
+            return SecurityDecision.DENIED, f"Destructive command '{clean_cmd}' is prohibited by Stroke's Absolute No-Delete Policy."
+        target = " ".join(args) if args else "this file/directory"
+        return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to delete {target}? [Allow] [Decline]"
+
+    # 3. Check Git operations
+    if clean_cmd == "git":
+        subcmd = args[0].lower() if args else "status"
+        if subcmd == "clean" or (subcmd == "reset" and any("--hard" in str(a).lower() for a in args)):
+            if is_ai_initiated:
+                return SecurityDecision.DENIED, f"Destructive Git operation 'git {subcmd}' is prohibited by Stroke's Absolute No-Delete Policy."
+            return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run destructive git {subcmd}? [Allow] [Decline]"
+        if subcmd in GIT_ALLOWED_SUBCOMMANDS:
+            return SecurityDecision.ALLOWED, "Routine Git read-only inspection."
+        if subcmd in GIT_APPROVAL_SUBCOMMANDS:
+            return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
+        return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
+
+    # 4. Check arbitrary code execution in interpreters (-c, -e, --eval) and embedded deletion patterns
     if clean_cmd in INTERPRETERS:
+        for a in args:
+            a_lower = str(a).lower()
+            if any(del_kw in a_lower for del_kw in ("os.remove", "os.unlink", "shutil.rmtree", "path.unlink", "os.rmdir", "rm -rf", "remove-item")):
+                if is_ai_initiated:
+                    return SecurityDecision.DENIED, "Embedded file deletion detected in script arguments. Prohibited by Stroke's Absolute No-Delete Policy."
+                return SecurityDecision.REQUIRES_APPROVAL, "Script contains file deletion calls requiring user authorization."
         for idx, a in enumerate(args):
             a_lower = str(a).lower()
             if a_lower in INTERPRETER_EVAL_FLAGS or a_lower.startswith(("-c", "-e")):
                 snippet = " ".join(args[idx:])[:60]
                 return SecurityDecision.REQUIRES_APPROVAL, f"Executing arbitrary inline code via '{clean_cmd} {snippet}' requires user confirmation."
 
-    # 3. Check raw shell invocations
+    # 5. Check raw shell invocations
     if clean_cmd in SHELLS:
+        for a in args:
+            a_lower = str(a).lower()
+            if any(del_kw in a_lower for del_kw in ("rm ", "rm -", "del ", "rmdir", "remove-item", "erase")):
+                if is_ai_initiated:
+                    return SecurityDecision.DENIED, "Shell execution contains deletion commands. Prohibited by Stroke's Absolute No-Delete Policy."
         return SecurityDecision.REQUIRES_APPROVAL, f"Shell interpreter '{clean_cmd}' can execute arbitrary commands and requires explicit user confirmation."
 
-    # 4. Check shell control characters in arguments (piping, chaining, redirection)
+    # 6. Check shell control characters in arguments (piping, chaining, redirection)
     for a in args:
         a_str = str(a)
         if any(op in a_str for op in (";", "&&", "||", "|", "`", "$(", "\n", "\r")):
             return SecurityDecision.REQUIRES_APPROVAL, f"Command contains shell control sequence requiring explicit user confirmation."
-
-    # 5. Check destructive deletion utilities
-    if clean_cmd in DESTRUCTIVE_COMMANDS:
-        target = " ".join(args) if args else "this file/directory"
-        return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to delete {target}? [Allow] [Decline]"
-
-    # 6. Check Git operations
-    if clean_cmd == "git":
-        subcmd = args[0].lower() if args else "status"
-        if subcmd in GIT_ALLOWED_SUBCOMMANDS:
-            return SecurityDecision.ALLOWED, "Routine Git read-only inspection."
-        if subcmd in GIT_APPROVAL_SUBCOMMANDS:
-            return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
-        return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
 
     # 7. Check Package Managers (install/update require approval; test/list allowed)
     if clean_cmd in PACKAGE_MANAGERS:
@@ -238,6 +255,7 @@ class TerminalSession:
         # Bounded ring buffers
         self.output_lines: deque = deque(maxlen=MAX_OUTPUT_LINES)
         self.total_output_bytes = 0
+        self.sequence_number = 0
         self.lock = threading.Lock()
         self.exec_lock = threading.RLock()
         
@@ -287,6 +305,7 @@ class TerminalSession:
                 line_bytes = len(formatted_line.encode("utf-8")) + 1
                 self.output_lines.append(formatted_line)
                 self.total_output_bytes += line_bytes
+                self.sequence_number += 1
 
             # Evict oldest lines when exceeding total byte limit (256 KB)
             while self.output_lines and self.total_output_bytes > MAX_OUTPUT_BYTES:
@@ -700,6 +719,28 @@ class TerminalSession:
                 return [truncated_notice] + list(self.output_lines)[-limit:]
             return list(self.output_lines)
 
+    def read_output_delta(self, since_seq: int = 0) -> Dict[str, Any]:
+        """Returns incremental output lines appended since sequence number for real-time streaming."""
+        with self.lock:
+            total_lines = len(self.output_lines)
+            if since_seq <= 0:
+                lines = list(self.output_lines)
+            else:
+                diff = self.sequence_number - since_seq
+                if diff <= 0:
+                    lines = []
+                elif diff >= total_lines:
+                    lines = list(self.output_lines)
+                else:
+                    lines = list(self.output_lines)[-diff:]
+            return {
+                "session_id": self.session_id,
+                "lines": lines,
+                "sequence_number": self.sequence_number,
+                "is_running": self.current_process is not None and self.current_process.poll() is None,
+                "state": self.state
+            }
+
     def stop(self) -> Dict[str, Any]:
         """Terminates any active running process in this session and its process group."""
         with self.exec_lock:
@@ -978,6 +1019,14 @@ class TerminalManager:
         return cls.read_terminal_output(session_id=session_id, tail_lines=tail_lines)
 
     @classmethod
+    def terminal_read_output_delta(cls, session_id: str, since_seq: int = 0) -> Dict[str, Any]:
+        """Tool: terminal_read_output_delta(session_id, since_seq) for real-time streaming."""
+        session = cls.get_session(session_id)
+        if not session:
+            return {"status": "error", "message": f"Session '{session_id}' not found.", "lines": [], "sequence_number": 0}
+        return session.read_output_delta(since_seq=since_seq)
+
+    @classmethod
     def terminal_get_status(cls, session_id: str) -> Dict[str, Any]:
         """Tool: terminal_get_status(session_id)"""
         return cls.get_terminal_status(session_id=session_id)
@@ -1085,6 +1134,70 @@ def _run_coroutine_sync(coro):
     return asyncio.run(coro)
 
 
+def robust_json_parse(raw: Any) -> Optional[Any]:
+    """
+    Resilient JSON parser designed for small LLM outputs (Llama 3.2 1B).
+    Recovers from trailing commas, single quotes, auto-closes truncated brackets,
+    and unpacks stringified JSON.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    if not isinstance(raw, str):
+        return None
+    cleaned = raw.strip()
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, str):
+            try:
+                inner = json.loads(parsed)
+                if isinstance(inner, (dict, list)):
+                    return inner
+            except Exception:
+                pass
+        return parsed
+    except Exception:
+        pass
+
+    # Strip markdown backticks if wrapped
+    if cleaned.startswith("```") and cleaned.endswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            pass
+
+    # Attempt 1: Remove trailing commas before } or ]
+    fixed = re.sub(r",\s*([\]\}])", r"\1", cleaned)
+    try:
+        return json.loads(fixed)
+    except Exception:
+        pass
+
+    # Attempt 2: Auto-close unclosed braces/brackets if truncated
+    open_braces = fixed.count("{") - fixed.count("}")
+    open_brackets = fixed.count("[") - fixed.count("]")
+    if open_braces > 0 or open_brackets > 0:
+        auto_closed = fixed + ("]" * max(0, open_brackets)) + ("}" * max(0, open_braces))
+        try:
+            return json.loads(auto_closed)
+        except Exception:
+            pass
+
+    # Attempt 3: Safe ast.literal_eval for python-style single-quoted dicts
+    try:
+        import ast
+        val = ast.literal_eval(cleaned)
+        if isinstance(val, (dict, list)):
+            return val
+    except Exception:
+        pass
+
+    return None
+
+
 class ToolDispatcher:
     """
     Unified AI Tool Dispatcher & Parser.
@@ -1104,20 +1217,65 @@ class ToolDispatcher:
     WEB_SEARCH_TOOLS = {"web_search"}
     VFX_TOOLS = {"search_vfx_database", "vfx_kinematics_lookup"}
     STUDIO_TOOLS = {
+        # Core & Scripting
         "studio_execute_luau", "execute_luau",
-        "studio_search_scripts", "studio_insert_vfx_asset", "studio_get_console"
+        "studio_search_scripts", "script_search",
+        "studio_insert_vfx_asset", "insert_asset",
+        "studio_get_console", "get_console_output",
+        "script_read", "studio_read_script",
+        "multi_edit", "studio_multi_edit",
+        "script_grep", "studio_grep_scripts",
+        # Asset & Content Generation
+        "generate_mesh", "generate_material", "generate_procedural_model",
+        "generate_texture", "generate_animation", "generate_scene",
+        "segment_mesh", "wait_job_finished", "search_asset",
+        "upload_image", "store_image",
+        # DataModel Exploration
+        "search_game_tree", "inspect_instance",
+        # Playtesting & Simulation
+        "get_studio_state", "start_stop_play",
+        # Player Input & Navigation
+        "screen_capture", "character_navigation",
+        "user_keyboard_input", "user_mouse_input", "auto_setup_avatar",
+        # Skills & Extensibility
+        "list_skills", "create_skill", "edit_skill", "skill", "subagent",
+        # Cloud & Session
+        "http_get", "open_cloud_invoke", "list_roblox_studios"
     }
     GITHUB_TOOLS = {
-        "github_commit_file", "github_create_pull_request"
+        "github_commit_file", "github_create_pull_request",
+        "github_list_repos", "github_get_file_contents",
+        "github_list_branches", "github_create_branch",
+        "github_list_issues", "github_create_issue",
+        "github_list_pull_requests"
+    }
+    DYNAMIC_TOOLS = {"tools_search"}
+    FILE_TOOLS = {
+        "list_directory", "fs_list_directory",
+        "read_file", "fs_read_file",
+        "read_multiple_files", "fs_read_multiple_files",
+        "create_file", "fs_create_file",
+        "edit_file", "fs_edit_file",
+        "create_directory", "fs_create_directory",
+        "search_files", "fs_search_files",
+        "search_in_files", "fs_search_in_files",
+        "inspect_file", "fs_inspect_file",
+        "apply_patch", "fs_apply_patch",
+        "compare_file_versions", "fs_compare_file_versions",
+        "inspect_workspace", "fs_inspect_workspace",
+        "list_backups", "fs_list_backups",
+        "restore_backup", "fs_restore_backup",
+        "list_approved_workspaces", "workspace_list_approved",
+        "approve_workspace", "workspace_approve"
     }
 
-    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS
+    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS | FILE_TOOLS | DYNAMIC_TOOLS
 
     @classmethod
     def is_supported(cls, tool_name: str) -> bool:
         """Checks if a tool name is supported by the unified tool registry."""
         name = tool_name.strip()
-        return name in cls.SUPPORTED_TOOLS or name.startswith("mcp_")
+        return name in cls.SUPPORTED_TOOLS or name.startswith("mcp_") or "__" in name
 
     @classmethod
     def _extract_json_objects(cls, text: str) -> List[Dict[str, Any]]:
@@ -1149,12 +1307,9 @@ class ToolDispatcher:
                             depth -= 1
                             if depth == 0:
                                 chunk = text[start:i+1]
-                                try:
-                                    parsed = json.loads(chunk)
-                                    if isinstance(parsed, dict):
-                                        objs.append(parsed)
-                                except Exception:
-                                    pass
+                                parsed = robust_json_parse(chunk)
+                                if isinstance(parsed, dict):
+                                    objs.append(parsed)
                                 break
                     i += 1
             i += 1
@@ -1167,11 +1322,10 @@ class ToolDispatcher:
         if isinstance(arguments, dict):
             args = arguments
         elif isinstance(arguments, str):
-            try:
-                parsed = json.loads(arguments)
-                if isinstance(parsed, dict):
-                    args = parsed
-            except Exception:
+            parsed = robust_json_parse(arguments)
+            if isinstance(parsed, dict):
+                args = parsed
+            else:
                 args = {}
 
         name = tool_name.strip()
@@ -1250,8 +1404,8 @@ class ToolDispatcher:
                 except Exception as ve:
                     return {"status": "error", "message": f"VFX database search failed: {str(ve)}"}
 
-            # 4. MCP Tools (Roblox Studio, GitHub, Custom)
-            elif name in cls.STUDIO_TOOLS or name in cls.GITHUB_TOOLS or name.startswith("mcp_"):
+            # 4. MCP Tools (Roblox Studio, GitHub, Dynamic, Custom)
+            elif name in cls.STUDIO_TOOLS or name in cls.GITHUB_TOOLS or name in cls.DYNAMIC_TOOLS or name.startswith("mcp_") or "__" in name:
                 # Argument validation for studio_execute_luau
                 if name in ("studio_execute_luau", "execute_luau") and not (args.get("code") or args.get("script") or args.get("luau") or args.get("content")):
                     return {"status": "error", "message": "Missing required argument 'code' for studio_execute_luau."}
@@ -1260,6 +1414,124 @@ class ToolDispatcher:
                     return await mcp_bridge.execute_mcp_tool(name, args)
                 except Exception as me:
                     return {"status": "error", "message": f"MCP tool execution failed: {str(me)}"}
+
+            # 5. Non-Destructive File System & Workspace Tools
+            elif name in cls.FILE_TOOLS:
+                import file_service
+                import backup_service
+                import workspace_service
+
+                if name in ("list_directory", "fs_list_directory"):
+                    dir_path = args.get("dir_path") or args.get("directory") or args.get("path") or "."
+                    recursive = bool(args.get("recursive", False))
+                    max_depth = int(args.get("max_depth", 3))
+                    include_hidden = bool(args.get("include_hidden", False))
+                    return file_service.list_directory(dir_path, recursive=recursive, max_depth=max_depth, include_hidden=include_hidden)
+
+                elif name in ("read_file", "fs_read_file"):
+                    file_path = args.get("file_path") or args.get("path") or args.get("file")
+                    if not file_path:
+                        return {"status": "error", "message": "Missing required argument 'file_path'."}
+                    start_line = args.get("start_line")
+                    end_line = args.get("end_line")
+                    if start_line is not None:
+                        start_line = int(start_line)
+                    if end_line is not None:
+                        end_line = int(end_line)
+                    return file_service.read_file(file_path, start_line=start_line, end_line=end_line)
+
+                elif name in ("read_multiple_files", "fs_read_multiple_files"):
+                    paths = args.get("file_paths") or args.get("paths") or args.get("files") or []
+                    if isinstance(paths, str):
+                        paths = [paths]
+                    return file_service.read_multiple_files(paths)
+
+                elif name in ("create_file", "fs_create_file"):
+                    file_path = args.get("file_path") or args.get("path") or args.get("file")
+                    content = args.get("content") or args.get("code") or args.get("text") or ""
+                    overwrite = bool(args.get("overwrite", False))
+                    task_id = args.get("task_id", "ai_task")
+                    if not file_path:
+                        return {"status": "error", "message": "Missing required argument 'file_path'."}
+                    return file_service.create_file(file_path, content, overwrite=overwrite, task_id=task_id)
+
+                elif name in ("edit_file", "fs_edit_file"):
+                    file_path = args.get("file_path") or args.get("path") or args.get("file")
+                    content = args.get("new_content") or args.get("content") or args.get("code") or args.get("text")
+                    if not file_path:
+                        return {"status": "error", "message": "Missing required argument 'file_path'."}
+                    if content is None:
+                        return {"status": "error", "message": "Missing required argument 'new_content'."}
+                    task_id = args.get("task_id", "ai_task")
+                    desc = args.get("description", "File edited by Stroke AI")
+                    return file_service.edit_file(file_path, content, task_id=task_id, description=desc)
+
+                elif name in ("create_directory", "fs_create_directory"):
+                    dir_path = args.get("dir_path") or args.get("path") or args.get("directory")
+                    if not dir_path:
+                        return {"status": "error", "message": "Missing required argument 'dir_path'."}
+                    return file_service.create_directory(dir_path)
+
+                elif name in ("search_files", "fs_search_files"):
+                    ws = args.get("workspace_path") or args.get("workspace") or args.get("path") or "."
+                    pattern = args.get("pattern") or args.get("query") or "*"
+                    max_results = int(args.get("max_results", 200))
+                    return file_service.search_files(ws, pattern=pattern, max_results=max_results)
+
+                elif name in ("search_in_files", "fs_search_in_files"):
+                    ws = args.get("workspace_path") or args.get("workspace") or args.get("path") or "."
+                    query = args.get("query") or args.get("text") or args.get("q")
+                    if not query:
+                        return {"status": "error", "message": "Missing required argument 'query'."}
+                    is_regex = bool(args.get("is_regex", False))
+                    file_pattern = args.get("file_pattern", "*")
+                    max_matches = int(args.get("max_matches", 150))
+                    return file_service.search_in_files(ws, query=query, is_regex=is_regex, file_pattern=file_pattern, max_matches=max_matches)
+
+                elif name in ("inspect_file", "fs_inspect_file"):
+                    file_path = args.get("file_path") or args.get("path") or args.get("file")
+                    if not file_path:
+                        return {"status": "error", "message": "Missing required argument 'file_path'."}
+                    return file_service.inspect_file(file_path)
+
+                elif name in ("apply_patch", "fs_apply_patch"):
+                    file_path = args.get("file_path") or args.get("path") or args.get("file")
+                    patch_diff = args.get("patch_diff") or args.get("patch") or args.get("diff")
+                    if not file_path or not patch_diff:
+                        return {"status": "error", "message": "Missing required arguments 'file_path' and 'patch_diff'."}
+                    task_id = args.get("task_id", "ai_patch")
+                    return file_service.apply_patch(file_path, patch_diff, task_id=task_id)
+
+                elif name in ("compare_file_versions", "fs_compare_file_versions"):
+                    file_path = args.get("file_path") or args.get("path") or args.get("file")
+                    content = args.get("comparison_content") or args.get("content") or ""
+                    if not file_path:
+                        return {"status": "error", "message": "Missing required argument 'file_path'."}
+                    return file_service.compare_file_versions(file_path, content)
+
+                elif name in ("inspect_workspace", "fs_inspect_workspace"):
+                    ws = args.get("workspace_path") or args.get("workspace") or args.get("path") or "."
+                    return file_service.inspect_workspace(ws)
+
+                elif name in ("list_backups", "fs_list_backups"):
+                    fp = args.get("file_path") or args.get("path") or None
+                    return {"status": "success", "backups": backup_service.list_backups(fp)}
+
+                elif name in ("restore_backup", "fs_restore_backup"):
+                    backup_id = args.get("backup_id") or args.get("id")
+                    if not backup_id:
+                        return {"status": "error", "message": "Missing required argument 'backup_id'."}
+                    return backup_service.restore_backup(backup_id)
+
+                elif name in ("list_approved_workspaces", "workspace_list_approved"):
+                    return {"status": "success", "workspaces": workspace_service.list_approved_workspaces()}
+
+                elif name in ("approve_workspace", "workspace_approve"):
+                    path = args.get("path") or args.get("workspace_path")
+                    label = args.get("label")
+                    if not path:
+                        return {"status": "error", "message": "Missing required argument 'path'."}
+                    return workspace_service.approve_workspace(path, label)
 
             return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
         except Exception as exc:
@@ -1272,19 +1544,18 @@ class ToolDispatcher:
         if isinstance(arguments, dict):
             args = arguments
         elif isinstance(arguments, str):
-            try:
-                parsed = json.loads(arguments)
-                if isinstance(parsed, str):
-                    parsed = json.loads(parsed)
-                if isinstance(parsed, dict):
-                    args = parsed
-            except Exception:
+            parsed = robust_json_parse(arguments)
+            if isinstance(parsed, dict):
+                args = parsed
+            else:
                 args = {}
 
         name = tool_name.strip()
 
         # Terminal and local tools can be dispatched synchronously directly
         if name in cls.TERMINAL_TOOLS:
+            return _run_coroutine_sync(cls.dispatch_async(name, args))
+        elif name in cls.FILE_TOOLS:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
         elif name in cls.WEB_SEARCH_TOOLS:
             q = args.get("query") or args.get("q") or args.get("search") or args.get("search_query") or ""
@@ -1314,7 +1585,7 @@ class ToolDispatcher:
                 }
             except Exception as ve:
                 return {"status": "error", "message": f"VFX database search failed: {str(ve)}"}
-        elif name in cls.STUDIO_TOOLS or name in cls.GITHUB_TOOLS or name.startswith("mcp_"):
+        elif name in cls.STUDIO_TOOLS or name in cls.GITHUB_TOOLS or name in cls.DYNAMIC_TOOLS or name.startswith("mcp_") or "__" in name:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
 
         return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
@@ -1348,15 +1619,17 @@ class ToolDispatcher:
                 pass
 
         # 2. Parse JSON blocks with "tool" or "name"
+        # 2. Parse JSON blocks with "tool" or "name"
         json_pattern = r"```(?:json)?\s*(\{[\s\S]*?\})\s*```"
         for match in re.finditer(json_pattern, text):
             try:
-                data = json.loads(match.group(1))
-                tool_name = data.get("tool") or data.get("name") or data.get("function")
-                if tool_name and cls.is_supported(tool_name):
-                    args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
-                    res = cls.dispatch(tool_name, args)
-                    results.append({"tool": tool_name, "arguments": args, "result": res})
+                data = robust_json_parse(match.group(1))
+                if isinstance(data, dict):
+                    tool_name = data.get("tool") or data.get("name") or data.get("function")
+                    if tool_name and cls.is_supported(tool_name):
+                        args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
+                        res = cls.dispatch(tool_name, args)
+                        results.append({"tool": tool_name, "arguments": args, "result": res})
             except Exception:
                 pass
 
@@ -1364,8 +1637,8 @@ class ToolDispatcher:
         tag_pattern = r"<tool_call>\s*([\s\S]*?)\s*</tool_call>"
         for match in re.finditer(tag_pattern, text):
             try:
-                data = json.loads(match.group(1).strip())
-                items = data if isinstance(data, list) else [data]
+                data = robust_json_parse(match.group(1).strip())
+                items = data if isinstance(data, list) else [data] if data else []
                 for item in items:
                     if isinstance(item, dict):
                         tool_name = item.get("name") or item.get("tool") or item.get("function")
@@ -1404,8 +1677,8 @@ class ToolDispatcher:
         cleaned_text = text.strip()
         if (cleaned_text.startswith("{") and cleaned_text.endswith("}")) or (cleaned_text.startswith("[") and cleaned_text.endswith("]")):
             try:
-                data = json.loads(cleaned_text)
-                items = data if isinstance(data, list) else [data]
+                data = robust_json_parse(cleaned_text)
+                items = data if isinstance(data, list) else [data] if data else []
                 for item in items:
                     if isinstance(item, dict):
                         tool_name = item.get("tool") or item.get("name") or item.get("function")
@@ -1422,12 +1695,13 @@ class ToolDispatcher:
         json_pattern = r"```(?:json)?\s*(\{[\s\S]*?\})\s*```"
         for match in re.finditer(json_pattern, text):
             try:
-                data = json.loads(match.group(1))
-                tool_name = data.get("tool") or data.get("name") or data.get("function")
-                if tool_name and cls.is_supported(tool_name):
-                    args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
-                    res = await cls.dispatch_async(tool_name, args)
-                    results.append({"tool": tool_name, "arguments": args, "result": res})
+                data = robust_json_parse(match.group(1))
+                if isinstance(data, dict):
+                    tool_name = data.get("tool") or data.get("name") or data.get("function")
+                    if tool_name and cls.is_supported(tool_name):
+                        args = data.get("parameters") or data.get("arguments") or data.get("args") or {}
+                        res = await cls.dispatch_async(tool_name, args)
+                        results.append({"tool": tool_name, "arguments": args, "result": res})
             except Exception:
                 pass
 
@@ -1435,8 +1709,8 @@ class ToolDispatcher:
         tag_pattern = r"<tool_call>\s*([\s\S]*?)\s*</tool_call>"
         for match in re.finditer(tag_pattern, text):
             try:
-                data = json.loads(match.group(1).strip())
-                items = data if isinstance(data, list) else [data]
+                data = robust_json_parse(match.group(1).strip())
+                items = data if isinstance(data, list) else [data] if data else []
                 for item in items:
                     if isinstance(item, dict):
                         tool_name = item.get("name") or item.get("tool") or item.get("function")
@@ -1708,3 +1982,207 @@ def get_terminal_tools_schema() -> List[Dict[str, Any]]:
             }
         }
     ]
+
+
+def get_file_tools_schema() -> List[Dict[str, Any]]:
+    """Returns the JSON schemas for non-destructive file system and workspace management tools."""
+    return [
+        {
+            "name": "list_directory",
+            "description": "Lists files and subdirectories inside an approved workspace with size and modification metadata.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dir_path": {"type": "string", "description": "Workspace directory path to inspect."},
+                    "recursive": {"type": "boolean", "description": "Whether to scan subdirectories recursively."},
+                    "max_depth": {"type": "integer", "description": "Maximum directory recursion depth (default 3)."},
+                    "include_hidden": {"type": "boolean", "description": "Whether to include hidden files/directories."}
+                },
+                "required": ["dir_path"]
+            }
+        },
+        {
+            "name": "read_file",
+            "description": "Reads text content from an approved user file, supporting optional start/end line ranges.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Absolute or workspace-relative path to the file."},
+                    "start_line": {"type": "integer", "description": "1-indexed starting line number (optional)."},
+                    "end_line": {"type": "integer", "description": "1-indexed ending line number (optional)."}
+                },
+                "required": ["file_path"]
+            }
+        },
+        {
+            "name": "read_multiple_files",
+            "description": "Reads multiple files in an approved workspace simultaneously in a single call.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_paths": {"type": "array", "items": {"type": "string"}, "description": "List of file paths to read."}
+                },
+                "required": ["file_paths"]
+            }
+        },
+        {
+            "name": "create_file",
+            "description": "Creates a new file in an approved workspace. If the file exists and overwrite=False, raises FileExistsError.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path of the new file to create."},
+                    "content": {"type": "string", "description": "Initial text content of the file."},
+                    "overwrite": {"type": "boolean", "description": "Set to True only if explicitly intending to replace content."},
+                    "task_id": {"type": "string", "description": "Optional task/session identifier for audit tracking."}
+                },
+                "required": ["file_path", "content"]
+            }
+        },
+        {
+            "name": "edit_file",
+            "description": "Modifies an existing user file. An automatic full version backup is always created before modification.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to the existing file to edit."},
+                    "new_content": {"type": "string", "description": "The complete replacement content for the file."},
+                    "task_id": {"type": "string", "description": "Task identifier for change tracking."},
+                    "description": {"type": "string", "description": "Brief description of the edit rationale."}
+                },
+                "required": ["file_path", "new_content"]
+            }
+        },
+        {
+            "name": "create_directory",
+            "description": "Creates a directory (and any necessary parent directories) in an approved workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "dir_path": {"type": "string", "description": "Directory path to create."}
+                },
+                "required": ["dir_path"]
+            }
+        },
+        {
+            "name": "search_files",
+            "description": "Finds files matching a glob pattern (e.g. '*.luau', '*.py', '*test*') in a workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "workspace_path": {"type": "string", "description": "Target workspace root path."},
+                    "pattern": {"type": "string", "description": "Wildcard pattern (default '*')."},
+                    "max_results": {"type": "integer", "description": "Maximum number of matches to return (default 200)."}
+                },
+                "required": ["workspace_path"]
+            }
+        },
+        {
+            "name": "search_in_files",
+            "description": "Searches for text or regex patterns across files inside an approved workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "workspace_path": {"type": "string", "description": "Target workspace root path."},
+                    "query": {"type": "string", "description": "Text substring or regex pattern to search for."},
+                    "is_regex": {"type": "boolean", "description": "Whether query is a regex pattern (default false)."},
+                    "file_pattern": {"type": "string", "description": "Filename filter pattern (default '*')."},
+                    "max_matches": {"type": "integer", "description": "Maximum matches to return (default 150)."}
+                },
+                "required": ["workspace_path", "query"]
+            }
+        },
+        {
+            "name": "inspect_file",
+            "description": "Inspects file metadata, line count, SHA-256 hash, and available backup history.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to file to inspect."}
+                },
+                "required": ["file_path"]
+            }
+        },
+        {
+            "name": "apply_patch",
+            "description": "Applies a unified diff patch to an existing file with automatic pre-patch backup.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to the target file."},
+                    "patch_diff": {"type": "string", "description": "Unified diff patch content."},
+                    "task_id": {"type": "string", "description": "Task identifier for audit tracking."}
+                },
+                "required": ["file_path", "patch_diff"]
+            }
+        },
+        {
+            "name": "compare_file_versions",
+            "description": "Generates a unified diff comparing current file content against proposed content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Target file path."},
+                    "comparison_content": {"type": "string", "description": "Proposed or alternative content string."}
+                },
+                "required": ["file_path", "comparison_content"]
+            }
+        },
+        {
+            "name": "inspect_workspace",
+            "description": "Summarizes project workspace architecture, file extensions, total size, and manifest files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "workspace_path": {"type": "string", "description": "Workspace root path."}
+                },
+                "required": ["workspace_path"]
+            }
+        },
+        {
+            "name": "list_backups",
+            "description": "Lists historical backups stored in Stroke app data, optionally filtered by file path.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Optional file path filter."}
+                }
+            }
+        },
+        {
+            "name": "restore_backup",
+            "description": "Restores a file to a previous backup version, taking a safety backup before restoring.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "backup_id": {"type": "string", "description": "Backup ID to restore."}
+                },
+                "required": ["backup_id"]
+            }
+        },
+        {
+            "name": "list_approved_workspaces",
+            "description": "Lists all approved workspaces permitted for Stroke file and terminal operations.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        },
+        {
+            "name": "approve_workspace",
+            "description": "Registers a new user project directory into Stroke's approved workspaces catalog.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Absolute directory path to approve."},
+                    "label": {"type": "string", "description": "Optional human-readable label for the workspace."}
+                },
+                "required": ["path"]
+            }
+        }
+    ]
+
+
+def get_all_agent_tools_schema() -> List[Dict[str, Any]]:
+    """Returns the unified tool schema combining terminal and file management tools."""
+    return get_terminal_tools_schema() + get_file_tools_schema()

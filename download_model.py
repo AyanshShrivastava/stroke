@@ -8,10 +8,31 @@ Alternative:   Meta Llama 3.2 3B Instruct (Q4_K_M, ~2.0 GB)
 ================================================================================
 """
 
-import os
-import sys
-import time
-import httpx
+import hashlib
+
+def compute_file_sha256(filepath: str, chunk_size: int = 1024 * 1024) -> str:
+    """Computes streaming SHA-256 checksum of the target model file."""
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+def verify_model_integrity(filepath: str, expected_sha256: str = None) -> bool:
+    """Verifies that the downloaded file meets minimum size and matches expected SHA-256 hash."""
+    if not os.path.exists(filepath):
+        return False
+    size = os.path.getsize(filepath)
+    if size < 10_000_000:
+        return False
+    if expected_sha256:
+        actual = compute_file_sha256(filepath)
+        return actual.lower() == expected_sha256.lower()
+    return True
+
 
 MODELS = {
     "llama3.2-1b": {
@@ -39,10 +60,12 @@ MODELS = {
 DEFAULT_MODEL_KEY = "llama3.2-1b"
 
 def get_models_dir():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    models_dir = os.path.join(base_dir, "models")
-    os.makedirs(models_dir, exist_ok=True)
-    return models_dir
+    import paths_service
+    user_models_dir = str(paths_service.get_models_dir())
+    local_models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+    if os.path.exists(local_models_dir) and any(f.endswith(".gguf") for f in os.listdir(local_models_dir)):
+        return local_models_dir
+    return user_models_dir
 
 def is_model_installed(model_key=DEFAULT_MODEL_KEY):
     info = MODELS.get(model_key, MODELS[DEFAULT_MODEL_KEY])
@@ -105,8 +128,13 @@ def download_model(model_key=DEFAULT_MODEL_KEY, progress_callback=None):
                     sys.stdout.write(f"\r[{bar}] {pct}% ({downloaded / (1024*1024):.1f}/{total_bytes / (1024*1024):.1f} MB @ {speed_mbps:.1f} MB/s)")
                     sys.stdout.flush()
 
+    if not verify_model_integrity(temp_path, expected_sha256=info.get("sha256")):
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise ValueError(f"Integrity check failed for downloaded model '{info['filename']}'. Checksum mismatch or corrupt payload.")
+
     os.rename(temp_path, dest_path)
-    print("\n\n[STROKE AI] Model weights locked and verified successfully.")
+    print("\n\n[STROKE AI] Model weights locked and verified with SHA-256 integrity.")
     return dest_path
 
 if __name__ == "__main__":

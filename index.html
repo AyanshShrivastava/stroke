@@ -236,6 +236,15 @@
         </div>
       </div>
 
+      <!-- Zero Administrator / Non-Elevated Verification Row -->
+      <div id="elevationStatusRow" class="px-2.5 py-1.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 text-[10px] font-mono flex items-center justify-between" title="Stroke Non-Administrator Verification">
+        <span class="flex items-center space-x-1.5">
+          <span id="elevationStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span id="elevationStatusText" class="text-emerald-400 font-medium">Standard User</span>
+        </span>
+        <span class="text-[9px] text-brand-muted uppercase">No Root</span>
+      </div>
+
       <!-- Action: + New Chat -->
       <button id="newChatBtn" class="w-full py-2 px-3 rounded-lg bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/40 text-white font-medium text-xs flex items-center justify-between transition-all glow-button group">
         <span class="flex items-center space-x-2">
@@ -265,6 +274,33 @@
             <span id="sidebarTerminalStatus">Idle</span>
           </span>
         </div>
+
+        <!-- Workspaces (Non-destructive File System & Native OS Folder Picker) -->
+        <button id="openWorkspacesBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
+          <span class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            <span>Workspaces</span>
+          </span>
+          <span id="workspacesCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">1</span>
+        </button>
+
+        <!-- Backups & Safe Version Recovery -->
+        <button id="openBackupsBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-cyan-400 hover:bg-white/5 transition-colors group">
+          <span class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-brand-muted group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>Backups</span>
+          </span>
+          <span id="backupsCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/30 font-mono">Safe</span>
+        </button>
+
+        <!-- Local GGUF Neural Models & Downloader -->
+        <button id="openModelsBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-purple-400 hover:bg-white/5 transition-colors group">
+          <span class="flex items-center space-x-2.5">
+            <svg class="w-4 h-4 text-brand-muted group-hover:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <span>Models</span>
+          </span>
+          <span id="modelsStatusBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-purple-400/10 text-purple-400 border border-purple-400/30 font-mono">GGUF</span>
+        </button>
 
         <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-brand-text hover:text-white hover:bg-white/5 transition-colors">
           <svg class="w-4 h-4 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -997,6 +1033,179 @@
         </button>
         <button id="confirmModalActionBtn" type="button" class="px-4 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold font-mono transition-colors shadow-sm">
           Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: WORKSPACE MANAGEMENT & NATIVE OS FOLDER PICKER                     -->
+  <!-- ========================================================================= -->
+  <div id="workspacesModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 font-sans">
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-7 h-7 rounded-lg bg-brand-accent/20 border border-brand-accent flex items-center justify-center text-brand-accent">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-white text-sm">Approved Workspaces</h3>
+            <p class="text-[11px] text-brand-muted">Stroke is strictly confined to user-approved directories.</p>
+          </div>
+        </div>
+        <button id="closeWorkspacesModalBtn" class="text-brand-muted hover:text-white p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-3 rounded-xl bg-brand-surface border border-brand-border space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-white">Add Project Folder</span>
+          <span class="text-[10px] font-mono text-emerald-400">Zero Administrator Required</span>
+        </div>
+        <p class="text-[11px] text-brand-muted leading-relaxed">
+          Select a project workspace folder using your operating system's native folder picker.
+        </p>
+        <button id="pickNativeFolderBtn" class="w-full py-2 px-3 rounded-lg bg-brand-accent hover:bg-emerald-400 text-black font-semibold text-xs transition-colors flex items-center justify-center space-x-2 font-mono">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          <span>Select Folder via OS Native Picker</span>
+        </button>
+      </div>
+
+      <div>
+        <label class="block text-[10px] font-mono uppercase text-brand-muted mb-1.5">Approved Workspaces Catalog</label>
+        <div id="approvedWorkspacesList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+          <!-- Populated dynamically via loadApprovedWorkspaces() -->
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button id="closeWorkspacesDoneBtn" class="px-4 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20 transition-colors font-mono">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: VERSION BACKUPS & SAFE RECOVERY                                     -->
+  <!-- ========================================================================= -->
+  <div id="backupsModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 font-sans">
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-7 h-7 rounded-lg bg-cyan-400/20 border border-cyan-400 flex items-center justify-center text-cyan-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-white text-sm">Version Backups & Recovery</h3>
+            <p class="text-[11px] text-brand-muted">Automatic pre-modification snapshots stored in user app data.</p>
+          </div>
+        </div>
+        <button id="closeBackupsModalBtn" class="text-brand-muted hover:text-white p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div id="backupDiffContainer" class="hidden p-3 rounded-xl bg-black border border-brand-border space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-mono font-semibold text-cyan-400" id="backupDiffTitle">Unified Diff Preview</span>
+          <button id="closeBackupDiffBtn" class="text-[10px] text-brand-muted hover:text-white font-mono">Close Diff</button>
+        </div>
+        <pre id="backupDiffCode" class="text-[11px] font-mono text-neutral-300 max-h-48 overflow-y-auto whitespace-pre p-2 bg-neutral-950 rounded"></pre>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="text-[10px] font-mono uppercase text-brand-muted">Snapshot History</label>
+          <span id="backupsTotalCount" class="text-[10px] font-mono text-brand-muted">0 snapshots</span>
+        </div>
+        <div id="backupsList" class="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+          <!-- Populated dynamically via loadBackups() -->
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button id="closeBackupsDoneBtn" class="px-4 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20 transition-colors font-mono">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: LOCAL NEURAL MODELS & BACKGROUND DOWNLOADER                         -->
+  <!-- ========================================================================= -->
+  <div id="modelsModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 font-sans">
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500 flex items-center justify-center text-purple-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-white text-sm">Local Neural Models</h3>
+            <p class="text-[11px] text-brand-muted">Downloaded directly into user application storage.</p>
+          </div>
+        </div>
+        <button id="closeModelsModalBtn" class="text-brand-muted hover:text-white p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-3 rounded-xl bg-brand-surface border border-brand-border space-y-1.5">
+        <div class="text-xs font-semibold text-white">Models Storage Path</div>
+        <div id="modelsDirPathDisplay" class="text-[11px] font-mono text-purple-300 break-all bg-black/50 p-2 rounded border border-purple-900/40">
+          Loading...
+        </div>
+        <p class="text-[10px] text-brand-muted">
+          Standard user directory. Does not require admin privileges or elevated writes.
+        </p>
+      </div>
+
+      <!-- Active Model Card: Llama 3.2 1B Instruct -->
+      <div class="p-3.5 rounded-xl bg-brand-surface border border-brand-border space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+            <span class="text-xs font-semibold text-white font-mono">Llama-3.2-1B-Instruct-Q4_K_M.gguf</span>
+          </div>
+          <span id="modelTaskStatusBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border font-mono">Idle</span>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="space-y-1">
+          <div class="w-full h-2 bg-black rounded-full overflow-hidden border border-brand-border">
+            <div id="modelProgressBar" class="h-full bg-gradient-to-r from-purple-600 to-brand-accent w-0 transition-all duration-300"></div>
+          </div>
+          <div class="flex items-center justify-between text-[10px] font-mono text-brand-muted">
+            <span id="modelProgressBytes">0 MB / 808 MB</span>
+            <span id="modelProgressPercent">0%</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span id="modelSpeedEta" class="text-[10px] font-mono text-brand-muted">Speed: -- | ETA: --</span>
+          <div class="flex space-x-1.5" id="modelActionButtons">
+            <button id="downloadModelBtn" class="px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold font-mono transition-colors">
+              Download
+            </button>
+            <button id="pauseModelBtn" class="hidden px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[11px] font-mono transition-colors">
+              Pause
+            </button>
+            <button id="resumeModelBtn" class="hidden px-2.5 py-1 rounded bg-brand-accent text-black text-[11px] font-semibold font-mono transition-colors">
+              Resume
+            </button>
+            <button id="cancelModelBtn" class="hidden px-2.5 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 text-[11px] font-mono transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button id="closeModelsDoneBtn" class="px-4 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20 transition-colors font-mono">
+          Close
         </button>
       </div>
     </div>
@@ -3469,6 +3678,361 @@
 
       return finalHtml;
     }
+
+    // --- WORKSPACE & NATIVE PICKER CONTROLLER ---
+    const openWorkspacesBtn = document.getElementById('openWorkspacesBtn');
+    const workspacesModal = document.getElementById('workspacesModal');
+    const closeWorkspacesModalBtn = document.getElementById('closeWorkspacesModalBtn');
+    const closeWorkspacesDoneBtn = document.getElementById('closeWorkspacesDoneBtn');
+    const pickNativeFolderBtn = document.getElementById('pickNativeFolderBtn');
+    const approvedWorkspacesList = document.getElementById('approvedWorkspacesList');
+    const workspacesCountBadge = document.getElementById('workspacesCountBadge');
+
+    async function loadApprovedWorkspaces() {
+      try {
+        const res = await fetch('/workspace/list-approved');
+        if (res.ok) {
+          const data = await res.json();
+          const list = data.workspaces || [];
+          if (workspacesCountBadge) workspacesCountBadge.textContent = list.length;
+          if (!approvedWorkspacesList) return;
+          if (list.length === 0) {
+            approvedWorkspacesList.innerHTML = '<div class="text-[11px] text-brand-muted font-mono p-2">No approved workspaces registered.</div>';
+            return;
+          }
+          approvedWorkspacesList.innerHTML = list.map(ws => `
+            <div class="p-2.5 rounded-lg bg-brand-surface border border-brand-border flex items-center justify-between">
+              <div class="min-w-0 pr-2">
+                <div class="flex items-center space-x-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-brand-accent"></span>
+                  <span class="text-xs font-semibold text-white font-mono truncate">${escapeHtml(ws.name || ws.path)}</span>
+                </div>
+                <div class="text-[10px] text-brand-muted font-mono truncate mt-0.5">${escapeHtml(ws.path)}</div>
+              </div>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-brand-muted font-mono shrink-0">Approved</span>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        console.error('Failed to load workspaces:', e);
+      }
+    }
+
+    if (openWorkspacesBtn) {
+      openWorkspacesBtn.addEventListener('click', () => {
+        loadApprovedWorkspaces();
+        workspacesModal.classList.remove('hidden');
+      });
+    }
+    if (closeWorkspacesModalBtn) closeWorkspacesModalBtn.addEventListener('click', () => workspacesModal.classList.add('hidden'));
+    if (closeWorkspacesDoneBtn) closeWorkspacesDoneBtn.addEventListener('click', () => workspacesModal.classList.add('hidden'));
+
+    if (pickNativeFolderBtn) {
+      pickNativeFolderBtn.addEventListener('click', async () => {
+        pickNativeFolderBtn.disabled = true;
+        pickNativeFolderBtn.innerHTML = '<span>Opening OS Native Picker...</span>';
+        try {
+          const res = await fetch('/workspace/pick-native', { method: 'POST' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'success' && data.selected_path) {
+              showToast('Approved workspace: ' + data.selected_path);
+              await loadApprovedWorkspaces();
+            } else {
+              showToast('Folder selection cancelled.');
+            }
+          }
+        } catch (e) {
+          showToast('Failed to open native picker: ' + e.message);
+        } finally {
+          pickNativeFolderBtn.disabled = false;
+          pickNativeFolderBtn.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>Select Folder via OS Native Picker</span>
+          `;
+        }
+      });
+    }
+
+    // --- BACKUPS & VERSION RECOVERY CONTROLLER ---
+    const openBackupsBtn = document.getElementById('openBackupsBtn');
+    const backupsModal = document.getElementById('backupsModal');
+    const closeBackupsModalBtn = document.getElementById('closeBackupsModalBtn');
+    const closeBackupsDoneBtn = document.getElementById('closeBackupsDoneBtn');
+    const backupsList = document.getElementById('backupsList');
+    const backupsTotalCount = document.getElementById('backupsTotalCount');
+    const backupDiffContainer = document.getElementById('backupDiffContainer');
+    const backupDiffTitle = document.getElementById('backupDiffTitle');
+    const backupDiffCode = document.getElementById('backupDiffCode');
+    const closeBackupDiffBtn = document.getElementById('closeBackupDiffBtn');
+
+    async function loadBackups() {
+      try {
+        const res = await fetch('/backups/history');
+        if (res.ok) {
+          const data = await res.json();
+          const list = data.backups || [];
+          if (backupsTotalCount) backupsTotalCount.textContent = list.length + ' snapshots';
+          if (!backupsList) return;
+          if (list.length === 0) {
+            backupsList.innerHTML = '<div class="text-[11px] text-brand-muted font-mono p-3 text-center">No version backups recorded yet. Backups are automatically created before any file is edited.</div>';
+            return;
+          }
+          backupsList.innerHTML = list.map(b => `
+            <div class="p-2.5 rounded-lg bg-brand-surface border border-brand-border flex items-center justify-between">
+              <div class="min-w-0 pr-2">
+                <div class="flex items-center space-x-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                  <span class="text-xs font-semibold text-white font-mono truncate">${escapeHtml(b.file_name)}</span>
+                  <span class="text-[10px] text-brand-muted font-mono">(${Math.round(b.size_bytes / 1024)} KB)</span>
+                </div>
+                <div class="text-[10px] text-brand-muted font-mono truncate mt-0.5">${escapeHtml(b.description || b.task_id || 'Snapshot')} &bull; ${escapeHtml(b.timestamp)}</div>
+              </div>
+              <div class="flex space-x-1 shrink-0">
+                <button onclick="compareBackupDiff('${escapeHtml(b.backup_id)}')" class="px-2 py-1 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 text-[10px] font-mono transition-colors">
+                  Diff
+                </button>
+                <button onclick="restoreBackupSnapshot('${escapeHtml(b.backup_id)}')" class="px-2 py-1 rounded bg-brand-accent/10 hover:bg-brand-accent/20 text-brand-accent text-[10px] font-mono transition-colors">
+                  Restore
+                </button>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        console.error('Failed to load backups:', e);
+      }
+    }
+
+    window.compareBackupDiff = async function(backupId) {
+      try {
+        const res = await fetch('/backups/' + encodeURIComponent(backupId) + '/compare');
+        if (res.ok) {
+          const data = await res.json();
+          if (backupDiffContainer && backupDiffCode) {
+            backupDiffTitle.textContent = 'Diff: ' + (data.file_path || backupId);
+            backupDiffCode.textContent = data.diff || '(Identical to current file state)';
+            backupDiffContainer.classList.remove('hidden');
+          }
+        }
+      } catch (e) {
+        showToast('Diff retrieval failed: ' + e.message);
+      }
+    };
+
+    window.restoreBackupSnapshot = async function(backupId) {
+      const confirmed = await askConfirmation({
+        title: 'Restore File Backup',
+        message: 'Are you sure you want to restore this version? An automatic safety snapshot of the current state will be taken before restoring.',
+        confirmText: 'Restore Snapshot',
+        isDanger: false
+      });
+      if (!confirmed) return;
+      try {
+        const res = await fetch('/backups/' + encodeURIComponent(backupId) + '/restore', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          showToast('File restored cleanly: ' + data.target_file);
+          await loadBackups();
+        } else {
+          const err = await res.json();
+          showToast('Restore failed: ' + (err.detail || err.message));
+        }
+      } catch (e) {
+        showToast('Restore error: ' + e.message);
+      }
+    };
+
+    if (openBackupsBtn) {
+      openBackupsBtn.addEventListener('click', () => {
+        loadBackups();
+        backupsModal.classList.remove('hidden');
+      });
+    }
+    if (closeBackupsModalBtn) closeBackupsModalBtn.addEventListener('click', () => backupsModal.classList.add('hidden'));
+    if (closeBackupsDoneBtn) closeBackupsDoneBtn.addEventListener('click', () => backupsModal.classList.add('hidden'));
+    if (closeBackupDiffBtn) closeBackupDiffBtn.addEventListener('click', () => backupDiffContainer.classList.add('hidden'));
+
+    // --- LOCAL GGUF MODELS CONTROLLER ---
+    const openModelsBtn = document.getElementById('openModelsBtn');
+    const modelsModal = document.getElementById('modelsModal');
+    const closeModelsModalBtn = document.getElementById('closeModelsModalBtn');
+    const closeModelsDoneBtn = document.getElementById('closeModelsDoneBtn');
+    const modelsDirPathDisplay = document.getElementById('modelsDirPathDisplay');
+    const modelTaskStatusBadge = document.getElementById('modelTaskStatusBadge');
+    const modelProgressBar = document.getElementById('modelProgressBar');
+    const modelProgressBytes = document.getElementById('modelProgressBytes');
+    const modelProgressPercent = document.getElementById('modelProgressPercent');
+    const modelSpeedEta = document.getElementById('modelSpeedEta');
+    const downloadModelBtn = document.getElementById('downloadModelBtn');
+    const pauseModelBtn = document.getElementById('pauseModelBtn');
+    const resumeModelBtn = document.getElementById('resumeModelBtn');
+    const cancelModelBtn = document.getElementById('cancelModelBtn');
+
+    let modelPollTimer = null;
+
+    async function updateModelsStatus() {
+      try {
+        const res = await fetch('/models/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (modelsDirPathDisplay) modelsDirPathDisplay.textContent = data.models_dir || '~/Library/Application Support/Stroke/Models';
+          const tasks = data.tasks || {};
+          const llama = tasks['llama-3.2-1b'];
+          if (llama) {
+            renderModelTask(llama);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch models status:', e);
+      }
+    }
+
+    function renderModelTask(task) {
+      const status = task.status || 'idle';
+      if (modelTaskStatusBadge) {
+        modelTaskStatusBadge.textContent = status.toUpperCase();
+        if (status === 'completed') modelTaskStatusBadge.className = 'text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono';
+        else if (status === 'downloading') modelTaskStatusBadge.className = 'text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/30 font-mono animate-pulse';
+        else modelTaskStatusBadge.className = 'text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border font-mono';
+      }
+      if (modelProgressBar) modelProgressBar.style.width = (task.percent || 0) + '%';
+      if (modelProgressBytes) {
+        const dlMB = (task.downloaded_bytes / (1024 * 1024)).toFixed(1);
+        const totMB = (task.total_bytes / (1024 * 1024)).toFixed(1);
+        modelProgressBytes.textContent = `${dlMB} MB / ${totMB} MB`;
+      }
+      if (modelProgressPercent) modelProgressPercent.textContent = (task.percent || 0) + '%';
+      if (modelSpeedEta) {
+        const speed = (task.speed_bytes_sec / (1024 * 1024)).toFixed(2);
+        const eta = task.eta_seconds ? `${task.eta_seconds}s` : '--';
+        modelSpeedEta.textContent = `Speed: ${speed} MB/s | ETA: ${eta}`;
+      }
+
+      if (downloadModelBtn && pauseModelBtn && resumeModelBtn && cancelModelBtn) {
+        if (status === 'downloading') {
+          downloadModelBtn.classList.add('hidden');
+          pauseModelBtn.classList.remove('hidden');
+          resumeModelBtn.classList.add('hidden');
+          cancelModelBtn.classList.remove('hidden');
+        } else if (status === 'paused') {
+          downloadModelBtn.classList.add('hidden');
+          pauseModelBtn.classList.add('hidden');
+          resumeModelBtn.classList.remove('hidden');
+          cancelModelBtn.classList.remove('hidden');
+        } else if (status === 'completed') {
+          downloadModelBtn.classList.add('hidden');
+          pauseModelBtn.classList.add('hidden');
+          resumeModelBtn.classList.add('hidden');
+          cancelModelBtn.classList.add('hidden');
+        } else {
+          downloadModelBtn.classList.remove('hidden');
+          pauseModelBtn.classList.add('hidden');
+          resumeModelBtn.classList.add('hidden');
+          cancelModelBtn.classList.add('hidden');
+        }
+      }
+    }
+
+    if (openModelsBtn) {
+      openModelsBtn.addEventListener('click', () => {
+        updateModelsStatus();
+        modelsModal.classList.remove('hidden');
+        if (!modelPollTimer) {
+          modelPollTimer = setInterval(updateModelsStatus, 1000);
+        }
+      });
+    }
+    if (closeModelsModalBtn) closeModelsModalBtn.addEventListener('click', () => {
+      modelsModal.classList.add('hidden');
+      if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
+    });
+    if (closeModelsDoneBtn) closeModelsDoneBtn.addEventListener('click', () => {
+      modelsModal.classList.add('hidden');
+      if (modelPollTimer) { clearInterval(modelPollTimer); modelPollTimer = null; }
+    });
+
+    if (downloadModelBtn) {
+      downloadModelBtn.addEventListener('click', async () => {
+        try {
+          await fetch('/models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_id: 'llama-3.2-1b' })
+          });
+          showToast('Starting model download...');
+          updateModelsStatus();
+        } catch (e) {
+          showToast('Download request failed: ' + e.message);
+        }
+      });
+    }
+
+    if (pauseModelBtn) {
+      pauseModelBtn.addEventListener('click', async () => {
+        await fetch('/models/pause', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model_id: 'llama-3.2-1b' })
+        });
+        updateModelsStatus();
+      });
+    }
+
+    if (resumeModelBtn) {
+      resumeModelBtn.addEventListener('click', async () => {
+        await fetch('/models/resume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model_id: 'llama-3.2-1b' })
+        });
+        updateModelsStatus();
+      });
+    }
+
+    if (cancelModelBtn) {
+      cancelModelBtn.addEventListener('click', async () => {
+        await fetch('/models/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model_id: 'llama-3.2-1b' })
+        });
+        updateModelsStatus();
+      });
+    }
+
+    // --- ELEVATION STATUS AUDIT (ZERO ADMINISTRATOR) ---
+    async function checkElevationStatus() {
+      try {
+        const res = await fetch('/system/elevation-status');
+        if (res.ok) {
+          const data = await res.json();
+          const row = document.getElementById('elevationStatusRow');
+          const dot = document.getElementById('elevationStatusDot');
+          const text = document.getElementById('elevationStatusText');
+          if (data.is_elevated) {
+            if (row) row.className = 'px-2.5 py-1.5 rounded-lg bg-amber-950/40 border border-amber-500/40 text-[10px] font-mono flex items-center justify-between';
+            if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping';
+            if (text) {
+              text.textContent = 'ELEVATED ROOT/SUDO';
+              text.className = 'text-amber-400 font-bold';
+            }
+          } else {
+            if (row) row.className = 'px-2.5 py-1.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 text-[10px] font-mono flex items-center justify-between';
+            if (dot) dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400';
+            if (text) {
+              text.textContent = 'Standard User';
+              text.className = 'text-emerald-400 font-medium';
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to check elevation status:', e);
+      }
+    }
+
+    checkElevationStatus();
+    loadApprovedWorkspaces();
   </script>
 </body>
 </html>

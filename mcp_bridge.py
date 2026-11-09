@@ -22,138 +22,708 @@ _MCP_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 
 def get_roblox_studio_tools() -> List[Dict[str, Any]]:
-    """Standard Roblox Studio MCP tool definitions."""
+    """Official Roblox Studio MCP tool definitions (35 tools across all Studio capabilities)."""
     return [
+        # --- Script Management ---
         {
-            "name": "studio_execute_luau",
+            "name": "execute_luau",
             "description": "Executes live Luau script in Roblox Studio to construct VFX models, configure ParticleEmitters, or update DataModel.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "The exact Luau code to execute in Roblox Studio."
-                    },
-                    "target_parent": {
-                        "type": "string",
-                        "description": "Target container (e.g. 'ReplicatedStorage.VFX', 'Workspace', 'ServerStorage'). Defaults to 'ReplicatedStorage.VFX'."
-                    }
+                    "code": {"type": "string", "description": "The exact Luau code to execute in Roblox Studio."},
+                    "target_parent": {"type": "string", "description": "Target container (e.g. 'ReplicatedStorage.VFX', 'Workspace'). Defaults to 'workspace'."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID when multiple Roblox Studio instances are open."}
                 },
                 "required": ["code"]
             }
         },
         {
-            "name": "studio_search_scripts",
+            "name": "studio_execute_luau",
+            "description": "Executes live Luau script in Roblox Studio (alias for execute_luau).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "The exact Luau code to execute in Roblox Studio."},
+                    "target_parent": {"type": "string", "description": "Target container (e.g. 'ReplicatedStorage.VFX', 'Workspace'). Defaults to 'ReplicatedStorage.VFX'."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["code"]
+            }
+        },
+        {
+            "name": "script_read",
+            "description": "Reads the source code of a Script, LocalScript, or ModuleScript in Roblox Studio.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "script_path": {"type": "string", "description": "DataModel path to the script (e.g. 'ReplicatedStorage.Controllers.VFXController')."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["script_path"]
+            }
+        },
+        {
+            "name": "multi_edit",
+            "description": "Applies multiple atomic edits, replacements, or insertions to scripts in Studio.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "edits": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "script_path": {"type": "string"},
+                                "target_content": {"type": "string"},
+                                "replacement_content": {"type": "string"}
+                            },
+                            "required": ["script_path", "target_content", "replacement_content"]
+                        },
+                        "description": "List of edit operations to execute atomically."
+                    },
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["edits"]
+            }
+        },
+        {
+            "name": "script_search",
             "description": "Searches for Luau scripts and modules across the active Roblox Studio DataModel.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Function name, module name, or keyword to search for."
-                    }
+                    "query": {"type": "string", "description": "Function name, module name, or keyword to search for."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
                 },
                 "required": ["query"]
             }
         },
         {
-            "name": "studio_insert_vfx_asset",
+            "name": "studio_search_scripts",
+            "description": "Searches for Luau scripts and modules across the active Roblox Studio DataModel (alias for script_search).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Function name, module name, or keyword to search for."}
+                },
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "script_grep",
+            "description": "Executes regex search across script contents in the active Roblox Studio project.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Regex pattern to match in script code."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["pattern"]
+            }
+        },
+        # --- Asset & Content Generation ---
+        {
+            "name": "generate_mesh",
+            "description": "Generates a 3D mesh model from text prompt via Roblox generation pipeline.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Detailed description of the 3D model/mesh to generate."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["prompt"]
+            }
+        },
+        {
+            "name": "generate_material",
+            "description": "Generates PBR materials and texture maps (color, normal, roughness) for Roblox parts.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Description of the material surface (e.g. 'cracked volcanic basalt', 'sci-fi glowing panel')."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["prompt"]
+            }
+        },
+        {
+            "name": "generate_procedural_model",
+            "description": "Constructs procedural 3D structures (castles, arenas, towers, dungeons) in Studio.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Architectural prompt or procedural layout instructions."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["prompt"]
+            }
+        },
+        {
+            "name": "generate_texture",
+            "description": "Generates 2D texture images for decals, particles, and surfaces.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Texture prompt (e.g. 'purple electrical spark burst', 'fire ring')."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["prompt"]
+            }
+        },
+        {
+            "name": "generate_animation",
+            "description": "Generates keyframe animation for R15/R6 characters.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Animation description (e.g. 'sword slash with jump', 'spell cast stance')."},
+                    "rig_type": {"type": "string", "description": "'R15' or 'R6'. Defaults to 'R15'."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["prompt"]
+            }
+        },
+        {
+            "name": "generate_scene",
+            "description": "Generates complete themed environment scene with lighting and atmosphere in Studio.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Theme prompt (e.g. 'cyberpunk alleyway at night', 'cyber matrix arena')."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["prompt"]
+            }
+        },
+        {
+            "name": "segment_mesh",
+            "description": "Segments a composite mesh into editable parts or sub-components.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "mesh_id": {"type": "string", "description": "Mesh asset ID to segment."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["mesh_id"]
+            }
+        },
+        {
+            "name": "wait_job_finished",
+            "description": "Polls status and waits for an asynchronous asset generation job to complete.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string", "description": "Generation job ID."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["job_id"]
+            }
+        },
+        {
+            "name": "search_asset",
+            "description": "Searches the Roblox Creator Store and toolbox for verified models, audio, and meshes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search keyword or asset name."},
+                    "category": {"type": "string", "description": "Asset category ('Model', 'MeshPart', 'Audio', 'Decal')."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "insert_asset",
             "description": "Inserts a verified Roblox asset into the Studio DataModel by Asset ID.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "asset_id": {
-                        "type": "string",
-                        "description": "The Roblox asset string (e.g. 'rbxassetid://13780268621')."
-                    },
-                    "target_folder": {
-                        "type": "string",
-                        "description": "Folder to insert into. Defaults to 'ReplicatedStorage.VFX'."
-                    }
+                    "asset_id": {"type": "string", "description": "The Roblox asset string or numeric ID (e.g. 'rbxassetid://13780268621')."},
+                    "target_folder": {"type": "string", "description": "Target folder (e.g. 'Workspace', 'ReplicatedStorage.VFX'). Defaults to 'Workspace'."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
                 },
                 "required": ["asset_id"]
             }
         },
         {
-            "name": "studio_get_console",
-            "description": "Reads output log lines from the Roblox Studio command console.",
+            "name": "studio_insert_vfx_asset",
+            "description": "Inserts a verified Roblox asset into the Studio DataModel (alias for insert_asset).",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "max_lines": {
-                        "type": "integer",
-                        "description": "Maximum number of lines to retrieve (default 30)."
-                    }
+                    "asset_id": {"type": "string", "description": "The Roblox asset string (e.g. 'rbxassetid://13780268621')."},
+                    "target_folder": {"type": "string", "description": "Folder to insert into. Defaults to 'ReplicatedStorage.VFX'."}
+                },
+                "required": ["asset_id"]
+            }
+        },
+        {
+            "name": "upload_image",
+            "description": "Uploads an image file to Roblox cloud / Studio as an asset.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path to the local image file."},
+                    "name": {"type": "string", "description": "Asset display name."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["file_path"]
+            }
+        },
+        {
+            "name": "store_image",
+            "description": "Stores an image in the local Studio session storage.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "image_data": {"type": "string", "description": "Base64 encoded image data."},
+                    "name": {"type": "string", "description": "Asset identifier."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["image_data"]
+            }
+        },
+        # --- DataModel Exploration ---
+        {
+            "name": "search_game_tree",
+            "description": "Searches for Instances in the active DataModel by ClassName, Name, or Attribute.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Instance name or search term."},
+                    "class_name": {"type": "string", "description": "Optional ClassName filter (e.g. 'ParticleEmitter', 'BasePart', 'Model')."},
+                    "root": {"type": "string", "description": "Starting path (default 'Workspace')."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "inspect_instance",
+            "description": "Inspects detailed properties, attributes, and tags of a DataModel Instance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instance_path": {"type": "string", "description": "DataModel path (e.g. 'Workspace.SpawnLocation')."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["instance_path"]
+            }
+        },
+        # --- Playtesting & Simulation ---
+        {
+            "name": "get_studio_state",
+            "description": "Retrieves the current execution state of Roblox Studio ('Edit', 'Play', 'Run', 'Paused').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
                 }
+            }
+        },
+        {
+            "name": "start_stop_play",
+            "description": "Starts, pauses, or stops simulation or playtesting in Studio.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["play", "run", "pause", "stop"], "description": "Simulation action."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["action"]
+            }
+        },
+        {
+            "name": "get_console_output",
+            "description": "Reads output log lines and error diagnostics from the Roblox Studio command console.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_lines": {"type": "integer", "description": "Maximum number of lines to retrieve (default 30)."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                }
+            }
+        },
+        {
+            "name": "studio_get_console",
+            "description": "Reads output log lines from the Roblox Studio command console (alias for get_console_output).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "max_lines": {"type": "integer", "description": "Maximum number of lines to retrieve (default 30)."}
+                }
+            }
+        },
+        # --- Player Input & Automation ---
+        {
+            "name": "screen_capture",
+            "description": "Captures a screenshot of the active 3D Studio viewport.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                }
+            }
+        },
+        {
+            "name": "character_navigation",
+            "description": "Moves or navigates the player character to a destination Vector3 in playtest mode.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "destination": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "description": "[x, y, z] target world coordinate."
+                    },
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["destination"]
+            }
+        },
+        {
+            "name": "user_keyboard_input",
+            "description": "Simulates keyboard keystroke events in Studio playtest.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Key identifier (e.g. 'W', 'Space', 'E')."},
+                    "event": {"type": "string", "enum": ["press", "down", "up"], "description": "Key event type."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["key"]
+            }
+        },
+        {
+            "name": "user_mouse_input",
+            "description": "Simulates mouse click or motion in the 3D viewport.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["click", "down", "up", "move"], "description": "Mouse action."},
+                    "x": {"type": "integer", "description": "Screen X coordinate."},
+                    "y": {"type": "integer", "description": "Screen Y coordinate."},
+                    "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "Mouse button."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["action"]
+            }
+        },
+        {
+            "name": "auto_setup_avatar",
+            "description": "Sets up standard character avatar rig (R15 or R6) in the workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "rig_type": {"type": "string", "enum": ["R15", "R6"], "description": "Avatar rig type. Defaults to R15."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                }
+            }
+        },
+        # --- Skills & Extensibility ---
+        {
+            "name": "list_skills",
+            "description": "Lists installed custom Studio automation skills.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                }
+            }
+        },
+        {
+            "name": "create_skill",
+            "description": "Creates a new custom Studio automation skill.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name."},
+                    "description": {"type": "string", "description": "Skill description."},
+                    "code": {"type": "string", "description": "Luau execution code."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["name", "code"]
+            }
+        },
+        {
+            "name": "edit_skill",
+            "description": "Edits an existing Studio skill definition.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name."},
+                    "code": {"type": "string", "description": "Updated Luau code."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["name", "code"]
+            }
+        },
+        {
+            "name": "skill",
+            "description": "Invokes an installed Studio skill by name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name to invoke."},
+                    "parameters": {"type": "object", "description": "Arguments payload."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "subagent",
+            "description": "Dispatches an autonomous Studio subagent task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instruction": {"type": "string", "description": "Subagent instructions."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["instruction"]
+            }
+        },
+        {
+            "name": "http_get",
+            "description": "Performs an HTTP GET request within Studio's secure sandbox.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Target URL."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["url"]
+            }
+        },
+        {
+            "name": "open_cloud_invoke",
+            "description": "Invokes Roblox Open Cloud API operations (DataStores, MessagingService, Assets).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string", "description": "Open Cloud API operation."},
+                    "payload": {"type": "object", "description": "Operation arguments."},
+                    "studio_id": {"type": "string", "description": "Optional studio session ID."}
+                },
+                "required": ["operation"]
+            }
+        },
+        # --- Multi-Studio Session Management ---
+        {
+            "name": "list_roblox_studios",
+            "description": "Lists all active Roblox Studio instances, returning studio_id, process ID, and place info.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
             }
         }
     ]
 
 
 def get_github_tools() -> List[Dict[str, Any]]:
-    """Standard GitHub MCP tool definitions."""
+    """Complete GitHub MCP tool definitions."""
     return [
         {
-            "name": "github_commit_file",
-            "description": "Creates or updates a file directly in a GitHub repository.",
+            "name": "github_list_repos",
+            "description": "Lists repositories accessible to the configured GitHub Personal Access Token.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "repo": {
-                        "type": "string",
-                        "description": "Repository in format 'owner/repo'."
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "File path within repository (e.g. 'src/client/VFXController.luau')."
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Full file content string."
-                    },
-                    "commit_message": {
-                        "type": "string",
-                        "description": "Descriptive git commit message."
-                    },
-                    "confirmed": {
-                        "type": "boolean",
-                        "description": "Explicit user authorization to write/commit to the repository. Must be true to execute commit."
-                    }
+                    "visibility": {"type": "string", "enum": ["all", "public", "private"], "description": "Visibility filter."},
+                    "per_page": {"type": "integer", "description": "Number of repositories to return (default 30)."}
+                }
+            }
+        },
+        {
+            "name": "github_get_file_contents",
+            "description": "Reads file contents directly from a GitHub repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."},
+                    "path": {"type": "string", "description": "Path to the file."},
+                    "ref": {"type": "string", "description": "Optional git branch, tag, or commit SHA."}
+                },
+                "required": ["repo", "path"]
+            }
+        },
+        {
+            "name": "github_commit_file",
+            "description": "Creates or updates a file directly in a GitHub repository (requires user confirmation).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."},
+                    "path": {"type": "string", "description": "File path within repository (e.g. 'src/client/VFXController.luau')."},
+                    "content": {"type": "string", "description": "Full file content string."},
+                    "commit_message": {"type": "string", "description": "Descriptive git commit message."},
+                    "branch": {"type": "string", "description": "Target branch."},
+                    "confirmed": {"type": "boolean", "description": "Explicit user authorization to write/commit. Must be true to execute."}
                 },
                 "required": ["repo", "path", "content", "commit_message"]
             }
         },
         {
-            "name": "github_create_pull_request",
-            "description": "Creates a pull request on GitHub.",
+            "name": "github_list_branches",
+            "description": "Lists branches in a GitHub repository.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "repo": {
-                        "type": "string",
-                        "description": "Repository in format 'owner/repo'."
-                    },
-                    "title": {
-                        "type": "string",
-                        "description": "Pull request title."
-                    },
-                    "head": {
-                        "type": "string",
-                        "description": "Name of the branch containing changes."
-                    },
-                    "base": {
-                        "type": "string",
-                        "description": "Name of branch you want to merge into (default: 'main')."
-                    },
-                    "body": {
-                        "type": "string",
-                        "description": "PR description."
-                    }
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."}
+                },
+                "required": ["repo"]
+            }
+        },
+        {
+            "name": "github_create_branch",
+            "description": "Creates a new git branch in a repository (requires user confirmation).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."},
+                    "new_branch": {"type": "string", "description": "Name of new branch."},
+                    "from_branch": {"type": "string", "description": "Source branch (default 'main')."},
+                    "confirmed": {"type": "boolean", "description": "Explicit user authorization."}
+                },
+                "required": ["repo", "new_branch"]
+            }
+        },
+        {
+            "name": "github_list_issues",
+            "description": "Lists issues in a GitHub repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."},
+                    "state": {"type": "string", "enum": ["open", "closed", "all"], "description": "Issue state filter."}
+                },
+                "required": ["repo"]
+            }
+        },
+        {
+            "name": "github_create_issue",
+            "description": "Creates a new issue in a GitHub repository (requires user confirmation).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."},
+                    "title": {"type": "string", "description": "Issue title."},
+                    "body": {"type": "string", "description": "Issue description / body."},
+                    "confirmed": {"type": "boolean", "description": "Explicit user authorization."}
+                },
+                "required": ["repo", "title"]
+            }
+        },
+        {
+            "name": "github_list_pull_requests",
+            "description": "Lists pull requests in a GitHub repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."},
+                    "state": {"type": "string", "enum": ["open", "closed", "all"], "description": "PR state filter."}
+                },
+                "required": ["repo"]
+            }
+        },
+        {
+            "name": "github_create_pull_request",
+            "description": "Creates a pull request on GitHub (requires user confirmation).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Repository in format 'owner/repo'."},
+                    "title": {"type": "string", "description": "Pull request title."},
+                    "head": {"type": "string", "description": "Name of the branch containing changes."},
+                    "base": {"type": "string", "description": "Name of branch you want to merge into (default: 'main')."},
+                    "body": {"type": "string", "description": "PR description."},
+                    "confirmed": {"type": "boolean", "description": "Explicit user authorization."}
                 },
                 "required": ["repo", "title", "head"]
             }
         }
     ]
+
+
+def tools_search(query: str, category: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Dynamic Tool Discovery / Two-Tier Catalog Search.
+    Discovers tools matching a query across Studio, GitHub, and custom MCP servers.
+    """
+    all_tools = get_roblox_studio_tools() + get_github_tools()
+    try:
+        from mcp_client import global_mcp_registry
+        for t in global_mcp_registry.list_all_tools():
+            all_tools.append({
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["parameters"]
+            })
+    except Exception:
+        pass
+
+    q = query.lower().strip()
+    matches = []
+    for t in all_tools:
+        name = t["name"].lower()
+        desc = t.get("description", "").lower()
+        if q in name or q in desc or not q:
+            matches.append(t)
+
+    return {
+        "status": "success",
+        "query": query,
+        "count": len(matches),
+        "tools": matches[:10]
+    }
+
+
+def list_roblox_studios_sync() -> Dict[str, Any]:
+    """Inspects operating system processes for active Roblox Studio instances."""
+    import subprocess
+    studios = []
+    try:
+        if sys.platform == "darwin":
+            out = subprocess.check_output(["ps", "-ax", "-o", "pid,command"], stderr=subprocess.DEVNULL, timeout=2.0).decode("utf-8")
+            for line in out.splitlines():
+                if "RobloxStudio" in line and not "grep" in line:
+                    parts = line.strip().split(None, 1)
+                    if len(parts) >= 2:
+                        pid = parts[0]
+                        studios.append({
+                            "studio_id": f"studio-{pid}",
+                            "pid": int(pid),
+                            "name": "Roblox Studio (macOS)",
+                            "command": parts[1][:120]
+                        })
+        elif sys.platform == "win32":
+            out = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq RobloxStudioBeta.exe"], stderr=subprocess.DEVNULL, timeout=2.0).decode("utf-8")
+            if "RobloxStudioBeta.exe" in out:
+                studios.append({
+                    "studio_id": "studio-primary",
+                    "name": "Roblox Studio (Windows)",
+                    "status": "running"
+                })
+    except Exception:
+        pass
+
+    if studios:
+        return {
+            "status": "success",
+            "connected": True,
+            "count": len(studios),
+            "studios": studios,
+            "message": f"Detected {len(studios)} active Roblox Studio instance(s)."
+        }
+    return {
+        "status": "offline",
+        "connected": False,
+        "count": 0,
+        "studios": [],
+        "message": "No running Roblox Studio instances detected on this machine."
+    }
+
 
 
 def get_generic_tools(server_id: str, name: str) -> List[Dict[str, Any]]:
@@ -542,6 +1112,63 @@ def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
     return ai_tools
 
 
+def select_active_tools_for_query(prompt: str, history: Optional[List[Dict[str, str]]] = None, max_tools: int = 8) -> List[Dict[str, Any]]:
+    """
+    Two-Tier Dynamic Tool Selection for Llama 3.2 1B.
+    Selects 6 to 8 relevant tool schemas per turn to avoid starving the 1B context window,
+    while tools_search allows on-demand discovery of any other tool.
+    """
+    p_lower = prompt.lower()
+    if history:
+        for m in history[-2:]:
+            p_lower += " " + str(m.get("content", "")).lower()
+
+    selected_names = {"terminal_run", "terminal_read_output", "web_search", "tools_search"}
+
+    is_roblox = any(k in p_lower for k in ["roblox", "studio", "luau", "vfx", "particle", "part", "cframe", "hitbox", "tween", "model", "mesh", "script"])
+    is_github = any(k in p_lower for k in ["git", "github", "commit", "pull request", "branch", "repo", "issue", "pr"])
+    is_vfx = any(k in p_lower for k in ["vfx", "particle", "lightning", "fire", "spark", "explosion", "aura", "spell"])
+    is_file = any(k in p_lower for k in ["file", "directory", "folder", "read", "write", "patch", "search_files"])
+
+    if is_roblox:
+        selected_names.update(["execute_luau", "studio_execute_luau", "script_search", "insert_asset", "list_roblox_studios", "inspect_instance"])
+    if is_vfx:
+        selected_names.update(["search_vfx_database", "generate_material", "insert_asset"])
+    if is_github:
+        selected_names.update(["github_commit_file", "github_get_file_contents", "github_create_pull_request", "github_list_repos"])
+    if is_file:
+        selected_names.update(["read_file", "list_directory", "create_file", "edit_file"])
+
+    all_schemas = get_all_mcp_ai_tool_schemas()
+    has_tools_search = any(s.get("function", {}).get("name") == "tools_search" for s in all_schemas)
+    if not has_tools_search:
+        all_schemas.append({
+            "type": "function",
+            "function": {
+                "name": "tools_search",
+                "description": "Searches for available tools by query or category and returns their exact schemas.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Keyword to search tools for."}
+                    },
+                    "required": ["query"]
+                }
+            }
+        })
+
+    filtered = []
+    for s in all_schemas:
+        fn_name = s.get("function", {}).get("name", "")
+        if fn_name in selected_names:
+            filtered.append(s)
+            if len(filtered) >= max_tools:
+                break
+
+    return filtered if filtered else all_schemas[:max_tools]
+
+
+
 async def execute_studio_mcp_command(
     cmd_path: str,
     tool_name: str,
@@ -819,135 +1446,147 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
         }
 
     # --------------------------------------------------------------------------
-    # GITHUB MCP TOOLS
+    # MULTI-STUDIO & ROBLOX STUDIO TOOLS
     # --------------------------------------------------------------------------
-    elif tool_name == "github_commit_file":
-        repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
-        path = args.get("path") or args.get("file_path") or args.get("filepath") or ""
-        content = args.get("content") or args.get("code") or ""
-        msg = args.get("commit_message") or args.get("message") or args.get("msg") or "update via Stroke AI"
+    elif tool_name == "list_roblox_studios":
+        return list_roblox_studios_sync()
 
-        if not args.get("confirmed", False):
-            return {
-                "status": "requires_confirmation",
-                "tool": "github_commit_file",
-                "repo": repo,
-                "path": path,
-                "commit_message": msg,
-                "message": f"Confirmation Required: External GitHub write requested to repository '{repo}' for path '{path}'. Please confirm execution before proceeding.",
-                "requires_confirmation": True
-            }
-
-        token = user_github_token or os.getenv("GITHUB_TOKEN")
-        if token:
+    elif tool_name in [t["name"] for t in get_roblox_studio_tools()]:
+        studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
+        url = studio_srv.get("url") if studio_srv else None
+        if url:
             try:
-                headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
-                import base64
-                encoded = base64.b64encode(content.encode("utf-8")).decode("utf-8")
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    # Check if file exists to get SHA
-                    sha = None
-                    check_res = await client.get(f"{GITHUB_API_BASE}/repos/{repo}/contents/{path}", headers=headers)
-                    if check_res.status_code == 200:
-                        sha = check_res.json().get("sha")
+                async with httpx.AsyncClient(timeout=4.0) as client:
+                    res = await client.post(f"{url}/{tool_name}", json=args)
+                    if res.status_code == 200:
+                        return {"status": "success", "connected": True, "source": "roblox_studio_mcp_live", "result": res.json()}
+            except Exception:
+                pass
+        return {
+            "status": "offline",
+            "connected": False,
+            "source": "roblox_studio_mcp",
+            "tool": tool_name,
+            "message": f"Roblox Studio session is offline: unable to execute '{tool_name}'."
+        }
 
-                    body = {"message": msg, "content": encoded}
-                    if sha:
-                        body["sha"] = sha
+    # --------------------------------------------------------------------------
+    # GITHUB MCP TOOLS (Integrated with github_service.py)
+    # --------------------------------------------------------------------------
+    elif tool_name.startswith("github_"):
+        import github_service
+        token = user_github_token or github_service.get_stored_github_token()
 
-                    put_res = await client.put(f"{GITHUB_API_BASE}/repos/{repo}/contents/{path}", headers=headers, json=body)
-                    if put_res.status_code in (200, 201):
-                        return {
-                            "status": "success",
-                            "source": "github_mcp",
-                            "repo": repo,
-                            "path": path,
-                            "commit_sha": put_res.json().get("commit", {}).get("sha"),
-                            "message": f"Successfully committed '{path}' to GitHub."
-                        }
-                    else:
-                        err_detail = put_res.text[:200]
-                        return {
-                            "status": "error",
-                            "source": "github_mcp",
-                            "repo": repo,
-                            "path": path,
-                            "message": f"GitHub API rejected commit (HTTP {put_res.status_code}): {err_detail}"
-                        }
-            except Exception as e:
-                print(f"[STROKE MCP GITHUB ERROR] {e}", flush=True)
+        if tool_name == "github_commit_file":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            path = args.get("path") or args.get("file_path") or args.get("filepath") or ""
+            content = args.get("content") or args.get("code") or ""
+            msg = args.get("commit_message") or args.get("message") or args.get("msg") or "update via Stroke AI"
+            branch = args.get("branch")
+
+            if not args.get("confirmed", False):
+                return {
+                    "status": "requires_confirmation",
+                    "tool": "github_commit_file",
+                    "repo": repo,
+                    "path": path,
+                    "commit_message": msg,
+                    "message": f"Confirmation Required: External GitHub write requested to repository '{repo}' for path '{path}'. Please confirm execution before proceeding.",
+                    "requires_confirmation": True
+                }
+
+            if not token:
                 return {
                     "status": "error",
                     "source": "github_mcp",
                     "repo": repo,
                     "path": path,
-                    "message": f"GitHub commit failed: {str(e)}"
+                    "message": "GITHUB_TOKEN is not configured. Please supply a valid GitHub Personal Access Token in environment or profile."
                 }
 
-        return {
-            "status": "error",
-            "source": "github_mcp",
-            "repo": repo,
-            "path": path,
-            "message": "GitHub commit failed: GITHUB_TOKEN is not configured. Please configure your GITHUB_TOKEN environment variable to commit to remote repositories."
-        }
+            return await github_service.commit_file(repo, path, content, msg, branch=branch, confirmed=True)
 
-    elif tool_name == "github_create_pull_request":
-        repo = args.get("repo", "AyanshShrivastava/stroke")
-        title = args.get("title", "")
-        head = args.get("head", "")
-        base = args.get("base", "main")
-        body = args.get("body", "")
+        elif tool_name == "github_create_pull_request":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            title = args.get("title", "")
+            head = args.get("head", "")
+            base = args.get("base", "main")
+            body = args.get("body", "")
 
-        token = user_github_token or os.getenv("GITHUB_TOKEN")
-        if token:
-            try:
-                headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
-                async with httpx.AsyncClient(timeout=15.0) as client:
-                    pr_body = {"title": title, "head": head, "base": base, "body": body}
-                    pr_res = await client.post(f"{GITHUB_API_BASE}/repos/{repo}/pulls", headers=headers, json=pr_body)
-                    if pr_res.status_code in (200, 201):
-                        pr_data = pr_res.json()
-                        return {
-                            "status": "success",
-                            "source": "github_mcp",
-                            "repo": repo,
-                            "title": title,
-                            "head": head,
-                            "base": base,
-                            "pr_url": pr_data.get("html_url", f"https://github.com/{repo}/pull/{pr_data.get('number')}"),
-                            "pr_number": pr_data.get("number")
-                        }
-                    else:
-                        err_detail = pr_res.text[:200]
-                        return {
-                            "status": "error",
-                            "source": "github_mcp",
-                            "repo": repo,
-                            "message": f"GitHub API failed to create pull request (HTTP {pr_res.status_code}): {err_detail}"
-                        }
-            except Exception as e:
+            if not args.get("confirmed", False):
+                return {
+                    "status": "requires_confirmation",
+                    "tool": "github_create_pull_request",
+                    "repo": repo,
+                    "title": title,
+                    "head": head,
+                    "base": base,
+                    "message": f"Confirmation Required: Open Pull Request '{title}' ({head} -> {base}) in repository '{repo}'?",
+                    "requires_confirmation": True
+                }
+
+            if not token:
                 return {
                     "status": "error",
                     "source": "github_mcp",
                     "repo": repo,
-                    "message": f"GitHub PR creation failed: {str(e)}"
+                    "message": "GITHUB_TOKEN is not configured. Provide token to create PR via API."
                 }
 
-        return {
-            "status": "error",
-            "source": "github_mcp",
-            "repo": repo,
-            "title": title,
-            "head": head,
-            "base": base,
-            "pr_url": f"https://github.com/{repo}/pull/new/{head}",
-            "message": "GitHub PR creation failed: GITHUB_TOKEN is not configured. Provide token to create PR via API."
-        }
+            return await github_service.create_pull_request(repo, title, head, base=base, body=body, confirmed=True)
+
+        elif tool_name == "github_list_repos":
+            return await github_service.list_repositories(
+                visibility=args.get("visibility", "all"),
+                per_page=int(args.get("per_page", 30))
+            )
+
+        elif tool_name == "github_get_file_contents":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            path = args.get("path") or args.get("file_path") or ""
+            return await github_service.get_file_contents(repo, path, ref=args.get("ref"))
+
+        elif tool_name == "github_list_branches":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            return await github_service.list_branches(repo)
+
+        elif tool_name == "github_create_branch":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            new_b = args.get("new_branch", "")
+            from_b = args.get("from_branch", "main")
+            return await github_service.create_branch(repo, new_b, from_branch=from_b, confirmed=args.get("confirmed", False))
+
+        elif tool_name == "github_list_issues":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            return await github_service.list_issues(repo, state=args.get("state", "open"))
+
+        elif tool_name == "github_create_issue":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            title = args.get("title", "")
+            body = args.get("body", "")
+            return await github_service.create_issue(repo, title, body=body, confirmed=args.get("confirmed", False))
+
+        elif tool_name == "github_list_pull_requests":
+            repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
+            return await github_service.list_pull_requests(repo, state=args.get("state", "open"))
 
     # --------------------------------------------------------------------------
-    # CUSTOM MCP SERVERS DISPATCH
+    # DYNAMIC TOOL DISCOVERY TOOL
     # --------------------------------------------------------------------------
+    elif tool_name == "tools_search":
+        return tools_search(args.get("query", ""), category=args.get("category"))
+
+    # --------------------------------------------------------------------------
+    # CUSTOM MCP SERVERS DISPATCH (Via McpClient & McpServerRegistry)
+    # --------------------------------------------------------------------------
+    try:
+        from mcp_client import global_mcp_registry
+        if "__" in tool_name or tool_name in [t["name"] for t in global_mcp_registry.list_all_tools()]:
+            res = await global_mcp_registry.dispatch_tool(tool_name, args)
+            return res
+    except Exception:
+        pass
+
     for s_id, server in _MCP_REGISTRY.items():
         if any(t["name"] == tool_name for t in server.get("tools", [])):
             url = server.get("url")

@@ -85,15 +85,24 @@ export function compactMessages(msgs: ChatMsg[]): string | null {
   return parts.join("\n\n");
 }
 
-// Placeholder Builder Core replies until a local model ships.
-export function fakeReply(prompt: string, ingest: Ingested): string {
-  const p = prompt.toLowerCase();
-  const ctx = ingest ? `\n\n_Context: ${ingest.files} ingested files from **${ingest.name}**._` : "";
-  if (/(roblox|luau|lua|tween|vfx|particle|emitter)/.test(p)) {
-    return `**Builder Core** — Luau draft (placeholder reply)\n\n\`\`\`lua\nlocal TweenService = game:GetService("TweenService")\nlocal info = TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)\n\nlocal emitter = Instance.new("ParticleEmitter")\nemitter.Color = ColorSequence.new({\n  ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 240, 180)),\n  ColorSequenceKeypoint.new(0.35, Color3.fromRGB(255, 140, 40)),\n  ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 10, 0)),\n})\nemitter.Rate = 0\nemitter.Parent = script.Parent\nemitter:Emit(48)\n\`\`\`${ctx}`;
+// Authentic Stroke AI communication to Python FastAPI backend
+export async function fetchAiReply(prompt: string, history: ChatMsg[] = []): Promise<string> {
+  try {
+    const res = await fetch("/api/ai/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        messages: history.map((m) => ({ role: m.role === "builder" ? "assistant" : "user", content: m.text }))
+      })
+    });
+    if (!res.ok) {
+      return `[Stroke AI Error: HTTP ${res.status}] Failed to obtain inference from local neural model.`;
+    }
+    const data = await res.json();
+    return data.message || data.reply || (typeof data === "string" ? data : JSON.stringify(data));
+  } catch (err) {
+    return `[Stroke AI Offline] Could not reach backend engine (${(err as Error).message}). Ensure the Python FastAPI server is running.`;
   }
-  if (/(python|c\+\+|javascript|typescript|bug|refactor|function)/.test(p)) {
-    return `**Builder Core** — code pass (placeholder reply)\n\nI'd break this into: 1) reproduce, 2) isolate the failing unit, 3) refactor with tests.\n\n\`\`\`python\ndef solve(data):\n    # TODO: real model output arrives with the local engine\n    return sorted(set(data))\n\`\`\`${ctx}`;
-  }
-  return `**Builder Core** received: "${prompt.slice(0, 140)}"\n\nThis is a placeholder reply — the offline model isn't connected yet. Your message is still saved and the Archivist will compact it within 30 seconds.${ctx}`;
 }
+

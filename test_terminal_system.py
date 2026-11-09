@@ -107,13 +107,13 @@ def test_session_lifecycle_and_tools():
     print(f"  [OK] list_terminals returned {len(sessions)} active sessions")
 
     # 3. run_command in Session 1
-    run_res1 = TerminalManager.run_command(session_id1, "python", ["-c", "print('Hello from Session 1')"])
+    run_res1 = TerminalManager.run_command(session_id1, "python", ["-c", "print('Hello from Session 1')"], approved=True)
     assert run_res1["exit_code"] == 0
     assert "Hello from Session 1" in run_res1["stdout"]
     print(f"  [OK] Session 1 run_command output: {run_res1['stdout'].strip()}")
 
     # 4. run_command in Session 2 (Independent cwd / state)
-    run_res2 = TerminalManager.run_command(session_id2, "python", ["-c", "print('Hello from Session 2')"])
+    run_res2 = TerminalManager.run_command(session_id2, "python", ["-c", "print('Hello from Session 2')"], approved=True)
     assert run_res2["exit_code"] == 0
     assert "Hello from Session 2" in run_res2["stdout"]
     print(f"  [OK] Session 2 run_command output: {run_res2['stdout'].strip()}")
@@ -163,7 +163,7 @@ def test_timeouts_and_cancellation():
 
     # Run sleep command with a 2-second timeout
     t0 = time.time()
-    res = TerminalManager.run_command(session_id, "python", ["-c", "import time; time.sleep(10)"], timeout_sec=2)
+    res = TerminalManager.run_command(session_id, "python", ["-c", "import time; time.sleep(10)"], timeout_sec=2, approved=True)
     elapsed = time.time() - t0
     assert elapsed < 4.0, f"Process timeout took too long: {elapsed}s"
     assert res["state"] == "timed_out"
@@ -223,7 +223,11 @@ local function onHitboxTriggered(hitPart: BasePart)
 end
 """
     luau_report = RobloxDomainTestRunner.test_luau_code(luau_code, "Roblox hitbox damage script")
-    assert luau_report["is_verified"] is True
+    if shutil.which("luau-analyze"):
+        assert luau_report["is_verified"] is True
+    else:
+        assert luau_report["is_verified"] is False
+        assert "AST" in luau_report["compiler_used"]
     print(f"  [OK] Luau verified with {len(luau_report['passed_checks'])} passing checks.")
     print("Test 7 passed successfully.")
 

@@ -35,7 +35,8 @@ def test_terminal_api():
     res = client.post("/terminal/run", json={
         "session_id": session_id,
         "command": "python",
-        "args": ["-c", "import sys; print(f'Python API Test {sys.version_info.major}')"]
+        "args": ["-c", "import sys; print(f'Python API Test {sys.version_info.major}')"],
+        "approved": True
     })
     assert res.status_code == 200
     run_data = res.json()

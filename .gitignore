@@ -41,3 +41,5 @@ build/
 *.sw?
 .stroke_scratch/
 src-tauri/target/
+data/.vault_key
+*.vault_key

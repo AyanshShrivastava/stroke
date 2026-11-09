@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AppShell } from "@/components/keyboard/AppShell";
-import { compactMessages, fakeReply, getChat, loadIngest, newMsg, upsertChat, type Chat } from "@/lib/keyboard-store";
+import { compactMessages, fetchAiReply, getChat, loadIngest, newMsg, upsertChat, type Chat } from "@/lib/keyboard-store";
 
 export const Route = createFileRoute("/_authenticated/chat/$chatId")({
   head: () => ({ meta: [{ title: "Chat — Stroke" }, { name: "description", content: "Work with the Builder Core agent." }] }),
@@ -68,17 +68,22 @@ function ChatWindow({ chatId }: { chatId: string }) {
 
   if (!chat) return <div className="p-10 text-muted-foreground">Chat not found. <Link to="/chat" className="text-primary">Open latest</Link></div>;
 
-  function send() {
+  async function send() {
     const text = input.trim();
     if (!text || thinking || !chat) return;
     const userMsg = newMsg("user", text);
     const next = { ...chat, title: chat.messages.length ? chat.title : text.slice(0, 40), updatedAt: Date.now(), messages: [...chat.messages, userMsg] };
     setChat(next); upsertChat(next); setInput(""); setThinking(true);
-    setTimeout(() => {
+    try {
+      const reply = await fetchAiReply(text, next.messages);
       const c = chatRef.current!;
-      const done = { ...c, updatedAt: Date.now(), messages: [...c.messages, newMsg("builder", fakeReply(text, loadIngest()))] };
-      setChat(done); upsertChat(done); setThinking(false);
-    }, 900);
+      const done = { ...c, updatedAt: Date.now(), messages: [...c.messages, newMsg("builder", reply)] };
+      setChat(done); upsertChat(done);
+    } catch (err) {
+      toast.error("Failed to query Stroke AI");
+    } finally {
+      setThinking(false);
+    }
   }
 
   return (

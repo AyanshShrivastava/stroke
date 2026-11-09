@@ -304,7 +304,8 @@ class TestStrokeAgentLoop(unittest.TestCase):
                 "repo": "AyanshShrivastava/stroke",
                 "path": "test_fake_file.py",
                 "content": "print('hello')",
-                "message": "test commit"
+                "message": "test commit",
+                "confirmed": True
             }))
             self.assertEqual(res.get("status"), "error")
             self.assertIn("GITHUB_TOKEN is not configured", res.get("message", ""))

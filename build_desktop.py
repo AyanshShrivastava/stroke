@@ -80,7 +80,13 @@ def run_build():
         "google.cloud.firestore",
         "google.cloud.firestore_v1",
         "webview",
-        "llama_cpp"
+        "llama_cpp",
+        "paths_service",
+        "backup_service",
+        "workspace_service",
+        "file_service",
+        "isolated_workspace",
+        "model_download_service"
     ]
 
     for imp in hidden_imports:

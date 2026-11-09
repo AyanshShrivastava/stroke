@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "Roblox_Studio": {
+      "name": "Roblox Studio",
+      "transport": "stdio",
+      "enabled": true,
+      "description": "Imported MCP server Roblox_Studio",
+      "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP",
+      "args": [],
+      "env": {}
+    }
+  }
+}

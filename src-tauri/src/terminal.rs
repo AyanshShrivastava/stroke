@@ -1,3 +1,9 @@
+// ARCHITECTURE NOTICE:
+// This Rust terminal module is deprecated and preserved for standalone Tauri builds only.
+// The canonical, secure, and actively-maintained terminal service for Stroke is implemented
+// in Python (terminal_service.py) and exposed via FastAPI in main.py / desktop.py.
+// All model tool executions, security boundary checks, and agent loops use terminal_service.py.
+
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
