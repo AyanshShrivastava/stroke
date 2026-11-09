@@ -42,6 +42,43 @@
   </script>
 
   <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    /* WebKit/Blink Autofill Reset - Prevents Chrome from overriding input backgrounds to white */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover, 
+    input:-webkit-autofill:focus, 
+    input:-webkit-autofill:active,
+    textarea:-webkit-autofill,
+    select:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0 1000px #0b0e14 inset !important;
+      box-shadow: 0 0 0 1000px #0b0e14 inset !important;
+      -webkit-text-fill-color: #f0f3f8 !important;
+      color: #f0f3f8 !important;
+      caret-color: #00ff66 !important;
+      font-family: inherit !important;
+      transition: background-color 50000s ease-in-out 0s;
+    }
+
+    /* Dedicated dark styling for modal auth inputs */
+    #authEmailInput, #authPasswordInput, #authOtpInput {
+      background-color: #0b0e14 !important;
+      color: #f0f3f8 !important;
+    }
+    #authEmailInput:-webkit-autofill,
+    #authEmailInput:-webkit-autofill:hover,
+    #authEmailInput:-webkit-autofill:focus,
+    #authPasswordInput:-webkit-autofill,
+    #authPasswordInput:-webkit-autofill:hover,
+    #authPasswordInput:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0 1000px #0b0e14 inset !important;
+      box-shadow: 0 0 0 1000px #0b0e14 inset !important;
+      -webkit-text-fill-color: #f0f3f8 !important;
+      color: #f0f3f8 !important;
+    }
+
     body {
       background-color: #090b10;
       color: #00ff66;
@@ -813,13 +850,13 @@
       <div id="otpStep1" class="space-y-3.5">
         <div>
           <label class="block text-[11px] text-brand-muted uppercase mb-1">Developer Email</label>
-          <input id="authEmailInput" type="email" placeholder="you@domain.com" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+          <input id="authEmailInput" type="email" placeholder="you@domain.com" autocomplete="email" spellcheck="false" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
         </div>
 
         <div>
           <label class="block text-[11px] text-brand-muted uppercase mb-1">Make / Enter Password</label>
           <div class="relative">
-            <input id="authPasswordInput" type="password" placeholder="Enter or create password (min 6 chars)" minlength="6" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono pr-14">
+            <input id="authPasswordInput" type="password" placeholder="Enter or create password (min 6 chars)" minlength="6" autocomplete="current-password" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono pr-14">
             <button id="toggleAuthPasswordBtn" type="button" class="absolute right-2.5 top-2 text-[11px] text-brand-muted hover:text-white font-mono uppercase">Show</button>
           </div>
           <p class="text-[10px] text-brand-muted mt-1 font-mono">Enter your email and create a password to receive your 6-digit OTP code.</p>
