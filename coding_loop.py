@@ -1350,7 +1350,8 @@ class StrokeCodingLoop:
         initial_reply: str,
         llm_generate_fn,
         user_email: Optional[str] = None,
-        max_iterations: Optional[int] = None
+        max_iterations: Optional[int] = None,
+        include_markdown_report: bool = True
     ) -> Tuple[str, Dict[str, Any], List[Dict[str, str]]]:
         """
         Executes the Write -> Test -> Diagnose -> Fix -> Retest coding loop across ALL code blocks.
@@ -1480,7 +1481,7 @@ class StrokeCodingLoop:
 
             # CRITICAL: When code works cleanly, give the answer immediately!
             # Stroke does not keep looping to "improve" code that is already working.
-            if not blocking_errors and report.get("is_verified", False):
+            if not blocking_errors and (report.get("is_verified", False) or report.get("static_status") == "PASS"):
                 state_ledger.record_resolved_check(f"{primary_lang.title()}Module", len(report.get("passed_checks", [])))
                 loop_steps.append({
                     "name": f"Verification Passed (Pass {iteration})",
@@ -1570,7 +1571,7 @@ class StrokeCodingLoop:
 
         effective_iterations = final_report.get("iteration_count", min(iteration, safety_ceiling))
         report_md = cls.format_verification_report_markdown(final_report, iterations=effective_iterations)
-        final_reply = current_reply + report_md
+        final_reply = (current_reply + report_md) if include_markdown_report else current_reply
 
         if final_report.get("is_verified", False):
             first_valid_code = current_blocks[0]["code"] if 'current_blocks' in locals() and current_blocks else ""

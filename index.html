@@ -199,9 +199,14 @@
     </p>
 
     <!-- Launch Button -->
-    <button id="greetingLaunchBtn" class="mt-10 px-8 py-3 rounded-xl bg-[#a3e635] hover:bg-[#bef264] text-black font-semibold text-sm transition-all duration-200 shadow-glow-lime font-mono flex items-center space-x-2">
-      <span>Launch Stroke →</span>
-    </button>
+    <div class="mt-10 flex flex-col items-center space-y-3">
+      <button id="greetingLaunchBtn" class="px-8 py-3 rounded-xl bg-[#a3e635] hover:bg-[#bef264] text-black font-semibold text-sm transition-all duration-200 shadow-glow-lime font-mono flex items-center space-x-2">
+        <span>Launch Stroke (Local Offline) →</span>
+      </button>
+      <button id="greetingSignInBtn" type="button" class="text-xs text-neutral-400 hover:text-white font-mono transition-colors">
+        Have an account? Sign In with Email
+      </button>
+    </div>
   </div>
 
   <!-- ========================================================================= -->
@@ -1030,9 +1035,12 @@
           <p class="text-[10px] text-brand-muted mt-1 font-mono">Enter your email and create a password to receive your 6-digit OTP code.</p>
         </div>
 
-        <div class="pt-1">
+        <div class="pt-1 space-y-2">
           <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button flex items-center justify-center space-x-2 font-mono">
             <span id="sendOtpBtnText">Send 6-Digit OTP Code →</span>
+          </button>
+          <button id="guestContinueBtn" type="button" class="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-brand-muted hover:text-white text-xs font-mono transition-colors">
+            Continue in Offline / Guest Mode →
           </button>
         </div>
       </div>
@@ -1424,7 +1432,8 @@
       const greetingView = document.getElementById('greetingView');
       const appWorkspace = document.getElementById('appWorkspace');
       const isAuth = !!(state.userEmail && state.userEmail.includes('@'));
-      if (!isAuth) {
+      const shouldShowWorkspace = isAuth || state.hasLaunched || localStorage.getItem('stroke_has_launched') === 'true';
+      if (!shouldShowWorkspace) {
         if (greetingView) {
           greetingView.classList.remove('hidden');
           greetingView.style.display = 'flex';
@@ -1444,6 +1453,46 @@
         }
       }
     }
+
+    // --- CENTRAL MODAL ORCHESTRATION ---
+    function closeAllModals() {
+      const modalIds = [
+        'settingsModal',
+        'workspacesModal',
+        'mcpHubModal',
+        'terminalModal',
+        'backupsModal',
+        'modelsModal',
+        'authModal',
+        'mandatoryMemoryModal'
+      ];
+      modalIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+      const popover = document.getElementById('profilePopover');
+      if (popover) popover.classList.add('hidden');
+    }
+
+    // Attach backdrop click dismissal to all full-screen modals
+    [
+      'settingsModal',
+      'workspacesModal',
+      'mcpHubModal',
+      'terminalModal',
+      'backupsModal',
+      'modelsModal',
+      'authModal'
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('click', (e) => {
+          if (e.target === el) {
+            el.classList.add('hidden');
+          }
+        });
+      }
+    });
 
     async function checkMagicLinkCallback() {
       const hash = window.location.hash;
@@ -1827,15 +1876,17 @@
         chatSearchInput.focus();
         chatSearchInput.select();
       } else if (e.key === 'Escape') {
-        if (!settingsModal.classList.contains('hidden')) {
-          closeSettingsModal();
+        const confirmModal = document.getElementById('confirmationModal');
+        if (confirmModal && !confirmModal.classList.contains('hidden')) {
+          return;
         }
+        closeAllModals();
       }
     });
 
     // 5b. Settings Modal Controller
     async function openSettingsModal() {
-      profilePopover.classList.add('hidden');
+      closeAllModals();
       settingsModal.classList.remove('hidden');
       settingsEmailText.textContent = state.userEmail || 'Not signed in';
       settingsTempSlider.value = state.creativity !== undefined ? state.creativity : state.temperature;
@@ -2118,6 +2169,7 @@
     closeMcpHubBtn.addEventListener('click', () => mcpHubModal.classList.add('hidden'));
 
     function openMcpModal() {
+      closeAllModals();
       mcpHubModal.classList.remove('hidden');
       loadMcpConfigJson();
       loadDiscoveredMcpTools();
@@ -2419,6 +2471,7 @@
 
     function openTerminalModal() {
       if (terminalModal) {
+        closeAllModals();
         terminalModal.classList.remove('hidden');
         refreshTerminalSessions();
       }
@@ -3482,6 +3535,7 @@
 
     // 14. Auth Modal, Sign Out, & OTP Gateway
     function openAuthModal() {
+      closeAllModals();
       const email = state.userEmail;
       const curEmailEl = document.getElementById('authModalCurrentEmail');
       const curSignOutBtn = document.getElementById('authModalSignOutBtn');
@@ -3515,21 +3569,41 @@
       state.userEmail = null;
       state.chatMessages = [];
       state.allChats = [];
+      state.hasLaunched = true;
+      localStorage.setItem('stroke_has_launched', 'true');
       const list = document.getElementById('recentChatsList');
-      if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">Sign in to view chats.</div>';
+      if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">Operating in Local / Offline mode.</div>';
       messagesList.innerHTML = '';
       messagesList.classList.add('hidden');
       emptyStateHero.classList.remove('hidden');
-      profilePopover.classList.add('hidden');
-      authModal.classList.add('hidden');
+      closeAllModals();
       syncViewAuthState();
       updateUserIdentityUI();
-      showToast('Signed out of Stroke.');
+      showToast('Signed out of Stroke. Operating in Local / Offline mode.');
     }
 
     const greetingLaunchBtn = document.getElementById('greetingLaunchBtn');
     if (greetingLaunchBtn) {
-      greetingLaunchBtn.addEventListener('click', openAuthModal);
+      greetingLaunchBtn.addEventListener('click', () => {
+        state.hasLaunched = true;
+        localStorage.setItem('stroke_has_launched', 'true');
+        syncViewAuthState();
+      });
+    }
+    const greetingSignInBtn = document.getElementById('greetingSignInBtn');
+    if (greetingSignInBtn) {
+      greetingSignInBtn.addEventListener('click', openAuthModal);
+    }
+    const guestContinueBtn = document.getElementById('guestContinueBtn');
+    if (guestContinueBtn) {
+      guestContinueBtn.addEventListener('click', () => {
+        state.hasLaunched = true;
+        localStorage.setItem('stroke_has_launched', 'true');
+        closeAllModals();
+        syncViewAuthState();
+        updateUserIdentityUI();
+        showToast('Operating in Local / Offline mode.');
+      });
     }
 
     document.getElementById('closeAuthModalBtn').addEventListener('click', () => authModal.classList.add('hidden'));
@@ -4159,6 +4233,7 @@
 
     if (openWorkspacesBtn) {
       openWorkspacesBtn.addEventListener('click', () => {
+        closeAllModals();
         loadApprovedWorkspaces();
         workspacesModal.classList.remove('hidden');
       });
@@ -4284,6 +4359,7 @@
 
     if (openBackupsBtn) {
       openBackupsBtn.addEventListener('click', () => {
+        closeAllModals();
         loadBackups();
         backupsModal.classList.remove('hidden');
       });
@@ -4375,6 +4451,7 @@
 
     if (openModelsBtn) {
       openModelsBtn.addEventListener('click', () => {
+        closeAllModals();
         updateModelsStatus();
         modelsModal.classList.remove('hidden');
         if (!modelPollTimer) {
