@@ -175,6 +175,7 @@ pub struct TerminalSession {
     pub last_command: Option<String>,
     pub last_duration_ms: Option<f64>,
     pub pending_approval: Option<PendingApproval>,
+    pub active_pid: Option<u32>,
 }
 
 impl TerminalSession {
@@ -190,6 +191,7 @@ impl TerminalSession {
             last_command: None,
             last_duration_ms: None,
             pending_approval: None,
+            active_pid: None,
         }
     }
 
@@ -375,16 +377,25 @@ impl TerminalSession {
             }
         };
 
+        self.active_pid = child.id();
         let mut stdout_str = String::new();
         let mut stderr_str = String::new();
 
         let run_future = async {
-            if let Some(mut stdout) = child.stdout.take() {
-                let _ = stdout.read_to_string(&mut stdout_str).await;
-            }
-            if let Some(mut stderr) = child.stderr.take() {
-                let _ = stderr.read_to_string(&mut stderr_str).await;
-            }
+            let mut out_take = child.stdout.take();
+            let mut err_take = child.stderr.take();
+
+            let out_fut = async {
+                if let Some(mut stdout) = out_take {
+                    let _ = stdout.read_to_string(&mut stdout_str).await;
+                }
+            };
+            let err_fut = async {
+                if let Some(mut stderr) = err_take {
+                    let _ = stderr.read_to_string(&mut stderr_str).await;
+                }
+            };
+            tokio::join!(out_fut, err_fut);
             child.wait().await
         };
 
@@ -404,6 +415,7 @@ impl TerminalSession {
             }
         };
 
+        self.active_pid = None;
         let clean_stdout = redact_sensitive_data(&stdout_str);
         let clean_stderr = redact_sensitive_data(&stderr_str);
 
@@ -547,6 +559,16 @@ impl TerminalManager {
     pub fn stop_terminal(&self, session_id: &str) -> Result<serde_json::Value, String> {
         let mut map = self.sessions.lock().unwrap();
         let session = map.get_mut(session_id).ok_or_else(|| format!("Session '{}' not found", session_id))?;
+        if let Some(pid) = session.active_pid.take() {
+            #[cfg(unix)]
+            {
+                let _ = std::process::Command::new("kill").args(["-9", &pid.to_string()]).output();
+            }
+            #[cfg(windows)]
+            {
+                let _ = std::process::Command::new("taskkill").args(["/F", "/PID", &pid.to_string()]).output();
+            }
+        }
         session.state = "terminated".to_string();
         session.append_output("system", "Session process terminated.");
         map.remove(session_id);

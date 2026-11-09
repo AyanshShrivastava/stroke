@@ -34,6 +34,8 @@ import asyncio
 import unittest
 from typing import Dict, Any, List
 
+os.environ["STROKE_TEST_AUTO_APPROVE"] = "1"
+
 # Ensure repository root is on sys.path
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 if REPO_ROOT not in sys.path:
@@ -278,11 +280,16 @@ class TestStrokeAgentLoop(unittest.TestCase):
         self.assertIn("Binary not found", bin_res["stderr"])
 
         # 4. Unlisted command requires user security authorization
-        unlisted_res = ToolDispatcher.dispatch("terminal_run", {
-            "session_id": sid,
-            "executable": "arbitrary_custom_binary_12345"
-        })
-        self.assertEqual(unlisted_res.get("status"), "requires_approval")
+        auto_app = os.environ.pop("STROKE_TEST_AUTO_APPROVE", None)
+        try:
+            unlisted_res = ToolDispatcher.dispatch("terminal_run", {
+                "session_id": sid,
+                "executable": "arbitrary_custom_binary_12345"
+            })
+            self.assertEqual(unlisted_res.get("status"), "requires_approval")
+        finally:
+            if auto_app:
+                os.environ["STROKE_TEST_AUTO_APPROVE"] = auto_app
         print("  [PASS] Terminal failures reliably return real exit codes (7, 127, SyntaxError) and enforce security approval.")
 
     def test_08_no_false_claims_on_github_commit_without_token(self):

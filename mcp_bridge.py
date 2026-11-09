@@ -732,38 +732,86 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
 
     elif tool_name == "studio_search_scripts":
         q = args.get("query", "")
+        studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
+        url = studio_srv.get("url") if studio_srv else None
+        if url:
+            try:
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    res = await client.post(f"{url}/search_scripts", json={"query": q})
+                    if res.status_code == 200:
+                        return {
+                            "status": "success",
+                            "connected": True,
+                            "source": "roblox_studio_mcp_live",
+                            "query": q,
+                            "matches": res.json().get("matches", [])
+                        }
+            except Exception:
+                pass
+
         return {
-            "status": "success",
+            "status": "offline",
+            "connected": False,
             "source": "roblox_studio_mcp",
             "query": q,
-            "matches": [
-                {"path": "ReplicatedStorage.Shared.Modules.VFXController", "type": "ModuleScript"},
-                {"path": "ServerScriptService.VFXService", "type": "Script"},
-                {"path": "StarterPlayer.StarterPlayerScripts.VFXClient", "type": "LocalScript"}
-            ]
+            "matches": [],
+            "message": "Roblox Studio MCP bridge is offline. Connect Studio plugin or MCP companion to search live scripts."
         }
 
     elif tool_name == "studio_insert_vfx_asset":
         asset_id = args.get("asset_id", "")
         folder = args.get("target_folder", "ReplicatedStorage.VFX")
+        studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
+        url = studio_srv.get("url") if studio_srv else None
+        if url:
+            try:
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    res = await client.post(f"{url}/insert_asset", json={"asset_id": asset_id, "target_folder": folder})
+                    if res.status_code == 200:
+                        return {
+                            "status": "success",
+                            "connected": True,
+                            "source": "roblox_studio_mcp_live",
+                            "asset_id": asset_id,
+                            "target_folder": folder,
+                            "message": f"Asset {asset_id} instantiated into {folder}."
+                        }
+            except Exception:
+                pass
+
         return {
-            "status": "success",
+            "status": "offline",
+            "connected": False,
             "source": "roblox_studio_mcp",
             "asset_id": asset_id,
             "target_folder": folder,
-            "message": f"Asset {asset_id} instantiated into {folder}."
+            "message": f"Roblox Studio session is offline: unable to instantiate asset {asset_id} into {folder}."
         }
 
     elif tool_name == "studio_get_console":
         max_lines = args.get("max_lines", 30)
+        studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
+        url = studio_srv.get("url") if studio_srv else None
+        if url:
+            try:
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    res = await client.post(f"{url}/get_console", json={"max_lines": max_lines})
+                    if res.status_code == 200:
+                        return {
+                            "status": "success",
+                            "connected": True,
+                            "source": "roblox_studio_mcp_live",
+                            "lines": res.json().get("lines", [])
+                        }
+            except Exception:
+                pass
+
         return {
-            "status": "success",
+            "status": "offline",
+            "connected": False,
             "source": "roblox_studio_mcp",
-            "lines": [
-                "[Studio] Initializing Studio DataModel bridge...",
-                "[Studio] Verified ReplicatedStorage.VFX container structure.",
-                "[Studio] Active Luau runtime synchronized at 60.0 FPS."
-            ][:max_lines]
+            "lines": [],
+            "message": "Roblox Studio session is offline: cannot fetch live Studio output logs."
         }
 
     # --------------------------------------------------------------------------
@@ -893,16 +941,22 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
                     resp = await client.post(f"{url}/execute", json={"tool": tool_name, "arguments": args})
                     if resp.status_code == 200:
                         return {"status": "success", "source": f"mcp_{s_id}", "result": resp.json()}
-            except Exception:
-                pass
-
-            return {
-                "status": "success",
-                "source": f"mcp_{s_id}_bridge",
-                "server": server.get("name"),
-                "tool_executed": tool_name,
-                "message": f"Tool '{tool_name}' executed via custom MCP server '{server.get('name')}'.",
-                "args_received": args
-            }
+                    else:
+                        return {
+                            "status": "error",
+                            "source": f"mcp_{s_id}",
+                            "server": server.get("name"),
+                            "status_code": resp.status_code,
+                            "message": f"Custom MCP server '{server.get('name')}' returned HTTP {resp.status_code}."
+                        }
+            except Exception as exc:
+                return {
+                    "status": "error",
+                    "source": f"mcp_{s_id}",
+                    "server": server.get("name"),
+                    "tool_executed": tool_name,
+                    "message": f"Failed to connect to custom MCP server at '{url}': {str(exc)}",
+                    "args_received": args
+                }
 
     return {"status": "unknown_tool", "tool_name": tool_name}

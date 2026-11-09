@@ -383,6 +383,34 @@ def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = ""
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", prompt[:28]).strip("_") or f"Ability_{secrets.token_hex(3)}"
     model_name = f"GodTier_{domain}_{slug}"
 
+    # 1. Parse real rate from code if present (e.g. .Rate = 120 or Rate = 50)
+    rate_m = re.search(r'\.?Rate\s*=\s*(\d+)', extracted_code)
+    actual_rate = int(rate_m.group(1)) if rate_m else (120 if domain == "Slash" else 60)
+
+    # 2. Parse lifetime
+    life_m = re.search(r'NumberRange\.new\(\s*([\d\.]+)\s*,\s*([\d\.]+)\s*\)', extracted_code)
+    actual_lifetime = [float(life_m.group(1)), float(life_m.group(2))] if life_m else [0.2, 0.4]
+
+    # 3. Parse drag & acceleration
+    drag_m = re.search(r'\.?Drag\s*=\s*([\d\.]+)', extracted_code)
+    actual_drag = float(drag_m.group(1)) if drag_m else (22.0 if domain == "Slash" else 5.0)
+
+    # 4. Deterministic quality calculation based on real technical criteria:
+    calc_score = 0.0
+    if code_match and len(extracted_code) > 80:
+        calc_score += 3.0
+    if any(inst in extracted_code for inst in ["ParticleEmitter", "Beam", "Trail", "Attachment"]):
+        calc_score += 2.0
+    if any(cl in extracted_code for cl in ["Debris", "TweenService", "task.delay", "Destroy"]):
+        calc_score += 1.5
+    if any(seq in extracted_code for seq in ["ColorSequence", "NumberSequence", "NumberRange"]):
+        calc_score += 1.5
+    if textures_found and any(t != "rbxassetid://13780268621" for t in textures_found):
+        calc_score += 2.0
+    else:
+        calc_score += 1.0
+    quality_score = round(min(10.0, max(5.0, calc_score)), 2)
+
     # Build structural model for database
     learned_model = {
         "name": model_name,
@@ -392,9 +420,9 @@ def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = ""
             {
                 "name": f"{domain}_PrimaryMatrixEmitter",
                 "properties": {
-                    "Rate": random.randint(80, 160),
-                    "Lifetime": [0.15, 0.35],
-                    "Drag": 22.0 if domain == "Slash" else 5.0,
+                    "Rate": actual_rate,
+                    "Lifetime": actual_lifetime,
+                    "Drag": actual_drag,
                     "Acceleration": [0, 20, 0] if domain == "Slash" else [0, 0, 0],
                     "Texture": list(textures_found)[0]
                 }
@@ -414,7 +442,23 @@ def evaluate_and_learn_god_tier_vfx(prompt: str, reply: str, tool_used: str = ""
         "attachments": [{"name": "RootAttachment0"}, {"name": "RootAttachment1"}],
         "textures": set(textures_found),
         "snippet": extracted_code,
-        "god_tier_score": round(random.uniform(9.4, 9.9), 2),
+        "god_tier_score": quality_score,
+        "is_verified_luau": bool(code_match),
+        "source_provenance": {
+            "origin": "user_session",
+            "prompt_slug": slug,
+            "tool_used": tool_used or "god_tier_synthesis",
+            "contributor": (user_email[:4] + "***") if user_email else "anonymous",
+            "verified_criteria": [
+                k for k, v in [
+                    ("luau_code_block", bool(code_match)),
+                    ("instance_construction", any(inst in extracted_code for inst in ["ParticleEmitter", "Beam", "Trail"])),
+                    ("resource_cleanup", any(cl in extracted_code for cl in ["Debris", "TweenService", "Destroy"])),
+                    ("dynamic_sequences", any(seq in extracted_code for seq in ["ColorSequence", "NumberSequence"])),
+                    ("authentic_assets", bool(textures_found))
+                ] if v
+            ]
+        },
         "learned_dynamically": True,
         "learned_at": datetime.now(timezone.utc).isoformat()
     }
@@ -506,19 +550,26 @@ def get_learned_chat_insights(domain: Optional[str] = None, max_items: int = 10)
 
 
 def get_learning_telemetry() -> Dict[str, Any]:
-    """Returns real-time continuous learning telemetry."""
+    """Returns real-time continuous learning telemetry based on verified models and insights."""
     insights = load_learned_insights()
+    all_learned = load_learned_vfx_models()
     domains_count: Dict[str, int] = {}
+    total_scores = 0.0
     for i in insights:
         d = i.get("domain", "General")
         domains_count[d] = domains_count.get(d, 0) + 1
+        total_scores += float(i.get("impact_score", 0.0))
+
+    avg_score = round(total_scores / len(insights), 2) if insights else 0.0
 
     return {
         "total_chats_distilled": _LEARNED_POOL.get("total_chats_learned", len(insights)),
         "active_insights_count": len(insights),
+        "verified_models_count": len(all_learned),
         "domains_breakdown": domains_count,
-        "accuracy_enhancement_ratio": f"+{round(min(38.5, len(insights) * 1.8), 1)}%",
-        "learning_status": "active_continuous_recursive",
+        "average_quality_score": avg_score,
+        "learning_system": "reviewed_knowledge_registry",
+        "description": "Dynamic RAG retrieval index augmenting prompt context with verified techniques.",
         "recent_insights": insights[:5]
     }
 

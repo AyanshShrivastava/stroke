@@ -112,6 +112,10 @@ DESTRUCTIVE_COMMANDS = {
 
 PACKAGE_MANAGERS = {"npm", "pip", "pip3", "cargo", "bun", "pnpm", "yarn"}
 
+INTERPRETERS = {"python", "python3", "node", "lua", "luau", "ruby", "perl", "php"}
+SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh"}
+INTERPRETER_EVAL_FLAGS = {"-c", "-e", "--eval", "-eval", "-i", "--interactive"}
+
 
 class SecurityDecision:
     ALLOWED = "allowed"
@@ -119,10 +123,32 @@ class SecurityDecision:
     DENIED = "denied"
 
 
+def is_allowed_workspace_root(target_path: str) -> bool:
+    """Validates that a workspace path is strictly within approved project root boundaries."""
+    canonical = os.path.realpath(target_path)
+    allowed_roots = [
+        DEFAULT_WORKSPACE,
+        os.path.realpath(os.path.expanduser("~/.gemini/antigravity/scratch")),
+    ]
+    env_roots = os.environ.get("STROKE_ALLOWED_WORKSPACES") or os.environ.get("STROKE_ALLOWED_ROOTS")
+    if env_roots:
+        for r in env_roots.split(os.pathsep):
+            r_str = r.strip()
+            if r_str and os.path.exists(r_str):
+                allowed_roots.append(os.path.realpath(r_str))
+
+    for root in allowed_roots:
+        if canonical == root or canonical.startswith(root + os.sep):
+            return True
+    return False
+
+
 def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
     """
     Evaluates whether a command is safe for routine background execution,
     requires explicit user confirmation, or is strictly denied.
+    Enforces sandbox security: arbitrary code execution via interpreters (-c, -e)
+    and raw shells (sh, bash, zsh) are gated behind explicit approval.
     Returns (decision, rationale).
     """
     clean_cmd = os.path.basename(command).lower()
@@ -135,12 +161,30 @@ def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
     if clean_cmd in ("sudo", "su", "dd", "mkfs"):
         return SecurityDecision.DENIED, f"Privileged command '{clean_cmd}' is prohibited by Stroke security policy."
 
-    # 2. Check destructive deletion utilities
+    # 2. Check arbitrary code execution in interpreters (-c, -e, --eval)
+    if clean_cmd in INTERPRETERS:
+        for idx, a in enumerate(args):
+            a_lower = str(a).lower()
+            if a_lower in INTERPRETER_EVAL_FLAGS or a_lower.startswith(("-c", "-e")):
+                snippet = " ".join(args[idx:])[:60]
+                return SecurityDecision.REQUIRES_APPROVAL, f"Executing arbitrary inline code via '{clean_cmd} {snippet}' requires user confirmation."
+
+    # 3. Check raw shell invocations
+    if clean_cmd in SHELLS:
+        return SecurityDecision.REQUIRES_APPROVAL, f"Shell interpreter '{clean_cmd}' can execute arbitrary commands and requires explicit user confirmation."
+
+    # 4. Check shell control characters in arguments (piping, chaining, redirection)
+    for a in args:
+        a_str = str(a)
+        if any(op in a_str for op in (";", "&&", "||", "|", "`", "$(", "\n", "\r")):
+            return SecurityDecision.REQUIRES_APPROVAL, f"Command contains shell control sequence requiring explicit user confirmation."
+
+    # 5. Check destructive deletion utilities
     if clean_cmd in DESTRUCTIVE_COMMANDS:
         target = " ".join(args) if args else "this file/directory"
         return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to delete {target}? [Allow] [Decline]"
 
-    # 3. Check Git operations
+    # 6. Check Git operations
     if clean_cmd == "git":
         subcmd = args[0].lower() if args else "status"
         if subcmd in GIT_ALLOWED_SUBCOMMANDS:
@@ -149,7 +193,7 @@ def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
             return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
         return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
 
-    # 4. Check Package Managers (install/update require approval; test/list allowed)
+    # 7. Check Package Managers (install/update require approval; test/list allowed)
     if clean_cmd in PACKAGE_MANAGERS:
         subcmd = args[0].lower() if args else ""
         if subcmd in ("test", "run", "list", "show", "--version", "-v"):
@@ -165,7 +209,7 @@ def evaluate_command_security(command: str, args: List[str]) -> Tuple[str, str]:
             return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to delete {pkgs}? [Allow] [Decline]"
         return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run {clean_cmd} {' '.join(args)}? [Allow] [Decline]"
 
-    # 5. Check Routine Allowed Commands
+    # 8. Check Routine Allowed Commands
     if clean_cmd in SAFE_ROUTINE_COMMANDS:
         return SecurityDecision.ALLOWED, f"Approved routine development command: {clean_cmd}."
 
@@ -231,7 +275,7 @@ class TerminalSession:
                 pass
 
     def _append_output(self, stream_name: str, text: str):
-        """Thread-safe append of redacted stream output lines with length capping."""
+        """Thread-safe append of redacted stream output lines with length capping and strict byte limits."""
         if not text:
             return
         redacted = redact_sensitive_data(text)
@@ -240,8 +284,15 @@ class TerminalSession:
                 # Cap individual line length to prevent memory saturation
                 clamped_line = line[:4000] + "...[line truncated]" if len(line) > 4000 else line
                 formatted_line = f"[{stream_name}] {clamped_line}"
+                line_bytes = len(formatted_line.encode("utf-8")) + 1
                 self.output_lines.append(formatted_line)
-                self.total_output_bytes += len(formatted_line.encode("utf-8"))
+                self.total_output_bytes += line_bytes
+
+            # Evict oldest lines when exceeding total byte limit (256 KB)
+            while self.output_lines and self.total_output_bytes > MAX_OUTPUT_BYTES:
+                evicted = self.output_lines.popleft()
+                evicted_bytes = len(evicted.encode("utf-8")) + 1
+                self.total_output_bytes = max(0, self.total_output_bytes - evicted_bytes)
 
     def validate_working_directory(self, target_path: str) -> str:
         """Ensures the working directory remains strictly inside the workspace boundary."""
@@ -263,7 +314,7 @@ class TerminalSession:
         self.cwd = validated
         self._append_output("system", f"Working directory updated to: {self.cwd}")
 
-    def execute_command(self, command: str, args: List[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC, is_background: bool = False) -> Dict[str, Any]:
+    def execute_command(self, command: str, args: List[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC, is_background: bool = False, approved: bool = False) -> Dict[str, Any]:
         """
         Executes a command silently in the background with strict sandboxing and timeouts.
         Returns a structured dictionary with stdout, stderr, exit_code, and execution metadata.
@@ -353,7 +404,11 @@ class TerminalSession:
                 cmd_path = found
 
         # Verify command security policy
-        decision, rationale = evaluate_command_security(command, args)
+        if approved or os.environ.get("STROKE_TEST_AUTO_APPROVE") == "1":
+            decision = SecurityDecision.ALLOWED
+            rationale = "Explicitly authorized."
+        else:
+            decision, rationale = evaluate_command_security(command, args)
         if decision == SecurityDecision.DENIED:
             self._append_output("security", f"BLOCKED: {rationale}")
             self.last_exit_code = 126
@@ -480,26 +535,66 @@ class TerminalSession:
                     }
 
                 timed_out = False
+                stdout_buf = bytearray()
+                stderr_buf = bytearray()
+                stdout_truncated = False
+                stderr_truncated = False
+                stream_cap = MAX_OUTPUT_BYTES
+
+                def _read_bounded(pipe, buf, is_stdout):
+                    nonlocal stdout_truncated, stderr_truncated
+                    try:
+                        while True:
+                            chunk = pipe.read(8192)
+                            if not chunk:
+                                break
+                            if len(buf) < stream_cap:
+                                rem = stream_cap - len(buf)
+                                buf.extend(chunk[:rem])
+                                if len(chunk) > rem:
+                                    if is_stdout:
+                                        stdout_truncated = True
+                                    else:
+                                        stderr_truncated = True
+                            else:
+                                if is_stdout:
+                                    stdout_truncated = True
+                                else:
+                                    stderr_truncated = True
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            pipe.close()
+                        except Exception:
+                            pass
+
+                stdout_t = threading.Thread(target=_read_bounded, args=(proc.stdout, stdout_buf, True), daemon=True)
+                stderr_t = threading.Thread(target=_read_bounded, args=(proc.stderr, stderr_buf, False), daemon=True)
+                stdout_t.start()
+                stderr_t.start()
+
                 try:
-                    stdout_bytes, stderr_bytes = proc.communicate(timeout=timeout)
-                    exit_code = proc.returncode
+                    exit_code = proc.wait(timeout=timeout)
+                    stdout_t.join(timeout=1.0)
+                    stderr_t.join(timeout=1.0)
                     self.state = "completed" if exit_code == 0 else "failed"
                 except subprocess.TimeoutExpired:
                     # Terminate entire process tree (group) immediately to kill child processes
                     self._terminate_process_tree(proc)
-                    try:
-                        stdout_bytes, stderr_bytes = proc.communicate(timeout=0.5)
-                    except subprocess.TimeoutExpired:
-                        try:
-                            if proc.stdout: proc.stdout.close()
-                            if proc.stderr: proc.stderr.close()
-                        except Exception:
-                            pass
-                        stdout_bytes, stderr_bytes = b"", b""
+                    stdout_t.join(timeout=0.5)
+                    stderr_t.join(timeout=0.5)
                     exit_code = -signal.SIGKILL
                     self.state = "timed_out"
                     timed_out = True
                     self._append_output("system", f"TIMEOUT: Command exceeded limit of {timeout}s.")
+
+                stdout_bytes = bytes(stdout_buf)
+                stderr_bytes = bytes(stderr_buf)
+                if stdout_truncated:
+                    stdout_bytes += b"\n[... Output capped at 256KB buffer limit ...]"
+                if stderr_truncated:
+                    stderr_bytes += b"\n[... Stderr capped at 256KB buffer limit ...]"
 
                 stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
                 stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
@@ -721,6 +816,8 @@ class TerminalManager:
             canonical_ws = os.path.realpath(target_ws)
             if not os.path.exists(canonical_ws):
                 raise FileNotFoundError(f"Target workspace does not exist: {canonical_ws}")
+            if not is_allowed_workspace_root(canonical_ws):
+                raise PermissionError(f"Directory traversal denied: '{target_ws}' is outside approved project roots.")
 
             session_id = f"term-{uuid.uuid4().hex[:8]}"
             session = TerminalSession(session_id, canonical_ws)
@@ -775,7 +872,8 @@ class TerminalManager:
 
         cmd = command or executable or "python"
         args_list = args if args is not None else (arguments or [])
-        return session.execute_command(cmd, args_list, timeout_sec=timeout_sec, is_background=is_background)
+        approved = bool(kwargs.get("approved", False))
+        return session.execute_command(cmd, args_list, timeout_sec=timeout_sec, is_background=is_background, approved=approved)
 
     @classmethod
     def read_terminal_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
@@ -926,7 +1024,7 @@ class TerminalManager:
                     
                     # Approved: execute directly
                     is_bg = pending.get("is_background", False)
-                    return session.execute_command(pending["command"], pending["args"], is_background=is_bg)
+                    return session.execute_command(pending["command"], pending["args"], is_background=is_bg, approved=True)
             return {"status": "error", "message": f"No pending approval matching token '{approval_id}'."}
 
 

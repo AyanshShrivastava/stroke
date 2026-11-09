@@ -1,3 +1,9 @@
+/**
+ * ARCHITECTURE NOTICE:
+ * This TanStack Router client represents an experimental web view with mock replies.
+ * The production desktop client for Stroke is canonicalized in desktop.py (FastAPI backend +
+ * PyWebView Cyberpunk matrix interface at http://127.0.0.1:8501) with local GGUF neural inference.
+ */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";

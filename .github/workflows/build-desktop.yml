@@ -24,6 +24,12 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt pyinstaller pywebview
 
+      - name: Run Test Suite
+        env:
+          STROKE_DEV_CONSOLE_OTP: "1"
+        run: |
+          python -m unittest discover -s . -p "test_*.py"
+
       - name: Compile macOS Application Bundle
         run: |
           python build_desktop.py
@@ -55,6 +61,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller pywebview
+
+      - name: Run Test Suite
+        env:
+          STROKE_DEV_CONSOLE_OTP: "1"
+        run: |
+          python -m unittest discover -s . -p "test_*.py"
 
       - name: Compile Windows Executable
         run: |

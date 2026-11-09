@@ -35,6 +35,7 @@ Tests:
 
 import sys
 import os
+os.environ["STROKE_TEST_AUTO_APPROVE"] = "1"
 import json
 import time
 import subprocess

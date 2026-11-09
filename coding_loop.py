@@ -622,7 +622,8 @@ class RobloxDomainTestRunner:
                     syntax_status = "PASS"
                 elif ec == 127:
                     # luau-analyze binary not installed on host, AST analysis was used
-                    syntax_status = "NOT RUN"
+                    syntax_status = "NOT RUN (COMPILER NOT INSTALLED)"
+                    compiler_used = "Stroke AST & Roblox Static Rules (Compiler Missing)"
                     untested_limitations.append("External luau-analyze compiler binary not in host PATH; verified via AST parser and static Roblox DataModel rules only. Live Luau runtime execution is unverified.")
                 else:
                     syntax_status = "FAIL"
@@ -659,9 +660,14 @@ class RobloxDomainTestRunner:
             syntax_status = "FAIL"
             static_status = "FAIL"
 
-        # Final Verification Status
+        # Final Verification Status: strictly requires real compiler verification and no syntax/API failures
         blocking_errors = [f for f in failed_checks if f.get("type") == "error"]
-        is_verified = (len(blocking_errors) == 0 and api_status != "FAIL" and syntax_status != "FAIL")
+        is_verified = (
+            len(blocking_errors) == 0 
+            and api_status != "FAIL" 
+            and syntax_status == "PASS" 
+            and has_compiler_verified
+        )
 
         return {
             "passed_checks": passed_checks,
@@ -1301,12 +1307,12 @@ class StrokeCodingLoop:
                     b_rep = RobloxDomainTestRunner.test_python_code(b_code, prompt)
                 else:
                     b_rep = {
-                        "passed_checks": [f"Block {b_idx}: Generic Syntax Validated"],
+                        "passed_checks": [f"Block {b_idx}: Generic Syntax Inspected"],
                         "failed_checks": [],
-                        "untested_limitations": [f"No compiler installed for {b_lang}."],
-                        "is_verified": True,
+                        "untested_limitations": [f"No compiler installed for {b_lang}. Live execution and semantics unverified."],
+                        "is_verified": False,
                         "has_compiler_verified": False,
-                        "syntax_status": "NOT RUN",
+                        "syntax_status": "NOT RUN (NO COMPILER)",
                         "static_status": "PASS",
                         "api_status": "NOT RUN",
                         "runtime_status": "NOT RUN",

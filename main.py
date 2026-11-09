@@ -37,14 +37,17 @@ import secrets
 import random
 import urllib.parse
 import html
+import hmac
+import base64
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple, Set
 
-from fastapi import FastAPI, HTTPException, Query, status, Request, Response, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Query, status, Request, Response, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 import httpx
+from cryptography.fernet import Fernet
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -158,7 +161,7 @@ app.add_middleware(
 
 class SendOtpRequest(BaseModel):
     email: str = Field(..., description="Target user email identity address")
-    password: Optional[str] = Field(None, min_length=6, description="User password for account creation or authentication")
+    password: str = Field(..., min_length=8, description="User password for account creation or authentication (minimum 8 characters)")
     force_resend: Optional[bool] = Field(False, description="Force regeneration and outbound dispatch of a fresh OTP")
 
     @field_validator("email")
@@ -295,6 +298,55 @@ async def serve_index_page():
 
 _LOCAL_OTP_STORE: Dict[str, Dict[str, Any]] = {}
 _AUTHENTICATED_IDENTITIES: Set[str] = set()
+_OAUTH_STATE_REGISTRY: Dict[str, Dict[str, Any]] = {}
+_FAILED_OTP_ATTEMPTS: Dict[str, Dict[str, Any]] = {}
+
+# Application-level encryption for sensitive tokens in Firestore
+_STROKE_ENCRYPTION_KEY = os.getenv("STROKE_ENCRYPTION_KEY")
+if not _STROKE_ENCRYPTION_KEY:
+    _key_material = hashlib.sha256(b"stroke_firestore_token_vault_key_2026").digest()
+    _STROKE_ENCRYPTION_KEY = base64.urlsafe_b64encode(_key_material).decode("utf-8")
+
+_FERNET = Fernet(_STROKE_ENCRYPTION_KEY.encode("utf-8") if isinstance(_STROKE_ENCRYPTION_KEY, str) else _STROKE_ENCRYPTION_KEY)
+
+def encrypt_token(plain_token: Optional[str]) -> Optional[str]:
+    """Encrypts sensitive tokens (e.g. GitHub PATs) before storing in Firestore."""
+    if not plain_token:
+        return None
+    try:
+        return _FERNET.encrypt(plain_token.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return plain_token
+
+def decrypt_token(cipher_token: Optional[str]) -> Optional[str]:
+    """Decrypts application-encrypted tokens from Firestore, falling back to plaintext for migration."""
+    if not cipher_token:
+        return None
+    try:
+        return _FERNET.decrypt(cipher_token.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return cipher_token
+
+def hash_password(password: str) -> str:
+    """Computes salted PBKDF2-HMAC password hash with 100,000 iterations."""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
+    return f"pbkdf2_sha256$100000${salt.hex()}${dk.hex()}"
+
+def verify_password(password: str, stored_hash: Optional[str]) -> bool:
+    """Verifies a password against stored PBKDF2-HMAC (with legacy SHA-256 fallback)."""
+    if not stored_hash:
+        return False
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        parts = stored_hash.split("$")
+        if len(parts) == 4:
+            iterations = int(parts[1])
+            salt = bytes.fromhex(parts[2])
+            expected_dk = bytes.fromhex(parts[3])
+            dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+            return hmac.compare_digest(dk, expected_dk)
+    # Legacy SHA-256 fallback
+    return hmac.compare_digest(hashlib.sha256(password.encode("utf-8")).hexdigest(), stored_hash)
 
 
 async def send_real_outbound_email(email: str, otp_code: str, password: Optional[str] = None) -> Tuple[bool, str]:
@@ -425,23 +477,32 @@ async def send_real_outbound_email(email: str, otp_code: str, password: Optional
     except Exception as sendmail_err:
         pass
 
-    # 5. Direct Stroke Security Gateway (Instant Verification Key)
-    print(f"[AUTH GATEWAY] Generated authentic 6-digit verification key for {email}: {otp_code}", flush=True)
-    return True, "stroke_gateway"
+    # 5. Outbound failure handling
+    if os.environ.get("STROKE_DEV_CONSOLE_OTP", "0") == "1":
+        print(f"[AUTH DEV] STROKE_DEV_CONSOLE_OTP active for test environment.", flush=True)
+        return True, "dev_console"
+
+    print(f"[AUTH ERROR] All outbound email dispatch mechanisms failed for {email}.", flush=True)
+    return False, "delivery_failed"
 
 
 @app.post("/auth/send-otp", tags=["Authentication"])
 async def send_otp(payload: SendOtpRequest):
     """
     POST /auth/send-otp
-    1. Validates the email address and user password.
-    2. Generates and dispatches strictly ONE verification code.
-    3. Performs an atomic write to Firestore and local store.
+    1. Validates the email address and enforces minimum 8-character password.
+    2. Generates and dispatches strictly ONE verification code via verified channels.
+    3. Performs an atomic write to Firestore and local store with salted PBKDF2 hashing.
     4. Supports force_resend to regenerate OTP codes if initial email is delayed.
-    5. Returns success status WITH the authentic 6-digit OTP code for instant verification.
+    5. Returns success status without leaking the OTP in the HTTP response.
     """
     email = payload.email
-    password = payload.password or "StrokeAuth2026!"
+    password = payload.password
+    if not password or len(password.strip()) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters long."
+        )
     force_resend = bool(payload.force_resend)
 
     # Throttling check: if recently dispatched (< 15 seconds), throttle to prevent spam
@@ -455,14 +516,12 @@ async def send_otp(payload: SendOtpRequest):
             if (now - sent_at).total_seconds() < 15:
                 expires_at = existing.get("otp_expires_at", now + timedelta(seconds=285))
                 ttl = int(max(0, (expires_at - now).total_seconds()))
-                active_code = existing.get("otp_code")
                 print(f"[AUTH REUSE] Throttling resend for {email} (TTL {ttl}s)", flush=True)
                 return {
                     "status": "success",
-                    "message": f"A verification email was recently dispatched to {email}. Code: {active_code}",
+                    "message": f"A verification email was recently dispatched to {email}. Please check your inbox and spam folder.",
                     "email": email,
-                    "otp_code": active_code,
-                    "provider": existing.get("provider", "stroke_gateway"),
+                    "provider": existing.get("provider", "email"),
                     "expires_in_seconds": ttl
                 }
 
@@ -470,6 +529,11 @@ async def send_otp(payload: SendOtpRequest):
     otp_expires_at = now + timedelta(minutes=5)
 
     dispatched, provider = await send_real_outbound_email(email, otp_code, password)
+    if not dispatched:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to deliver verification code to {email}. Outbound mail service (SMTP/Resend) unreachable or unconfigured."
+        )
 
     _LOCAL_OTP_STORE[email] = {
         "otp_code": otp_code,
@@ -486,7 +550,7 @@ async def send_otp(payload: SendOtpRequest):
             "otp_code": otp_code,
             "otp_expires_at": otp_expires_at,
             "provider": provider,
-            "password_hash": hashlib.sha256(password.encode()).hexdigest(),
+            "password_hash": hash_password(password),
             "updated_at": now.isoformat()
         }, merge=True)
     except Exception as exc:
@@ -500,7 +564,6 @@ async def send_otp(payload: SendOtpRequest):
         "status": "success",
         "message": msg,
         "email": email,
-        "otp_code": otp_code,
         "provider": provider,
         "expires_in_seconds": 300
     }
@@ -576,13 +639,26 @@ async def verify_otp(payload: VerifyOtpRequest):
     """
     email = payload.email
     submitted_code = payload.otp_code
+    now = datetime.now(timezone.utc)
+
+    # Enforce lockout check
+    lockout_info = _FAILED_OTP_ATTEMPTS.get(email)
+    if lockout_info:
+        locked_until = lockout_info.get("locked_until")
+        if locked_until and now < locked_until:
+            wait_sec = int((locked_until - now).total_seconds())
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Account temporarily locked due to excessive failed attempts. Please retry in {wait_sec} seconds."
+            )
+
     verified = False
 
     # 1. Fast local verification
     local_data = _LOCAL_OTP_STORE.get(email)
     if local_data and local_data.get("otp_code") == submitted_code:
         expires_at = local_data.get("otp_expires_at")
-        if expires_at and datetime.now(timezone.utc) < expires_at:
+        if expires_at and now < expires_at:
             verified = True
             _LOCAL_OTP_STORE.pop(email, None)
 
@@ -631,12 +707,22 @@ async def verify_otp(payload: VerifyOtpRequest):
             print(f"[AUTH VERIFY NOTE] Firestore direct lookup note: {exc}", flush=True)
 
     if not verified:
+        fail_rec = _FAILED_OTP_ATTEMPTS.setdefault(email, {"count": 0, "locked_until": None})
+        fail_rec["count"] += 1
+        if fail_rec["count"] >= 5:
+            fail_rec["locked_until"] = now + timedelta(minutes=15)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed verification attempts. Account locked for 15 minutes."
+            )
+        remaining = 5 - fail_rec["count"]
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired 6-digit verification code. Please check your email inbox and try again."
+            detail=f"Invalid or expired 6-digit verification code. {remaining} attempt(s) remaining before lockout."
         )
 
-    # Clean state management: clear single-use OTP and authenticate profile
+    # Verification successful: clear lockout record and single-use OTP
+    _FAILED_OTP_ATTEMPTS.pop(email, None)
     _LOCAL_OTP_STORE.pop(email, None)
     _AUTHENTICATED_IDENTITIES.add(email)
     try:
@@ -683,6 +769,11 @@ async def github_connect(email: str = Query(..., description="Target verified us
     # Secure compound state: email + cryptographic hex entropy token
     random_hex = secrets.token_hex(16)
     compound_state = f"{clean_email}::{random_hex}"
+    # Server-side registration of OAuth state with 10-minute expiration
+    _OAUTH_STATE_REGISTRY[compound_state] = {
+        "email": clean_email,
+        "expires_at": time.time() + 600
+    }
 
     oauth_params = {
         "client_id": GITHUB_CLIENT_ID,
@@ -727,15 +818,25 @@ async def github_callback(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Decompose compound state
-    target_email = ""
-    if state and "::" in state:
-        target_email = state.split("::")[0].strip().lower()
+    # Decompose compound state and validate against server-side session nonce registry
+    if not state or state not in _OAUTH_STATE_REGISTRY:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Compromised, unrecognized, or missing OAuth state tracking token."
+        )
 
+    stored_session = _OAUTH_STATE_REGISTRY.pop(state)  # Single-use consume
+    if time.time() > stored_session.get("expires_at", 0):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OAuth authorization session has expired. Please initiate GitHub connect again."
+        )
+
+    target_email = stored_session.get("email", "").strip().lower()
     if not target_email or "@" not in target_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Compromised or missing OAuth state tracking token."
+            detail="Invalid email identity associated with OAuth state token."
         )
 
     # Background asynchronous token exchange with GitHub
@@ -781,7 +882,8 @@ async def github_callback(
         """
         return HTMLResponse(content=error_html, status_code=status.HTTP_400_BAD_REQUEST)
 
-    # Atomic write to user's Firestore document
+    # Application-level encryption for access token before Firestore write
+    cipher_token = encrypt_token(access_token)
     user_ref = db.collection("users").document(target_email)
     transaction = db.transaction()
 
@@ -789,11 +891,11 @@ async def github_callback(
     def save_github_token_transaction(tx: firestore.Transaction, doc_ref: firestore.DocumentReference):
         snap = doc_ref.get(transaction=tx)
         if snap.exists:
-            tx.update(doc_ref, {"github_token": access_token})
+            tx.update(doc_ref, {"github_token": cipher_token})
         else:
             tx.set(doc_ref, {
                 "email": target_email,
-                "github_token": access_token,
+                "github_token": cipher_token,
                 "database_fed": False,
                 "otp_code": None,
                 "otp_expires_at": None
@@ -1217,7 +1319,8 @@ async def execute_mcp_call(payload: McpExecuteRequest):
         try:
             snap = db.collection("users").document(clean_email).get()
             if snap.exists:
-                user_gh_token = snap.to_dict().get("github_token")
+                raw_token = snap.to_dict().get("github_token")
+                user_gh_token = decrypt_token(raw_token)
         except Exception:
             pass
 
@@ -1391,7 +1494,8 @@ async def get_user_status(email: str = Query(..., description="Target user email
                 item["created_at"] = item["created_at"].isoformat()
             records_list.append(item)
 
-        gh_token = user_data.get("github_token")
+        raw_gh_token = user_data.get("github_token")
+        gh_token = decrypt_token(raw_gh_token)
         masked_token = f"{gh_token[:6]}••••••••{gh_token[-4:]}" if gh_token and len(gh_token) > 10 else None
 
         return {
@@ -1765,9 +1869,15 @@ async def get_ai_status():
     local_size_mb = round(os.path.getsize(DEFAULT_GGUF_PATH) / (1024 * 1024), 1) if os.path.exists(DEFAULT_GGUF_PATH) else 0.0
 
     llama_cpp_ready = False
+    gpu_offload_supported = False
     try:
         import llama_cpp
         llama_cpp_ready = True
+        if hasattr(llama_cpp, "llama_supports_gpu_offload"):
+            try:
+                gpu_offload_supported = bool(llama_cpp.llama_supports_gpu_offload())
+            except Exception:
+                gpu_offload_supported = False
     except ImportError:
         llama_cpp_ready = False
 
@@ -1793,7 +1903,9 @@ async def get_ai_status():
             "size_mb": local_size_mb,
             "path": DEFAULT_GGUF_PATH
         },
-        "llama_cpp_hardware_accelerated": llama_cpp_ready,
+        "llama_cpp_installed": llama_cpp_ready,
+        "llama_cpp_hardware_accelerated": gpu_offload_supported,
+        "gpu_offload_supported": gpu_offload_supported,
         "ollama": {
             "online": ollama_online,
             "models": local_ollama_models
@@ -3920,7 +4032,26 @@ async def verify_code_endpoint(payload: VerifyCodePayload):
 # PRIVATE INTERNAL BACKGROUND TERMINAL SERVICE ENDPOINTS (AI AGENT ACCESS ONLY)
 # ==============================================================================
 
-@app.post("/terminal/create", tags=["AI Terminal Service"])
+async def verify_terminal_access(request: Request):
+    """
+    Enforces private background terminal access policy:
+    1. Client must be on loopback (127.0.0.1, ::1, testclient) OR provide valid X-Internal-Token.
+    2. Strictly blocks external network traversal to the local command execution engine.
+    """
+    client_host = request.client.host if request.client else "127.0.0.1"
+    is_loopback = client_host in ("127.0.0.1", "::1", "localhost", "testclient")
+    internal_token = request.headers.get("X-Internal-Token") or request.headers.get("X-Stroke-Token")
+    expected_token = os.environ.get("STROKE_INTERNAL_SECRET")
+
+    if not is_loopback:
+        if not expected_token or internal_token != expected_token:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Terminal service is restricted to internal loopback and authorized agent sessions."
+            )
+
+
+@app.post("/terminal/create", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def create_terminal_endpoint(payload: Optional[CreateTerminalPayload] = None):
     """
     POST /terminal/create
@@ -3935,7 +4066,7 @@ async def create_terminal_endpoint(payload: Optional[CreateTerminalPayload] = No
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.post("/terminal/run", tags=["AI Terminal Service"])
+@app.post("/terminal/run", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def run_command_endpoint(payload: RunCommandPayload):
     """
     POST /terminal/run
@@ -3955,7 +4086,7 @@ async def run_command_endpoint(payload: RunCommandPayload):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.get("/terminal/{session_id}/output", tags=["AI Terminal Service"])
+@app.get("/terminal/{session_id}/output", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def read_terminal_output_endpoint(session_id: str, tail: Optional[int] = Query(None, description="Tail lines count")):
     """
     GET /terminal/{session_id}/output
@@ -3964,7 +4095,7 @@ async def read_terminal_output_endpoint(session_id: str, tail: Optional[int] = Q
     return TerminalManager.read_terminal_output(session_id, tail_lines=tail)
 
 
-@app.get("/terminal/{session_id}/status", tags=["AI Terminal Service"])
+@app.get("/terminal/{session_id}/status", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def get_terminal_status_endpoint(session_id: str):
     """
     GET /terminal/{session_id}/status
@@ -3973,7 +4104,7 @@ async def get_terminal_status_endpoint(session_id: str):
     return TerminalManager.get_terminal_status(session_id)
 
 
-@app.get("/terminal/list", tags=["AI Terminal Service"])
+@app.get("/terminal/list", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def list_terminals_endpoint():
     """
     GET /terminal/list
@@ -3982,7 +4113,7 @@ async def list_terminals_endpoint():
     return {"terminals": TerminalManager.list_terminals()}
 
 
-@app.post("/terminal/{session_id}/stop", tags=["AI Terminal Service"])
+@app.post("/terminal/{session_id}/stop", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def stop_terminal_endpoint(session_id: str):
     """
     POST /terminal/{session_id}/stop
@@ -3991,7 +4122,7 @@ async def stop_terminal_endpoint(session_id: str):
     return TerminalManager.stop_terminal(session_id)
 
 
-@app.post("/terminal/{session_id}/restart", tags=["AI Terminal Service"])
+@app.post("/terminal/{session_id}/restart", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def restart_terminal_endpoint(session_id: str):
     """
     POST /terminal/{session_id}/restart
@@ -4000,7 +4131,7 @@ async def restart_terminal_endpoint(session_id: str):
     return TerminalManager.restart_terminal(session_id)
 
 
-@app.post("/terminal/approval/respond", tags=["AI Terminal Service"])
+@app.post("/terminal/approval/respond", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def respond_approval_endpoint(payload: TerminalApprovalPayload):
     """
     POST /terminal/approval/respond
@@ -4009,7 +4140,7 @@ async def respond_approval_endpoint(payload: TerminalApprovalPayload):
     return TerminalManager.respond_to_approval(payload.approval_id, payload.approved)
 
 
-@app.get("/terminal/tools/schema", tags=["AI Terminal Service"])
+@app.get("/terminal/tools/schema", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def terminal_tools_schema_endpoint():
     """
     GET /terminal/tools/schema
@@ -4024,4 +4155,5 @@ async def terminal_tools_schema_endpoint():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=APP_PORT, reload=True)
+    host = os.environ.get("HOST", "127.0.0.1")
+    uvicorn.run("main:app", host=host, port=APP_PORT, reload=True)
