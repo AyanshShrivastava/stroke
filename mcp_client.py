@@ -478,8 +478,13 @@ class McpServerRegistry:
         )
         self.configs: Dict[str, ServerConfig] = {}
         self.clients: Dict[str, McpClient] = {}
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
         self.load_configurations()
+
+    def _ensure_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     def load_configurations(self):
         """Loads server configurations from disk."""
@@ -565,7 +570,7 @@ class McpServerRegistry:
 
     async def connect_server(self, server_id: str) -> McpClient:
         """Connects or reconnects a configured server."""
-        async with self._lock:
+        async with self._ensure_lock():
             if server_id not in self.configs:
                 raise McpError(f"Server '{server_id}' is not configured.")
 
@@ -596,7 +601,7 @@ class McpServerRegistry:
 
     async def disconnect_server(self, server_id: str):
         """Disconnects a server if connected."""
-        async with self._lock:
+        async with self._ensure_lock():
             if server_id in self.clients:
                 await self.clients[server_id].close()
                 del self.clients[server_id]
@@ -623,8 +628,6 @@ class McpServerRegistry:
         """
         all_tools = []
         for s_id, client in self.clients.items():
-            if not client.is_active():
-                continue
             for tool in client.discovered_tools:
                 orig_name = tool.get("name", "")
                 namespaced_name = f"{s_id}__{orig_name}"
@@ -638,6 +641,22 @@ class McpServerRegistry:
                     "parameters": schema
                 })
         return all_tools
+
+    def get_all_tool_schemas(self) -> List[Dict[str, Any]]:
+        """Returns OpenAI function-formatted tool schemas for active MCP tools."""
+        tools = self.list_all_tools()
+        return [{"type": "function", "function": t} for t in tools]
+
+    def register_server(self, cfg: ServerConfig) -> McpClient:
+        """Registers a server config and instantiates an McpClient."""
+        self.configs[cfg.id] = cfg
+        if cfg.transport_type == "stdio":
+            transport = StdioTransport(command=cfg.command or "python", args=cfg.args, env=cfg.env)
+        else:
+            transport = StreamableHttpTransport(url=cfg.url or "http://localhost", headers=cfg.headers)
+        client = McpClient(server_id=cfg.id, transport=transport, server_name=cfg.name)
+        self.clients[cfg.id] = client
+        return client
 
     async def dispatch_tool(self, full_tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatches namespaced tool '{server_id}__{tool_name}' or resolves tool directly."""

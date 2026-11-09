@@ -690,8 +690,18 @@
           <span class="text-[10px] text-brand-muted font-mono">Dynamic Status</span>
         </div>
         <div id="mcpServersList" class="flex flex-wrap gap-2 text-xs"></div>
-        <div class="text-[11px] text-brand-muted leading-relaxed border-t border-brand-border/40 pt-2 font-sans">
-          Configure any MCP server using standard JSON format with <code class="text-brand-accent font-mono text-[10px]">command</code>, <code class="text-brand-accent font-mono text-[10px]">args</code>, <code class="text-brand-accent font-mono text-[10px]">env</code>, or <code class="text-brand-accent font-mono text-[10px]">url</code>. Stroke dynamically exposes their tools to the AI.
+        <!-- Discovered Tools Explorer -->
+        <div class="border-t border-brand-border/60 pt-2.5 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-white flex items-center space-x-1.5">
+              <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+              <span>Discovered Tools &amp; Schemas</span>
+            </span>
+            <button id="refreshMcpToolsBtn" type="button" class="text-[10px] text-brand-accent hover:underline font-mono">↻ Refresh Tools</button>
+          </div>
+          <div id="mcpDiscoveredToolsContainer" class="max-h-40 overflow-y-auto space-y-1.5 pr-1 text-xs">
+            <div class="text-[11px] text-brand-muted font-mono italic">Loading discovered MCP tools...</div>
+          </div>
         </div>
       </div>
 
@@ -868,6 +878,52 @@
               </button>
             </div>
           </div>
+        <!-- GitHub Integration (Personal Access Token) -->
+        <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-3">
+          <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-1.5">
+              <svg class="w-4 h-4 text-brand-accent" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+              <span class="font-semibold text-white">GitHub Integration (PAT)</span>
+            </div>
+            <span id="settingsGithubStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border">Checking...</span>
+          </div>
+          <p class="text-[11px] text-brand-muted leading-relaxed">
+            Connect your Personal Access Token with <code class="text-emerald-400 font-mono">repo</code> permissions. Stroke encrypts tokens with machine-keyed AES-256 in local storage.
+          </p>
+
+          <!-- Connected GitHub Profile Display -->
+          <div id="githubProfileCard" class="hidden p-2.5 rounded-lg bg-black/40 border border-brand-border/60 flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-2.5">
+              <img id="githubUserAvatar" src="https://github.com/ghost.png" class="w-8 h-8 rounded-full border border-brand-accent/40" alt="GitHub User">
+              <div>
+                <div class="font-semibold text-white flex items-center space-x-1.5">
+                  <span id="githubUserName">@username</span>
+                  <span id="githubUserPlan" class="text-[9px] px-1 rounded bg-brand-accent/20 text-brand-accent font-mono uppercase">PRO</span>
+                </div>
+                <div id="githubRateLimitText" class="text-[10px] text-brand-muted font-mono">Rate Limit: 5000/5000 remaining</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div id="githubScopesText" class="text-[9px] text-emerald-400 font-mono">repo, workflow</div>
+              <button id="disconnectGithubBtn" type="button" class="text-[10px] text-red-400 hover:text-red-300 font-mono mt-0.5">Disconnect</button>
+            </div>
+          </div>
+
+          <div id="githubTokenInputSection" class="space-y-2">
+            <div>
+              <label class="block text-[10px] font-mono text-brand-muted mb-1">PERSONAL ACCESS TOKEN (CLASSIC OR FINE-GRAINED)</label>
+              <div class="relative">
+                <input id="settingsGithubTokenInput" type="password" placeholder="ghp_1234567890abcdefghijklmnopqrstuvwxyz" class="w-full bg-black/60 border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:border-brand-accent focus:outline-none pr-16">
+                <button type="button" id="toggleGithubTokenVisibility" class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-brand-muted hover:text-white font-mono px-1">Show</button>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <span id="settingsGithubNotice" class="text-[11px] text-emerald-400 font-mono hidden"></span>
+              <button id="saveGithubTokenBtn" type="button" class="ml-auto px-3 py-1.5 rounded-lg bg-brand-accent/20 border border-brand-accent/40 text-brand-accent hover:bg-brand-accent/30 text-xs font-semibold transition-colors">
+                Save &amp; Verify PAT
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Account -->
@@ -885,6 +941,49 @@
         <button id="closeSettingsSaveBtn" class="px-4 py-2 rounded-xl bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-colors">
           Done
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: TERMINAL STREAMING CONSOLE                                         -->
+  <!-- ========================================================================= -->
+  <div id="terminalModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-border rounded-2xl max-w-4xl w-full h-[75vh] flex flex-col p-5 shadow-2xl space-y-3 glow-box">
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-brand-border pb-3">
+        <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-1.5">
+            <span id="terminalConsoleDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+            <h3 class="font-mono font-bold text-white text-sm">Terminal Streaming Console</h3>
+          </div>
+          <select id="terminalSessionSelect" class="bg-black/60 border border-brand-border rounded-lg px-2.5 py-1 text-xs font-mono text-emerald-400 focus:outline-none">
+            <option value="">No Active Sessions</option>
+          </select>
+          <span id="terminalStateBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border">Idle</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="terminalStopBtn" class="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 text-xs font-mono transition-colors hidden">
+            Stop Process
+          </button>
+          <button id="terminalClearBtn" class="px-2.5 py-1 rounded-lg bg-white/5 border border-brand-border text-brand-muted hover:text-white text-xs font-mono transition-colors">
+            Clear
+          </button>
+          <button id="closeTerminalModalBtn" class="text-brand-muted hover:text-white p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-Time Monospace Output Console -->
+      <div id="terminalOutputLog" class="flex-1 bg-[#050508] border border-brand-border/60 rounded-xl p-3.5 font-mono text-xs overflow-y-auto space-y-1 select-text leading-relaxed">
+        <div class="text-brand-muted italic">[Terminal Console Ready. Real-time incremental delta streaming active.]</div>
+      </div>
+
+      <!-- Terminal Footer Info -->
+      <div class="flex items-center justify-between text-[11px] text-brand-muted font-mono pt-1">
+        <span id="terminalPathText">Workspace: ~/.gemini/antigravity/scratch</span>
+        <span id="terminalSeqText">Stream Seq: 0</span>
       </div>
     </div>
   </div>
@@ -1768,6 +1867,7 @@
       } catch (err) {
         console.warn('Failed to load email config:', err);
       }
+      await fetchGithubStatus();
     }
 
     function closeSettingsModal() {
@@ -2020,6 +2120,7 @@
     function openMcpModal() {
       mcpHubModal.classList.remove('hidden');
       loadMcpConfigJson();
+      loadDiscoveredMcpTools();
     }
 
     async function loadMcpConfigJson() {
@@ -2137,6 +2238,344 @@
       copyMcpJsonBtn.textContent = 'Copied!';
       setTimeout(() => { copyMcpJsonBtn.textContent = 'Copy'; }, 2000);
     });
+
+    // 7b. Discovered MCP Tools Explorer
+    async function loadDiscoveredMcpTools() {
+      const container = document.getElementById('mcpDiscoveredToolsContainer');
+      if (!container) return;
+      container.innerHTML = '<div class="text-[11px] text-brand-muted font-mono italic">Querying discovered MCP tools and schemas...</div>';
+      try {
+        const res = await fetch('/mcp/tools');
+        if (!res.ok) throw new Error('Failed to fetch tool schemas');
+        const data = await res.json();
+        const tools = data.tools || [];
+        if (tools.length === 0) {
+          container.innerHTML = '<div class="text-[11px] text-brand-muted font-mono italic">No active MCP tools discovered. Save a server configuration above to connect tools.</div>';
+          return;
+        }
+        container.innerHTML = '';
+        tools.forEach(tool => {
+          const fn = tool.function || tool;
+          const name = fn.name || 'unnamed_tool';
+          const desc = fn.description || 'No description provided';
+          const params = fn.parameters?.properties ? Object.keys(fn.parameters.properties).join(', ') : 'none';
+
+          const card = document.createElement('div');
+          card.className = 'p-2 rounded-lg bg-black/40 border border-brand-border/60 hover:border-brand-accent/40 transition-colors space-y-1';
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-emerald-400 font-semibold text-[11px]">${escapeHtml(name)}</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/15 text-brand-accent font-mono border border-brand-accent/30">Active</span>
+            </div>
+            <p class="text-[10px] text-brand-muted leading-tight line-clamp-2">${escapeHtml(desc)}</p>
+            <div class="text-[9px] text-brand-muted font-mono">Params: <code class="text-white">${escapeHtml(params)}</code></div>
+          `;
+          container.appendChild(card);
+        });
+      } catch (err) {
+        container.innerHTML = `<div class="text-[11px] text-red-400 font-mono">Error discovering tools: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    const refreshMcpToolsBtn = document.getElementById('refreshMcpToolsBtn');
+    if (refreshMcpToolsBtn) refreshMcpToolsBtn.addEventListener('click', loadDiscoveredMcpTools);
+
+    // 7c. GitHub PAT Integration Controllers
+    const settingsGithubStatusBadge = document.getElementById('settingsGithubStatusBadge');
+    const githubProfileCard = document.getElementById('githubProfileCard');
+    const githubUserAvatar = document.getElementById('githubUserAvatar');
+    const githubUserName = document.getElementById('githubUserName');
+    const githubUserPlan = document.getElementById('githubUserPlan');
+    const githubRateLimitText = document.getElementById('githubRateLimitText');
+    const githubScopesText = document.getElementById('githubScopesText');
+    const disconnectGithubBtn = document.getElementById('disconnectGithubBtn');
+    const settingsGithubTokenInput = document.getElementById('settingsGithubTokenInput');
+    const toggleGithubTokenVisibility = document.getElementById('toggleGithubTokenVisibility');
+    const saveGithubTokenBtn = document.getElementById('saveGithubTokenBtn');
+    const settingsGithubNotice = document.getElementById('settingsGithubNotice');
+
+    async function fetchGithubStatus() {
+      try {
+        const res = await fetch('/github/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.connected && data.user) {
+          if (settingsGithubStatusBadge) {
+            settingsGithubStatusBadge.textContent = `Connected (@${data.user.login})`;
+            settingsGithubStatusBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/40';
+          }
+          if (githubProfileCard) githubProfileCard.classList.remove('hidden');
+          if (githubUserAvatar) githubUserAvatar.src = data.user.avatar_url || 'https://github.com/ghost.png';
+          if (githubUserName) githubUserName.textContent = `@${data.user.login} (${data.user.name || 'Developer'})`;
+          if (githubUserPlan) githubUserPlan.textContent = data.user.plan || 'GITHUB';
+          if (githubRateLimitText) {
+            githubRateLimitText.textContent = `Rate Limit: ${data.rate_limit_remaining || '5000'}/${data.rate_limit_limit || '5000'} remaining`;
+          }
+          if (githubScopesText) {
+            const scopes = data.scopes && data.scopes.length > 0 ? data.scopes.join(', ') : 'repo, read:org';
+            githubScopesText.textContent = `Scopes: ${scopes}`;
+          }
+          if (settingsGithubTokenInput) {
+            settingsGithubTokenInput.value = '';
+            settingsGithubTokenInput.placeholder = '•••••••••••••••••••••••• (Encrypted in Vault)';
+          }
+        } else {
+          if (settingsGithubStatusBadge) {
+            settingsGithubStatusBadge.textContent = 'Not Configured';
+            settingsGithubStatusBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border';
+          }
+          if (githubProfileCard) githubProfileCard.classList.add('hidden');
+          if (settingsGithubTokenInput) {
+            settingsGithubTokenInput.placeholder = 'ghp_1234567890abcdefghijklmnopqrstuvwxyz';
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load GitHub status:', err);
+      }
+    }
+
+    if (toggleGithubTokenVisibility && settingsGithubTokenInput) {
+      toggleGithubTokenVisibility.addEventListener('click', () => {
+        const isPw = settingsGithubTokenInput.type === 'password';
+        settingsGithubTokenInput.type = isPw ? 'text' : 'password';
+        toggleGithubTokenVisibility.textContent = isPw ? 'Hide' : 'Show';
+      });
+    }
+
+    if (saveGithubTokenBtn) {
+      saveGithubTokenBtn.addEventListener('click', async () => {
+        const token = (settingsGithubTokenInput.value || '').trim();
+        if (!token) {
+          showToast('Please enter a GitHub Personal Access Token (ghp_...).');
+          return;
+        }
+
+        saveGithubTokenBtn.disabled = true;
+        saveGithubTokenBtn.textContent = 'Verifying...';
+        try {
+          const res = await fetch('/github/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token })
+          });
+          const data = await res.json();
+          if (res.ok && data.status === 'success') {
+            if (settingsGithubNotice) {
+              settingsGithubNotice.textContent = `✓ Authenticated as @${data.user?.login || 'user'}`;
+              settingsGithubNotice.classList.remove('hidden');
+              setTimeout(() => settingsGithubNotice.classList.add('hidden'), 4000);
+            }
+            showToast(`GitHub PAT verified! Connected as @${data.user?.login || 'user'}`);
+            await fetchGithubStatus();
+          } else {
+            showToast('GitHub Verification Failed: ' + (data.message || data.detail || res.statusText));
+          }
+        } catch (err) {
+          showToast('Network error verifying GitHub PAT.');
+        } finally {
+          saveGithubTokenBtn.disabled = false;
+          saveGithubTokenBtn.textContent = 'Save & Verify PAT';
+        }
+      });
+    }
+
+    if (disconnectGithubBtn) {
+      disconnectGithubBtn.addEventListener('click', async () => {
+        const confirmed = await askConfirmation({
+          title: 'Disconnect GitHub',
+          message: 'Are you sure you want to remove your encrypted GitHub token from Stroke?',
+          confirmText: 'Disconnect',
+          isDanger: true
+        });
+        if (!confirmed) return;
+
+        try {
+          const res = await fetch('/github/token', { method: 'DELETE' });
+          if (res.ok) {
+            showToast('GitHub token removed.');
+            await fetchGithubStatus();
+          }
+        } catch (err) {
+          showToast('Error removing GitHub token.');
+        }
+      });
+    }
+
+    // 7d. Terminal Streaming Console Controller
+    const terminalModal = document.getElementById('terminalModal');
+    const closeTerminalModalBtn = document.getElementById('closeTerminalModalBtn');
+    const terminalSessionSelect = document.getElementById('terminalSessionSelect');
+    const terminalStateBadge = document.getElementById('terminalStateBadge');
+    const terminalStopBtn = document.getElementById('terminalStopBtn');
+    const terminalClearBtn = document.getElementById('terminalClearBtn');
+    const terminalOutputLog = document.getElementById('terminalOutputLog');
+    const terminalConsoleDot = document.getElementById('terminalConsoleDot');
+    const terminalPathText = document.getElementById('terminalPathText');
+    const terminalSeqText = document.getElementById('terminalSeqText');
+
+    let terminalStreamInterval = null;
+    let currentTerminalSessionId = null;
+    let terminalCurrentSeq = 0;
+
+    function openTerminalModal() {
+      if (terminalModal) {
+        terminalModal.classList.remove('hidden');
+        refreshTerminalSessions();
+      }
+    }
+
+    function closeTerminalModal() {
+      if (terminalModal) {
+        terminalModal.classList.add('hidden');
+      }
+      if (terminalStreamInterval) {
+        clearInterval(terminalStreamInterval);
+        terminalStreamInterval = null;
+      }
+    }
+
+    if (sidebarTerminalRow) {
+      sidebarTerminalRow.classList.add('cursor-pointer');
+      sidebarTerminalRow.addEventListener('click', openTerminalModal);
+    }
+    if (topTerminalPill) {
+      topTerminalPill.classList.add('cursor-pointer');
+      topTerminalPill.addEventListener('click', openTerminalModal);
+    }
+    if (closeTerminalModalBtn) closeTerminalModalBtn.addEventListener('click', closeTerminalModal);
+
+    if (terminalClearBtn) {
+      terminalClearBtn.addEventListener('click', () => {
+        if (terminalOutputLog) {
+          terminalOutputLog.innerHTML = '<div class="text-brand-muted italic">[Console log cleared]</div>';
+        }
+      });
+    }
+
+    if (terminalStopBtn) {
+      terminalStopBtn.addEventListener('click', async () => {
+        if (!currentTerminalSessionId) return;
+        terminalStopBtn.disabled = true;
+        terminalStopBtn.textContent = 'Stopping...';
+        try {
+          const res = await fetch(`/terminal/${currentTerminalSessionId}/stop`, { method: 'POST' });
+          if (res.ok) {
+            showToast('Terminal process terminated.');
+            pollTerminalDelta();
+          }
+        } catch (err) {
+          showToast('Failed to stop terminal process.');
+        } finally {
+          terminalStopBtn.disabled = false;
+          terminalStopBtn.textContent = 'Stop Process';
+        }
+      });
+    }
+
+    if (terminalSessionSelect) {
+      terminalSessionSelect.addEventListener('change', (e) => {
+        currentTerminalSessionId = e.target.value;
+        terminalCurrentSeq = 0;
+        if (terminalOutputLog) terminalOutputLog.innerHTML = '';
+        pollTerminalDelta();
+      });
+    }
+
+    async function refreshTerminalSessions() {
+      try {
+        const res = await fetch('/terminal/list');
+        if (!res.ok) return;
+        const data = await res.json();
+        const terms = data.terminals || [];
+        terminalSessionSelect.innerHTML = '';
+        if (terms.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'No Active Sessions (Spawns on demand)';
+          terminalSessionSelect.appendChild(opt);
+          currentTerminalSessionId = null;
+          return;
+        }
+
+        terms.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.session_id;
+          opt.textContent = `Session ${t.session_id.slice(-8)} (${t.state || 'idle'})`;
+          terminalSessionSelect.appendChild(opt);
+        });
+
+        if (!currentTerminalSessionId || !terms.some(t => t.session_id === currentTerminalSessionId)) {
+          currentTerminalSessionId = terms[0].session_id;
+          terminalCurrentSeq = 0;
+        }
+
+        terminalSessionSelect.value = currentTerminalSessionId;
+        pollTerminalDelta();
+
+        if (!terminalStreamInterval) {
+          terminalStreamInterval = setInterval(pollTerminalDelta, 600);
+        }
+      } catch (err) {
+        console.warn('Error refreshing terminal sessions:', err);
+      }
+    }
+
+    async function pollTerminalDelta() {
+      if (!currentTerminalSessionId) return;
+      try {
+        const res = await fetch(`/terminal/output/delta?session_id=${encodeURIComponent(currentTerminalSessionId)}&since_seq=${terminalCurrentSeq}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Update state badges
+        const isRunning = data.is_running || data.state === 'running';
+        if (terminalStateBadge) {
+          terminalStateBadge.textContent = isRunning ? 'Running' : (data.state || 'Idle');
+          terminalStateBadge.className = isRunning
+            ? 'text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40 animate-pulse'
+            : 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/40';
+        }
+        if (terminalConsoleDot) {
+          terminalConsoleDot.className = isRunning
+            ? 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse'
+            : 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+        }
+        if (terminalStopBtn) {
+          if (isRunning) terminalStopBtn.classList.remove('hidden');
+          else terminalStopBtn.classList.add('hidden');
+        }
+
+        if (terminalSeqText) terminalSeqText.textContent = `Stream Seq: ${data.sequence_number || terminalCurrentSeq}`;
+
+        // Append delta lines
+        const lines = data.lines || [];
+        if (lines.length > 0 && terminalOutputLog) {
+          if (terminalCurrentSeq === 0) {
+            terminalOutputLog.innerHTML = '';
+          }
+          lines.forEach(l => {
+            const lineEl = document.createElement('div');
+            lineEl.className = 'font-mono text-xs whitespace-pre-wrap leading-tight';
+            if (l.startsWith('[stderr]')) {
+              lineEl.className += ' text-red-400';
+            } else if (l.startsWith('[stdout]')) {
+              lineEl.className += ' text-emerald-300';
+            } else if (l.startsWith('[system]') || l.startsWith('[cmd]')) {
+              lineEl.className += ' text-cyan-400 font-semibold';
+            } else {
+              lineEl.className += ' text-brand-text';
+            }
+            lineEl.textContent = l;
+            terminalOutputLog.appendChild(lineEl);
+          });
+          terminalOutputLog.scrollTop = terminalOutputLog.scrollHeight;
+        }
+
+        terminalCurrentSeq = data.sequence_number !== undefined ? data.sequence_number : (terminalCurrentSeq + lines.length);
+      } catch (err) {
+        // Delta stream polling network resilience
+      }
+    }
 
     // 8. New Chat & Prompt Handling
     newChatBtn.addEventListener('click', startNewConversation);

@@ -66,6 +66,7 @@ def save_github_token(token: str) -> bool:
     token = token.strip()
     if not token:
         return False
+
     try:
         cipher = _get_or_create_vault_cipher()
         encrypted = cipher.encrypt(token.encode("utf-8"))
@@ -78,6 +79,9 @@ def save_github_token(token: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to save GitHub PAT: {e}")
         return False
+
+
+store_github_token = save_github_token
 
 
 def get_stored_github_token() -> Optional[str]:
@@ -241,13 +245,15 @@ async def commit_file(
 ) -> Dict[str, Any]:
     """Creates or updates a file in a GitHub repository with safety confirmation."""
     if not confirmed:
+        prompt_msg = f"Confirmation Required: External GitHub write requested to repository '{repo}' for path '{path}'. Please confirm execution before proceeding."
         return {
             "status": "requires_confirmation",
             "tool": "github_commit_file",
             "repo": repo,
             "path": path,
             "commit_message": commit_message,
-            "message": f"Confirmation Required: External GitHub write requested to repository '{repo}' for path '{path}'. Please confirm execution before proceeding.",
+            "message": prompt_msg,
+            "confirmation_prompt": prompt_msg,
             "requires_confirmation": True
         }
 

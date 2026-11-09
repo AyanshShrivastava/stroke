@@ -292,6 +292,10 @@ class TerminalSession:
             except Exception:
                 pass
 
+    def append_output(self, text: str, stream_name: str = "stdout"):
+        """Public helper to append output text to session buffer."""
+        self._append_output(stream_name, text)
+
     def _append_output(self, stream_name: str, text: str):
         """Thread-safe append of redacted stream output lines with length capping and strict byte limits."""
         if not text:
@@ -737,6 +741,7 @@ class TerminalSession:
                 "session_id": self.session_id,
                 "lines": lines,
                 "sequence_number": self.sequence_number,
+                "latest_seq": self.sequence_number,
                 "is_running": self.current_process is not None and self.current_process.poll() is None,
                 "state": self.state
             }

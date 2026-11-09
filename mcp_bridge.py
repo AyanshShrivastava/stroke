@@ -675,6 +675,8 @@ def tools_search(query: str, category: Optional[str] = None) -> Dict[str, Any]:
         "status": "success",
         "query": query,
         "count": len(matches),
+        "match_count": len(matches),
+        "matches": matches[:10],
         "tools": matches[:10]
     }
 
@@ -713,15 +715,19 @@ def list_roblox_studios_sync() -> Dict[str, Any]:
             "status": "success",
             "connected": True,
             "count": len(studios),
+            "total_active": len(studios),
             "studios": studios,
-            "message": f"Detected {len(studios)} active Roblox Studio instance(s)."
+            "message": f"Detected {len(studios)} active Roblox Studio instance(s).",
+            "summary": f"Detected {len(studios)} active Roblox Studio instance(s)."
         }
     return {
         "status": "offline",
         "connected": False,
         "count": 0,
+        "total_active": 0,
         "studios": [],
-        "message": "No running Roblox Studio instances detected on this machine."
+        "message": "No running Roblox Studio instances detected on this machine.",
+        "summary": "No running Roblox Studio instances detected on this machine."
     }
 
 

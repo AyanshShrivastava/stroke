@@ -1,7 +1,7 @@
 {
   "TestEffect": {
     "model_name": "TestEffect",
-    "registered_at": "2026-11-09 11:39:29.622186+00:00"
+    "registered_at": "2026-11-09 11:50:50.787940+00:00"
   },
   "GodTier_Electro_Create_a_purple_lightning_VF": {
     "name": "GodTier_Electro_Create_a_purple_lightning_VF",
@@ -66,6 +66,6 @@
       ]
     },
     "learned_dynamically": true,
-    "learned_at": "2026-11-09T11:39:40.595249+00:00"
+    "learned_at": "2026-11-09T11:51:01.457643+00:00"
   }
 }
