@@ -546,11 +546,12 @@ async def execute_studio_mcp_command(
 ) -> Dict[str, Any]:
     """Communicates directly with Roblox Studio MCP binary via JSON-RPC stdio protocol."""
     cmd_expanded = os.path.expanduser(str(cmd_path)) if cmd_path else ""
-    if not (cmd_expanded and (os.path.exists(cmd_expanded) or shutil.which(cmd_path))):
-        discovered = find_roblox_studio_mcp_path()
-        if discovered:
-            cmd_expanded = discovered
-        else:
+    if not (cmd_expanded and (os.path.exists(cmd_expanded) or shutil.which(cmd_expanded))):
+        if not cmd_path:
+            discovered = find_roblox_studio_mcp_path()
+            if discovered:
+                cmd_expanded = discovered
+        if not cmd_expanded or not (os.path.exists(cmd_expanded) or shutil.which(cmd_expanded)):
             return {
                 "status": "offline",
                 "connected": False,
@@ -723,7 +724,7 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
             "status": "offline",
             "connected": False,
             "source": "roblox_studio_mcp_bridge",
-            "message": f"Roblox Studio session not connected. Luau code synthesized for {target} but not executed in Studio.",
+            "message": f"Roblox Studio session is offline: not connected. Luau code synthesized for {target} but not executed in Studio.",
             "target": target,
             "lines_executed": 0,
             "code_snippet": code[:400] + ("..." if len(code) > 400 else "")

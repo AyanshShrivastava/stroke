@@ -310,16 +310,18 @@ class TestStrokeAgentLoop(unittest.TestCase):
 
     def test_09_no_false_claims_when_roblox_studio_is_offline(self):
         """Verify studio_execute_luau returns status 'offline' when Studio is closed with zero lines executed."""
-        # With no Roblox Studio open on macOS, studio_execute_luau must report offline
-        res = asyncio.run(ToolDispatcher.dispatch_async("studio_execute_luau", {
-            "code": "local p = Instance.new('Part'); p.Parent = workspace"
-        }))
-        self.assertEqual(res.get("status"), "offline")
-        self.assertFalse(res.get("connected"))
-        self.assertEqual(res.get("lines_executed"), 0)
-        self.assertIn("offline", res.get("message", "").lower())
-        self.assertNotIn("successfully executed architectural additions", res.get("message", "").lower())
-        print("  [PASS] Roblox Studio offline execution strictly returns status 'offline' with 0 lines executed.")
+        # When Roblox Studio is offline / unconfigured, studio_execute_luau must report offline
+        import unittest.mock
+        with unittest.mock.patch.dict("mcp_bridge._MCP_REGISTRY", {}, clear=True):
+            res = asyncio.run(ToolDispatcher.dispatch_async("studio_execute_luau", {
+                "code": "local p = Instance.new('Part'); p.Parent = workspace"
+            }))
+            self.assertEqual(res.get("status"), "offline")
+            self.assertFalse(res.get("connected"))
+            self.assertEqual(res.get("lines_executed"), 0)
+            self.assertIn("offline", res.get("message", "").lower())
+            self.assertNotIn("successfully executed architectural additions", res.get("message", "").lower())
+            print("  [PASS] Roblox Studio offline execution strictly returns status 'offline' with 0 lines executed.")
 
     def test_10_unknown_tool_honest_error_handling(self):
         """Verify model calling an unknown tool receives honest error feedback instead of silent failure."""

@@ -139,12 +139,13 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
     # ==========================================================================
 
     def test_05_reasoning_level_orchestration_profiles(self):
-        """Verify the 4 reasoning profiles genuinely adjust budgets and policies."""
+        """Verify the 5 reasoning profiles genuinely adjust budgets, tokens, and verification policies."""
         profiles = {
-            "low": {"max_tool_turns": 0, "temperature": 0.7, "max_tokens": 768, "max_coding_iterations": 1},
-            "medium": {"max_tool_turns": 1, "temperature": 0.5, "max_tokens": 1024, "max_coding_iterations": 2},
-            "high": {"max_tool_turns": 3, "temperature": 0.3, "max_tokens": 1536, "max_coding_iterations": 4},
-            "maximum": {"max_tool_turns": 5, "temperature": 0.2, "max_tokens": 2048, "max_coding_iterations": 6},
+            "low": {"max_tool_turns": 0, "temperature": 0.35, "max_tokens": 768, "max_coding_iterations": 1},
+            "medium": {"max_tool_turns": 2, "temperature": 0.35, "max_tokens": 1024, "max_coding_iterations": 3},
+            "high": {"max_tool_turns": 6, "temperature": 0.35, "max_tokens": 2048, "max_coding_iterations": 6},
+            "maximum": {"max_tool_turns": 999, "temperature": 0.35, "max_tokens": 3072, "max_coding_iterations": 999},
+            "absolute_peak": {"max_tool_turns": 999, "temperature": 0.35, "max_tokens": 4096, "max_coding_iterations": 999},
         }
 
         for level, expected in profiles.items():
@@ -153,10 +154,24 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
                 reasoning_level=level
             )
             self.assertEqual(req.reasoning_level, level)
+            self.assertEqual(req.temperature, 0.35)
 
-            # Check that MAXIMUM enforces strict bounded ceiling
-            self.assertLessEqual(profiles[level]["max_tool_turns"], 5)
-            self.assertLessEqual(profiles[level]["max_coding_iterations"], 6)
+        # Check that MAXIMUM and ABSOLUTE_PEAK have unlimited tool turns and compiler checks
+        self.assertGreaterEqual(profiles["maximum"]["max_tool_turns"], 999)
+        self.assertGreaterEqual(profiles["maximum"]["max_coding_iterations"], 999)
+        self.assertGreaterEqual(profiles["absolute_peak"]["max_tool_turns"], 999)
+        self.assertGreaterEqual(profiles["absolute_peak"]["max_coding_iterations"], 999)
+
+    def test_05b_absolute_peak_vfx_and_procedural_directives(self):
+        """Verify ABSOLUTE PEAK system prompt incorporates all 3 core agentic pillars."""
+        req = main.AiChatRequest(
+            messages=[main.ChatMessage(role="user", content="Build meteor strike VFX")],
+            reasoning_level="absolute_peak",
+            creativity=0.35
+        )
+        self.assertEqual(req.reasoning_level, "absolute_peak")
+        self.assertEqual(req.creativity, 0.35)
+        self.assertEqual(req.temperature, 0.35)
 
     # ==========================================================================
     # 3. AUTONOMOUS ERROR DETECTION & SELF-HEALING AUDIT

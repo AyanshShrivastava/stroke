@@ -69,6 +69,22 @@ def redact_sensitive_data(text: str) -> str:
     return redacted
 
 
+SYSTEM_STDERR_NOISE_PATTERNS = [
+    re.compile(r".*ev_poll_posix\.cc.*FD from fork parent still in poll list.*(\r?\n)?"),
+    re.compile(r".*urllib3.*NotOpenSSLWarning.*(\r?\n)?"),
+    re.compile(r".*FutureWarning: You are using a Python version 3\.9 past its end of life.*(\r?\n)?"),
+]
+
+def strip_system_stderr_noise(text: str) -> str:
+    """Removes platform-level runtime fork noise (e.g. gRPC ev_poll_posix FD warnings) from child stderr."""
+    if not text:
+        return ""
+    cleaned = text
+    for pat in SYSTEM_STDERR_NOISE_PATTERNS:
+        cleaned = pat.sub("", cleaned)
+    return cleaned
+
+
 # ==============================================================================
 # 2. COMMAND SECURITY & ALLOWLIST POLICY
 # ==============================================================================
@@ -398,6 +414,8 @@ class TerminalSession:
                 env = os.environ.copy()
                 extra_path_str = ":".join(d for d in extra_search_dirs if os.path.isdir(d))
                 env["PATH"] = f"{extra_path_str}:{env.get('PATH', '')}"
+                env["GRPC_ENABLE_FORK_SUPPORT"] = "0"
+                env["GRPC_POLL_STRATEGY"] = "poll"
 
                 # start_new_session=True creates a new process group on POSIX,
                 # allowing clean teardown of child processes and preventing communication pipe hangs.
@@ -423,7 +441,10 @@ class TerminalSession:
                             for line in iter(pipe.readline, b''):
                                 if not line:
                                     break
-                                decoded = redact_sensitive_data(line.decode("utf-8", errors="replace").rstrip("\r\n"))
+                                raw_line = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                                if stream_name == "stderr" and not strip_system_stderr_noise(raw_line).strip():
+                                    continue
+                                decoded = redact_sensitive_data(raw_line)
                                 self._append_output(stream_name, decoded)
                         except Exception:
                             pass
@@ -483,12 +504,13 @@ class TerminalSession:
                 stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
                 stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
 
-                # Redact secrets
+                # Redact secrets and filter platform-level runtime fork noise
                 clean_stdout = redact_sensitive_data(stdout_text)
-                clean_stderr = redact_sensitive_data(stderr_text)
+                clean_stderr = redact_sensitive_data(strip_system_stderr_noise(stderr_text))
 
                 self._append_output("stdout", clean_stdout)
-                self._append_output("stderr", clean_stderr)
+                if clean_stderr.strip():
+                    self._append_output("stderr", clean_stderr)
 
                 # Context Protection: cap returned streams to prevent overwhelming LLM context
                 max_context_chars = 4000
