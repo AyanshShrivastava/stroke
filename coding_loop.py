@@ -63,6 +63,24 @@ FAKE_ROBLOX_API_RULES = [
     (r"\bparticleType\s*=\s*[\"'](?:Sphere|Mesh)[\"']", "ParticleEmitter does not have a 'particleType' setting. ParticleEmitter emits 2D billboard textures. For 3D meshes, use BasePart or MeshPart with TweenService."),
     (r"particleEmitter\.(?:Spread|Density|Radius|Velocity)\s*=", "Invalid ParticleEmitter property assignment. Legitimate ParticleEmitter properties are: 'Rate', 'Lifetime', 'Speed', 'SpreadAngle', 'Color', 'Size', 'Texture', 'Acceleration', and 'Drag'."),
     (r"\b([a-zA-Z0-9_]+)\.Parent\s*=\s*\1\b", "Cyclic instance parenting error: '{match}' cannot be parented to itself."),
+    # 1. WaitForChild callback misuse: :WaitForChild(name, function(...) ...)
+    (r':WaitForChild\s*\(\s*([^,\n\)]+)\s*,\s*function\b', "Roblox API Error: 'Instance:WaitForChild(childName, timeout)' takes a numeric timeout as its second argument, not a callback function. WaitForChild returns the child Instance synchronously."),
+    # 2. WaitForChild / FindFirstChild on properties
+    (r':(?:WaitForChild|FindFirstChild)\s*\(\s*["\'](CFrame|Position|Size|Health|MaxHealth|Anchored|CanCollide|Orientation)["\']', "Roblox API Error: ':{match}' is a property, not a child Instance. Access properties directly using dot notation (e.g. 'part.{match}')."),
+    # 3. Humanoid CFrame / Position / Size access
+    (r'(?::FindFirstChild(?:OfClass)?\(["\']Humanoid["\']\)|\.Humanoid)\s*(?::WaitForChild|:FindFirstChild)\s*\(\s*["\'](CFrame|Position|Size|Orientation)["\']', "Roblox Type Error: 'Humanoid' is a Controller instance without spatial geometry. It does not possess a '{match}' property or child. Access '.CFrame' on the character's 'HumanoidRootPart' (BasePart) instead."),
+    (r'(?::FindFirstChild(?:OfClass)?\(["\']Humanoid["\']\)|\.Humanoid)\s*\.\s*(CFrame|Position|Orientation)\b', "Roblox Type Error: 'Humanoid' does not have a '.{match}' property. Access '.{match}' on 'HumanoidRootPart' (BasePart) instead."),
+    # 4. TakeDamage on non-Humanoid (Part, Hitbox, Model, etc.)
+    (r'\b(hitbox|part|detectedPart|rootPart|humanoidRootPart|basePart|model|cframe)\s*:\s*TakeDamage\s*\(', "Roblox API Error: ':TakeDamage()' can only be invoked on a 'Humanoid' instance, not on '{match}' (BasePart). Locate the target's Humanoid via 'targetChar:FindFirstChildOfClass(\"Humanoid\")' and call 'humanoid:TakeDamage(damage)'."),
+    # 5. Fatal Library Shadowing: local task = task.wait
+    (r'\blocal\s+task\s*=\s*task\.wait\b', "Fatal Library Shadowing: 'local task = task.wait' shadows the standard 'task' library table with a function, causing all subsequent 'task.wait()' calls to crash ('attempt to index function with wait'). Remove this assignment; 'task.wait()' is already globally available."),
+    (r'\blocal\s+(task|math|string|table|os|coroutine|debug)\s*=\s*\1\.\w+', "Fatal Library Shadowing: 'local {match} = ...' shadows the standard library table with a function. Use '{match}' library functions directly."),
+    # 6. Fake API Mocking: Datatypes and Constructors
+    (r'\blocal\s+(OverlapParams|RaycastParams|TweenInfo|Color3|Vector3|Vector2|CFrame|NumberRange|NumberSequence|ColorSequence)\s*=\s*\{\}', "Fake API Implementation: 'local {match} = {{}}' shadows the built-in Roblox datatype constructor '{match}.new()'. Do not mock Roblox built-in datatypes with empty tables."),
+    # 7. Fake API Mocking: Methods and properties defined as empty tables
+    (r'\blocal\s+(GetPartBoundsInBox|GetPartsInPart|GetPartBoundsInRadius|Raycast|TakeDamage|FilterDescendantsInstances|FilterType|MaxParts)\s*=\s*\{\}', "Fake API Implementation: '{match}' is a Roblox method or property, not a standalone global table. Do not define empty mock tables."),
+    # 8. Type mismatch in function call: executeSpatialHitbox(HumanoidRootPart, ...)
+    (r'\bexecuteSpatialHitbox\s*\(\s*(HumanoidRootPart|rootPart|part|Player)\b', "Type Mismatch in Call: 'executeSpatialHitbox' expects a character 'Model' as argument #1, but received '{match}' (a BasePart/Player). Pass the character Model (e.g. 'Player.Character' or 'casterCharacter') instead."),
 ]
 
 
@@ -224,8 +242,18 @@ class LuauSyntaxValidator:
         # 2. Block Keyword matching (function, if, for, while, do -> end; repeat -> until)
         cleaned_code, _ = cls.strip_comments_and_strings(code)
         block_stack = []
+        inner_debounce_lines = []
+        outer_debounce_lines = []
 
         for line_idx, line in enumerate(cleaned_code.splitlines(), start=1):
+            deb_match = re.search(r'\blocal\s+(hitCharacters|hitTargets|debounce|damagedTargets|activeHitboxes|hitDebounce)\s*=\s*\{\}', line, re.IGNORECASE)
+            if deb_match:
+                func_depth = sum(1 for b in block_stack if b["token"] == "function")
+                if func_depth > 0:
+                    inner_debounce_lines.append((line_idx, deb_match.group(1)))
+                else:
+                    outer_debounce_lines.append((line_idx, deb_match.group(1)))
+
             tokens = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", line)
             for t_idx, token in enumerate(tokens):
                 if token in ("function", "for", "while", "do"):
@@ -345,6 +373,43 @@ class LuauSyntaxValidator:
                     "suggestion": "Use legitimate Roblox classes: Part, ParticleEmitter, Beam, Attachment, Model, Folder, etc."
                 })
 
+        # 5b. Unresolved Capitalized Workspace Global Check
+        if re.search(r'\bWorkspace\s*[:.]', code):
+            has_workspace_declaration = bool(re.search(r'\blocal\s+Workspace\b', code) or re.search(r'\bWorkspace\s*=', code))
+            if not has_workspace_declaration:
+                m = re.search(r'\bWorkspace\s*[:.]', code)
+                line_no = code[:m.start()].count("\n") + 1 if m else 1
+                issues.append({
+                    "type": "error",
+                    "line": line_no,
+                    "message": "Unresolved Global: 'Workspace' (capitalized) is not defined in Luau global scope. In Roblox, the global variable is lowercase 'workspace' or obtained via 'game:GetService(\"Workspace\")'.",
+                    "suggestion": "Replace 'Workspace' with lowercase 'workspace' or 'game:GetService(\"Workspace\")'."
+                })
+
+        # 5c. Incomplete Target Character Resolution Check
+        if re.search(r'\blocal\s+([a-zA-Z0-9_]+)\s*=\s*[a-zA-Z0-9_]+\.Parent\b', code):
+            if not re.search(r':FindFirstAncestor(?:OfClass|WhichIsA)?\(["\']Model["\']\)', code):
+                m = re.search(r'\blocal\s+([a-zA-Z0-9_]+)\s*=\s*[a-zA-Z0-9_]+\.Parent\b', code)
+                line_no = code[:m.start()].count("\n") + 1 if m else 1
+                issues.append({
+                    "type": "warning",
+                    "line": line_no,
+                    "message": "Incomplete Target Character Resolution: 'part.Parent' fails when a hitbox touches an Accessory, Tool, or nested limb because part.Parent is the Accessory/Tool, not the character Model.",
+                    "suggestion": "Use 'part:FindFirstAncestorOfClass(\"Model\")' to reliably locate the character Model containing the Humanoid."
+                })
+
+        # 5d. Function-Level Single-Invocation Debounce Check
+        has_timestamp_cooldown = bool(re.search(r'(?:os\.clock|tick)\s*\(\)', code))
+        has_attribute_debounce = bool(re.search(r':(?:GetAttribute|SetAttribute)\s*\(["\']Hit', code))
+        if inner_debounce_lines and not outer_debounce_lines and not has_timestamp_cooldown and not has_attribute_debounce:
+            for l_no, var_name in inner_debounce_lines:
+                issues.append({
+                    "type": "warning",
+                    "line": l_no,
+                    "message": f"Single-Invocation Debounce Only: The debounce table '{var_name}' is declared locally inside the function and is recreated on every invocation. It only deduplicates limbs within a single query, but does NOT debounce repeated calls across frames.",
+                    "suggestion": "Define the debounce table in a persistent outer scope, or use a timestamp cache ('os.clock() - lastHit < cooldown') or character attribute."
+                })
+
         # 6. Real AST Syntax Parser via luaparser
         if lua_ast:
             try:
@@ -432,8 +497,21 @@ class RobloxDomainTestRunner:
             ])
             has_touched = ".Touched:Connect" in code or ".Touched:connect" in code
 
-            if has_spatial_query:
+            has_spatial_blocking_error = any(
+                ("Workspace" in f.get("message", "") and "Unresolved Global" in f.get("message", ""))
+                or ("Fake API Implementation" in f.get("message", "") and any(term in f.get("message", "") for term in ["OverlapParams", "GetPartBoundsInBox", "GetPartsInPart", "GetPartBoundsInRadius"]))
+                for f in failed_checks
+            )
+
+            if has_spatial_query and not has_spatial_blocking_error:
                 passed_checks.append("Spatial Query Architecture (Modern OverlapParams / WorldRoot spatial query detected)")
+            elif has_spatial_query and has_spatial_blocking_error:
+                failed_checks.append({
+                    "type": "error",
+                    "line": 1,
+                    "message": "Spatial query architecture is corrupted by unresolved globals or fake API mock tables.",
+                    "suggestion": "Call spatial queries directly on 'workspace' (lowercase) or 'game:GetService(\"Workspace\")' with authentic OverlapParams."
+                })
             elif has_touched:
                 passed_checks.append("Touched Event Architecture (Physical part collision detection detected)")
                 untested_limitations.append("Touched events can suffer from physics latency; recommend spatial queries for competitive combat.")
@@ -441,8 +519,8 @@ class RobloxDomainTestRunner:
                 failed_checks.append({
                     "type": "warning",
                     "line": 1,
-                    "message": "Hitbox lacks recognized spatial queries (e.g. Workspace:GetPartBoundsInBox, GetPartsInPart) or Raycast.",
-                    "suggestion": "Implement OverlapParams and Workspace:GetPartBoundsInBox for robust server-side detection."
+                    "message": "Hitbox lacks recognized spatial queries (e.g. workspace:GetPartBoundsInBox, GetPartsInPart) or Raycast.",
+                    "suggestion": "Implement OverlapParams and workspace:GetPartBoundsInBox for robust server-side detection."
                 })
 
             # Check Debounce / Multi-Hit Protection (CRITICAL for hitboxes)
@@ -450,8 +528,14 @@ class RobloxDomainTestRunner:
                 "debounce", "cooldown", "hittargets", "hit_characters", "hitcharacters",
                 "damagedtargets", "alreadyhit", "hits[", "hitplayers"
             ])
+            has_single_invocation_debounce = any("Single-Invocation Debounce Only" in f.get("message", "") for f in failed_checks)
+
             if has_debounce:
-                passed_checks.append("Multi-Hit Debounce Protection (Prevents 60Hz damage spam per frame)")
+                if has_single_invocation_debounce:
+                    passed_checks.append("Single-Query Limb Deduplication (Filters multiple character limbs during a single spatial query)")
+                    untested_limitations.append("Hitbox uses single-invocation debounce table; repeated calls across frames will re-damage the same target without persistent cooldown.")
+                else:
+                    passed_checks.append("Multi-Hit Debounce Protection (Persistent debounce table or cooldown prevents damage spam across frames)")
             else:
                 failed_checks.append({
                     "type": "error",
@@ -463,9 +547,21 @@ class RobloxDomainTestRunner:
             # Check Humanoid & Health Check
             has_humanoid_check = bool(re.search(r'FindFirstChild(?:OfClass)?\(["\']Humanoid["\']\)', code))
             has_health_check = "humanoid.health" in code.lower() or "humanoid.health > 0" in code.lower()
+            has_humanoid_blocking_error = any(
+                ("Humanoid" in f.get("message", "") and ("Type Error" in f.get("message", "") or "API Error" in f.get("message", "")))
+                or ("TakeDamage" in f.get("message", ""))
+                for f in failed_checks
+            )
 
-            if has_humanoid_check:
+            if has_humanoid_check and not has_humanoid_blocking_error:
                 passed_checks.append("Entity Humanoid Resolution (Validates target character model has Humanoid)")
+            elif has_humanoid_blocking_error:
+                failed_checks.append({
+                    "type": "error",
+                    "line": 1,
+                    "message": "Humanoid resolution & damage execution contains fatal type/API errors (e.g. indexing Humanoid for CFrame or calling TakeDamage on a BasePart).",
+                    "suggestion": "Access CFrame on HumanoidRootPart, resolve character model via FindFirstAncestorOfClass('Model'), and call :TakeDamage() on Humanoid."
+                })
             else:
                 failed_checks.append({
                     "type": "warning",
@@ -474,7 +570,7 @@ class RobloxDomainTestRunner:
                     "suggestion": "Use 'character:FindFirstChildOfClass(\"Humanoid\")' to ensure valid damage targets."
                 })
 
-            if has_health_check:
+            if has_health_check and not has_humanoid_blocking_error:
                 passed_checks.append("Living Entity Guard (Verifies Humanoid.Health > 0 to prevent corpse damage)")
             else:
                 untested_limitations.append("Target health check (> 0) omitted; may register hits on dead characters.")
@@ -484,8 +580,21 @@ class RobloxDomainTestRunner:
                 "FilterDescendantsInstances", "caster", "player.Character", "character ~= hitCharacter",
                 "hitCharacter ~= character", "owner"
             ])
-            if has_caster_filter:
+            has_caster_blocking_error = any(
+                ("FilterDescendantsInstances" in f.get("message", "") and "Fake API" in f.get("message", ""))
+                or ("Type Mismatch in Call" in f.get("message", "") and "executeSpatialHitbox" in f.get("message", ""))
+                for f in failed_checks
+            )
+
+            if has_caster_filter and not has_caster_blocking_error:
                 passed_checks.append("Caster Immunity Filter (Prevents attacker from damaging themselves)")
+            elif has_caster_filter and has_caster_blocking_error:
+                failed_checks.append({
+                    "type": "error",
+                    "line": 1,
+                    "message": "Caster immunity filter is invalid: caller passes a BasePart instead of character Model or FilterDescendantsInstances is shadowed.",
+                    "suggestion": "Pass caster's character Model to FilterDescendantsInstances and assign directly to OverlapParams."
+                })
             else:
                 failed_checks.append({
                     "type": "warning",
@@ -509,8 +618,8 @@ class RobloxDomainTestRunner:
                         "message": "Hitbox creates Instance.new() parts or visualizers but lacks Debris:AddItem or :Destroy() cleanup.",
                         "suggestion": "Add 'game:GetService(\"Debris\"):AddItem(hitbox, duration)' to guarantee memory reclamation."
                     })
-            else:
-                passed_checks.append("Zero-Allocation Memory Profile (Pure spatial query without temporary Part allocations)")
+            elif not has_spatial_blocking_error:
+                passed_checks.append("Partless Spatial Query Architecture (Uses spatial queries directly without instantiating physical Part instances)")
 
             # Domain Untested Limitations
             untested_limitations.extend([
@@ -644,30 +753,31 @@ class RobloxDomainTestRunner:
             except Exception as term_exc:
                 untested_limitations.append(f"Private terminal runner note: {term_exc}")
 
-        # Check API errors
+        # Check API and semantic errors
         api_errors = [
             f for f in failed_checks 
             if any(k in f.get("message", "").lower() for k in [
                 "fake", "non-existent", "invalid roblox class", "spawnparticleemitter", 
-                "createhitbox", "makeexplosion", "findnearestcharacter", "damagehumanoid"
+                "createhitbox", "makeexplosion", "findnearestcharacter", "damagehumanoid",
+                "roblox api error", "roblox type error", "fatal library shadowing",
+                "unresolved global", "type mismatch in call"
             ])
         ]
         if api_errors:
             api_status = "FAIL"
+            static_status = "FAIL"
 
-        syntax_errors = [f for f in failed_checks if f.get("type") == "error" and f not in api_errors]
+        syntax_errors = [f for f in failed_checks if f.get("type") == "error"]
         if syntax_errors:
             syntax_status = "FAIL"
             static_status = "FAIL"
 
         # Final Verification Status: strictly requires real compiler verification and no syntax/API failures
         blocking_errors = [f for f in failed_checks if f.get("type") == "error"]
-        is_verified = (
-            len(blocking_errors) == 0 
-            and api_status != "FAIL" 
-            and syntax_status == "PASS" 
-            and has_compiler_verified
-        )
+        if blocking_errors or api_status == "FAIL" or syntax_status == "FAIL" or static_status == "FAIL":
+            is_verified = False
+        else:
+            is_verified = has_compiler_verified
 
         return {
             "passed_checks": passed_checks,
@@ -1177,11 +1287,11 @@ class StrokeCodingLoop:
         errors = [f for f in failed if f.get("type") == "error"]
         warnings = [f for f in failed if f.get("type") == "warning"]
 
-        if errors or not is_verified:
-            badge = "FAILED (SYNTAX OR RUNTIME ISSUES DETECTED)"
+        if errors or api_status == "FAIL" or syntax_status == "FAIL" or static_status == "FAIL":
+            badge = "FAILED (ROBLOX API OR TYPE ERRORS DETECTED)" if api_status == "FAIL" else "FAILED (SYNTAX OR RUNTIME ISSUES DETECTED)"
         elif is_verified and has_compiler_verified:
             badge = f"VERIFIED ({iterations} PASS{'ES' if iterations > 1 else ''})"
-        elif is_verified and not has_compiler_verified:
+        elif len(errors) == 0 and api_status == "PASS" and syntax_status in ("PASS", "NOT RUN (COMPILER NOT INSTALLED)"):
             badge = "STATIC CHECKS PASSED (COMPILER UNVERIFIED)"
         else:
             badge = "COMPLETED WITH WARNINGS"

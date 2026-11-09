@@ -215,7 +215,8 @@ class TestHonestMcpTools(unittest.TestCase):
     def test_01_studio_tools_report_offline_honestly(self):
         """Roblox Studio tools report status='offline' instead of fake success when disconnected."""
         import asyncio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
         res_search = loop.run_until_complete(mcp_bridge.execute_mcp_tool("studio_search_scripts", {"query": "VFX"}))
         self.assertEqual(res_search["status"], "offline")
@@ -231,7 +232,8 @@ class TestHonestMcpTools(unittest.TestCase):
     def test_02_custom_mcp_reports_error_on_network_failure(self):
         """Custom MCP tool dispatch reports error if connection fails rather than pretending success."""
         import asyncio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         mcp_bridge.register_custom_mcp_server(
             server_id="test_offline_server",
             name="Test Server",
