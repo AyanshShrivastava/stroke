@@ -494,7 +494,7 @@ async def send_otp(payload: SendOtpRequest):
 
     print(f"[AUTH AUDIT] Dispatched authentic verification email to {email} via {provider} (TTL: 5 Minutes)", flush=True)
 
-    msg = f"A verification code has been dispatched to {email}. Code: {otp_code}" if provider == "stroke_gateway" else f"A verification code has been dispatched to {email}. Please check your inbox and spam folder."
+    msg = f"A verification code has been dispatched to {email}. Please check your inbox and spam folder."
 
     return {
         "status": "success",
