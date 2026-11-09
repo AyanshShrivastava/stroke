@@ -801,6 +801,39 @@
           </button>
         </div>
 
+        <!-- Outbound Email & OTP Configuration (Resend API) -->
+        <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-3">
+          <div class="flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-1.5">
+              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <span class="font-semibold text-white">Outbound Email & OTP (Resend)</span>
+            </div>
+            <span id="settingsResendStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border">Checking...</span>
+          </div>
+          <p class="text-[11px] text-brand-muted leading-relaxed">
+            Configure your Resend API Key (<code class="text-emerald-400 font-mono">re_...</code>) for 100% reliable OTP verification delivery directly to user inboxes.
+          </p>
+          <div class="space-y-2">
+            <div>
+              <label class="block text-[10px] font-mono text-brand-muted mb-1">RESEND API KEY</label>
+              <div class="relative">
+                <input id="settingsResendKeyInput" type="password" placeholder="re_123456789..." class="w-full bg-black/60 border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:border-brand-accent focus:outline-none pr-16">
+                <button type="button" id="toggleResendKeyVisibility" class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-brand-muted hover:text-white font-mono px-1">Show</button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-brand-muted mb-1">FROM EMAIL (OPTIONAL / SENDER)</label>
+              <input id="settingsResendFromInput" type="text" placeholder="Stroke AI &lt;onboarding@resend.dev&gt;" class="w-full bg-black/60 border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:border-brand-accent focus:outline-none">
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <span id="settingsResendSavedNotice" class="text-[11px] text-emerald-400 font-mono hidden">✓ Saved to .env</span>
+              <button id="saveResendConfigBtn" type="button" class="ml-auto px-3 py-1.5 rounded-lg bg-brand-accent/20 border border-brand-accent/40 text-brand-accent hover:bg-brand-accent/30 text-xs font-semibold transition-colors">
+                Save Email Key
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Account -->
         <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-2">
           <div class="text-xs font-semibold text-white">Identity</div>
@@ -1056,6 +1089,12 @@
     const settingsSignOutBtn = document.getElementById('settingsSignOutBtn');
     const settingsEmailText = document.getElementById('settingsEmailText');
     const settingsCacheBadge = document.getElementById('settingsCacheBadge');
+    const settingsResendStatusBadge = document.getElementById('settingsResendStatusBadge');
+    const settingsResendKeyInput = document.getElementById('settingsResendKeyInput');
+    const settingsResendFromInput = document.getElementById('settingsResendFromInput');
+    const toggleResendKeyVisibility = document.getElementById('toggleResendKeyVisibility');
+    const saveResendConfigBtn = document.getElementById('saveResendConfigBtn');
+    const settingsResendSavedNotice = document.getElementById('settingsResendSavedNotice');
     const fileAttachmentInput = document.getElementById('fileAttachmentInput');
     const attachBtn = document.getElementById('attachBtn');
     const attachmentsPreviewStrip = document.getElementById('attachmentsPreviewStrip');
@@ -1487,7 +1526,7 @@
     });
 
     // 5b. Settings Modal Controller
-    function openSettingsModal() {
+    async function openSettingsModal() {
       profilePopover.classList.add('hidden');
       settingsModal.classList.remove('hidden');
       settingsEmailText.textContent = state.userEmail || 'Not signed in';
@@ -1497,6 +1536,29 @@
       const hasCache = !!localStorage.getItem(cacheKey);
       settingsCacheBadge.textContent = hasCache ? 'Active (Cached)' : 'Not Cached';
       settingsCacheBadge.className = hasCache ? 'text-[10px] font-mono text-brand-accent' : 'text-[10px] font-mono text-brand-muted';
+
+      // Load active Resend outbound email configuration
+      try {
+        const res = await fetch('/auth/email-config');
+        if (res.ok) {
+          const cfg = await res.json();
+          if (cfg.resend_configured) {
+            settingsResendStatusBadge.textContent = 'Active (Resend)';
+            settingsResendStatusBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/40';
+            if (cfg.resend_key_masked) {
+              settingsResendKeyInput.placeholder = cfg.resend_key_masked;
+            }
+          } else {
+            settingsResendStatusBadge.textContent = 'Not Configured';
+            settingsResendStatusBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border';
+          }
+          if (cfg.email_from) {
+            settingsResendFromInput.value = cfg.email_from;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load email config:', err);
+      }
     }
 
     function closeSettingsModal() {
@@ -1507,6 +1569,62 @@
     if (popoverOpenSettingsBtn) popoverOpenSettingsBtn.addEventListener('click', openSettingsModal);
     closeSettingsModalBtn.addEventListener('click', closeSettingsModal);
     closeSettingsSaveBtn.addEventListener('click', closeSettingsModal);
+
+    // Resend API Key visibility toggle
+    if (toggleResendKeyVisibility && settingsResendKeyInput) {
+      toggleResendKeyVisibility.addEventListener('click', () => {
+        const isPw = settingsResendKeyInput.type === 'password';
+        settingsResendKeyInput.type = isPw ? 'text' : 'password';
+        toggleResendKeyVisibility.textContent = isPw ? 'Hide' : 'Show';
+      });
+    }
+
+    // Save Resend API configuration
+    if (saveResendConfigBtn) {
+      saveResendConfigBtn.addEventListener('click', async () => {
+        const key = (settingsResendKeyInput.value || '').trim();
+        const from = (settingsResendFromInput.value || '').trim();
+        if (!key && !from) {
+          showToast('Please enter a Resend API key.');
+          return;
+        }
+
+        saveResendConfigBtn.disabled = true;
+        saveResendConfigBtn.textContent = 'Saving...';
+        try {
+          const payload = {};
+          if (key) payload.resend_api_key = key;
+          if (from) payload.email_from = from;
+
+          const res = await fetch('/auth/email-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (res.ok) {
+            settingsResendStatusBadge.textContent = 'Active (Resend)';
+            settingsResendStatusBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/40';
+            settingsResendKeyInput.value = '';
+            if (data.config && data.config.resend_key_masked) {
+              settingsResendKeyInput.placeholder = data.config.resend_key_masked;
+            }
+            if (settingsResendSavedNotice) {
+              settingsResendSavedNotice.classList.remove('hidden');
+              setTimeout(() => settingsResendSavedNotice.classList.add('hidden'), 4000);
+            }
+            showToast('Resend API key saved and activated!');
+          } else {
+            showToast('Failed to save email config: ' + (data.detail || res.statusText));
+          }
+        } catch (err) {
+          showToast('Network error saving email config.');
+        } finally {
+          saveResendConfigBtn.disabled = false;
+          saveResendConfigBtn.textContent = 'Save Email Key';
+        }
+      });
+    }
 
     settingsTempSlider.addEventListener('input', (e) => {
       updateCreativity(e.target.value);
@@ -1620,6 +1738,12 @@
 
       if (addedCount > 0) {
         renderAttachmentPreviews();
+        if (!promptInput.value.trim() && state.pendingAttachments.length > 0) {
+          const names = state.pendingAttachments.map(a => a.name).join(', ');
+          promptInput.value = `Analyze and review ${names}`;
+          promptInput.style.height = 'auto';
+          promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + 'px';
+        }
         showToast(`Attached ${addedCount} file(s)`);
       }
     }
@@ -1859,7 +1983,7 @@
       renderAttachmentPreviews();
       sendPromptBtn.disabled = true;
 
-      const effectivePrompt = text || 'Please analyze the attached file(s).';
+      const effectivePrompt = text || (currentAttachments.length === 1 ? `Please analyze the attached file: ${currentAttachments[0].name}` : `Please analyze the attached files (${currentAttachments.map(a => a.name).join(', ')}).`);
       await sendChatMessage(effectivePrompt, currentAttachments);
     }
 
@@ -1900,7 +2024,9 @@
         removeTypingIndicator(typingId);
 
         if (!res.ok) {
-          appendMessage('assistant', 'Error communicating with Stroke: ' + res.statusText);
+          const errData = await res.json().catch(() => null);
+          const errDetail = errData?.detail || errData?.message || res.statusText || 'Internal Server Error';
+          appendMessage('assistant', 'Error communicating with Stroke: ' + errDetail);
           return;
         }
 
@@ -2102,11 +2228,20 @@
               else if (ext === 'JSON') badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/40';
               else if (ext === 'LUAU' || ext === 'LUA') badgeColor = 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40';
 
+              const lineCount = (att.content || '').split('\n').length;
               attHtml += `
-                <div class="flex items-center space-x-2 px-2.5 py-1.5 rounded-xl bg-black/60 border border-[#23422c] shadow-sm">
-                  <span class="px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold ${badgeColor}">${ext}</span>
-                  <span class="font-mono text-xs text-white max-w-[180px] truncate">${escapeHtml(att.name)}</span>
-                  <span class="text-[10px] text-brand-muted font-mono">${sizeKb}KB</span>
+                <div class="flex flex-col space-y-1.5 p-2 rounded-xl bg-black/60 border border-[#23422c] shadow-sm max-w-full">
+                  <div class="flex items-center space-x-2">
+                    <span class="px-1.5 py-0.5 rounded border text-[9px] font-mono font-bold ${badgeColor}">${ext}</span>
+                    <span class="font-mono text-xs text-white max-w-[220px] truncate">${escapeHtml(att.name)}</span>
+                    <span class="text-[10px] text-brand-muted font-mono">${sizeKb}KB</span>
+                  </div>
+                  ${att.content ? `
+                    <details class="text-[11px] font-mono text-gray-300">
+                      <summary class="cursor-pointer text-brand-accent hover:underline text-[10px] select-none">View ${escapeHtml(att.name)} (${lineCount} lines)</summary>
+                      <pre class="mt-1.5 max-h-48 overflow-y-auto p-2 rounded bg-black/80 border border-brand-border/60 text-[10px] leading-relaxed text-emerald-200/90 whitespace-pre overflow-x-auto"><code>${escapeHtml(att.content.slice(0, 4000))}${att.content.length > 4000 ? '\n... [truncated]' : ''}</code></pre>
+                    </details>
+                  ` : ''}
                 </div>
               `;
             }

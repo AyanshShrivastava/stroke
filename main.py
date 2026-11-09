@@ -23,6 +23,8 @@ Architecture Specifications:
 """
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
 import sys
 import asyncio
 import threading
@@ -193,6 +195,11 @@ class VerifyOtpRequest(BaseModel):
         if not clean.isdigit() or len(clean) != 6:
             raise ValueError("OTP verification code must consist of exactly 6 numeric digits.")
         return clean
+
+
+class EmailConfigRequest(BaseModel):
+    resend_api_key: Optional[str] = Field(None, description="Resend API key starting with re_")
+    email_from: Optional[str] = Field(None, description="Sender email address e.g. Stroke AI <onboarding@resend.dev>")
 
 
 class SwitchAccountRequest(BaseModel):
@@ -566,6 +573,74 @@ async def send_otp(payload: SendOtpRequest):
         "email": email,
         "provider": provider,
         "expires_in_seconds": 300
+    }
+
+
+def save_env_variable(key: str, value: str):
+    """Safely update or append an environment variable in the .env file."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    lines = []
+    found = False
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    
+    new_lines = []
+    for line in lines:
+        if line.strip().startswith(f"{key}=") or line.strip().startswith(f'export {key}='):
+            new_lines.append(f'{key}="{value}"\n')
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        new_lines.append(f'{key}="{value}"\n')
+    
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+
+@app.get("/auth/email-config", tags=["Authentication"])
+async def get_email_config():
+    """Returns current outbound email configuration status (Resend / SMTP)."""
+    resend_key = os.environ.get("RESEND_API_KEY", "").strip()
+    masked_key = ""
+    if resend_key:
+        masked_key = resend_key[:6] + "..." + resend_key[-4:] if len(resend_key) > 10 else "configured"
+    
+    return {
+        "status": "success",
+        "resend_configured": bool(resend_key),
+        "resend_key_masked": masked_key,
+        "email_from": os.environ.get("EMAIL_FROM", "Stroke AI <onboarding@resend.dev>"),
+        "smtp_configured": bool(os.environ.get("SMTP_HOST"))
+    }
+
+
+@app.post("/auth/email-config", tags=["Authentication"])
+async def update_email_config(payload: EmailConfigRequest):
+    """Updates and permanently persists Resend API key and sender configuration in memory and .env."""
+    updated = {}
+    if payload.resend_api_key is not None:
+        key = payload.resend_api_key.strip()
+        os.environ["RESEND_API_KEY"] = key
+        save_env_variable("RESEND_API_KEY", key)
+        updated["resend_configured"] = bool(key)
+    if payload.email_from is not None:
+        from_email = payload.email_from.strip()
+        os.environ["EMAIL_FROM"] = from_email
+        save_env_variable("EMAIL_FROM", from_email)
+        updated["email_from"] = from_email
+    
+    resend_key = os.environ.get("RESEND_API_KEY", "").strip()
+    masked_key = resend_key[:6] + "..." + resend_key[-4:] if len(resend_key) > 10 else "configured" if resend_key else ""
+    return {
+        "status": "success",
+        "message": "Outbound email configuration saved and persisted successfully.",
+        "config": {
+            "resend_configured": bool(resend_key),
+            "resend_key_masked": masked_key,
+            "email_from": os.environ.get("EMAIL_FROM", "Stroke AI <onboarding@resend.dev>")
+        }
     }
 
 
@@ -1765,6 +1840,7 @@ class AiChatRequest(BaseModel):
     think_mode: Optional[bool] = Field(False, description="Enable deep neural reasoning mode (legacy, mapped to reasoning_level)")
     reasoning_level: Optional[str] = Field("medium", description="Reasoning level: low, medium, high, maximum, absolute_peak")
     attachments: Optional[List[FileAttachment]] = Field(None, description="Attached code, image, or text files")
+    web_search: Optional[bool] = Field(True, description="Enable real-time DuckDuckGo web search")
 
 class VerifyCodePayload(BaseModel):
     code: str = Field(..., description="The script or module to test and verify")
@@ -3214,7 +3290,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     )
                     execution_steps.append({"name": "VFX Architecture", "detail": "Retrieved authentic Roblox ParticleEmitter API definitions"})
 
-            elif not ai_reply_text and should_trigger_web_search(last_user_message, payload.web_search, bool(payload.attachments)):
+            elif not ai_reply_text and should_trigger_web_search(last_user_message, getattr(payload, 'web_search', True), bool(payload.attachments)):
                 tool_invoked = True
                 tool_name_used = "web_search"
                 tool_query = last_user_message
@@ -3277,10 +3353,11 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     pruned_messages = list(local_messages)
 
                 final_messages = []
+                max_msg_len = 16000 if payload.attachments else 4000
                 for m in pruned_messages:
                     c = m["content"]
-                    if len(c) > 4000:
-                        c = c[:4000] + "\n...[context capped]"
+                    if len(c) > max_msg_len:
+                        c = c[:max_msg_len] + "\n...[context capped]"
                     final_messages.append({"role": m["role"], "content": c})
 
                 execution_steps.append({"name": "Agentic Neural Synthesis", "detail": f"Inference via Llama 3.2 1B Instruct (Reasoning: {reasoning_level.upper()}, Tools max turns: {max_tool_turns})"})
@@ -3486,7 +3563,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         try:
             # Check if query requests real-time info or documentation
             needs_search = False
-            if should_trigger_web_search(last_user_message, payload.web_search, bool(payload.attachments)):
+            if should_trigger_web_search(last_user_message, getattr(payload, 'web_search', True), bool(payload.attachments)):
                 needs_search = True
                 tool_invoked = True
                 tool_name_used = "web_search"
@@ -3763,7 +3840,7 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                         "Use the code generator or Roblox Studio MCP proxy to inspect and test the emitter hierarchy."
                     )
 
-        elif should_trigger_web_search(last_user_message, payload.web_search, bool(payload.attachments)):
+        elif should_trigger_web_search(last_user_message, getattr(payload, 'web_search', True), bool(payload.attachments)):
             tool_invoked = True
             tool_name_used = "web_search"
             tool_query = last_user_message
