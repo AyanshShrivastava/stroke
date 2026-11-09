@@ -46,7 +46,10 @@ if STROKE_DIR not in sys.path:
     sys.path.insert(0, STROKE_DIR)
 
 from terminal_service import TerminalManager, ToolDispatcher, get_terminal_openai_tool_schemas
-from coding_loop import StrokeCodingLoop, RobloxDomainTestRunner, ErrorAnalyser, LuauSyntaxValidator
+from coding_loop import (
+    StrokeCodingLoop, RobloxDomainTestRunner, ErrorAnalyser, LuauSyntaxValidator,
+    StateLedger, stitch_continuations, is_response_incomplete
+)
 import mcp_bridge
 import main
 
@@ -172,6 +175,72 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
         self.assertEqual(req.reasoning_level, "absolute_peak")
         self.assertEqual(req.creativity, 0.35)
         self.assertEqual(req.temperature, 0.35)
+
+    def test_05c_rolling_memory_and_state_ledger(self):
+        """Verify Rolling Memory & State Ledger strategy across long agent loops."""
+        north_star = "Build a full open-world elemental magic system"
+        ledger = StateLedger(north_star_goal=north_star)
+
+        # 1. North Star lock
+        header = ledger.get_north_star_header()
+        self.assertIn("NORTH STAR USER GOAL", header)
+        self.assertIn("Build a full open-world elemental magic system", header)
+
+        # 2. State Ledger recording and micro-summary
+        ledger.record_resolved_check("VFXEngine", passed_count=5)
+        ledger.record_resolved_check("HitboxManager", passed_count=3)
+        summary = ledger.get_ledger_summary()
+        self.assertIn("State Ledger", summary)
+        self.assertIn("VFXEngine", summary)
+        self.assertIn("HitboxManager", summary)
+        self.assertIn("0 errors", summary)
+
+        # 3. Pruning intermediate broken drafts
+        bloated_history = [
+            {"role": "system", "content": "You are Stroke."},
+            {"role": "user", "content": north_star},
+            {"role": "assistant", "content": "broken draft 1\n```luau\nlocal a = 1\n```"},
+            {"role": "user", "content": "[TOOL_RESULT]: SyntaxError: expected end on line 2"},
+            {"role": "assistant", "content": "broken draft 2\n```luau\nlocal b = 2\n```"},
+            {"role": "user", "content": "[TOOL_RESULT]: TypeError: invalid call on line 3"},
+            {"role": "assistant", "content": "verified draft 3\n```luau\nlocal c = 3\n```"},
+            {"role": "user", "content": "[TOOL_RESULT]: Status: PASS. 0 errors."}
+        ]
+        pruned = StateLedger.prune_intermediate_history(
+            messages=bloated_history,
+            north_star_goal=north_star,
+            state_ledger=ledger
+        )
+        # Verify history is compressed and old broken drafts are pruned
+        self.assertLess(len(pruned), len(bloated_history))
+        self.assertIn("NORTH STAR USER GOAL", pruned[0]["content"])
+        self.assertIn("State Ledger", pruned[0]["content"])
+        self.assertNotIn("broken draft 1", str(pruned))
+        self.assertNotIn("broken draft 2", str(pruned))
+
+    def test_05d_token_window_exhaustion_auto_continue_all_thinking_levels(self):
+        """Verify incomplete responses (length or unclosed fences) trigger auto-continue across all levels."""
+        # 1. Incompleteness detection
+        self.assertTrue(is_response_incomplete("Here is code:\n```luau\nlocal x = 10", finish_reason="stop"))
+        self.assertTrue(is_response_incomplete("Finished part 1 but...", finish_reason="length"))
+        self.assertFalse(is_response_incomplete("Complete code:\n```luau\nlocal x = 10\n```", finish_reason="stop"))
+
+        # 2. Seamless continuation stitching without double code fences
+        part1 = "Here is the code:\n```luau\nlocal Players = game:GetService('Players')\nlocal function onJoin(p)"
+        part2 = "```luau\n    print(p.Name)\nend\nPlayers.PlayerAdded:Connect(onJoin)\n```"
+        stitched = stitch_continuations(part1, part2)
+        # Ensure code blocks don't have duplicated inner ```luau fences
+        self.assertEqual(stitched.count("```luau"), 1)
+        self.assertIn("print(p.Name)", stitched)
+        self.assertIn("Players.PlayerAdded:Connect", stitched)
+
+        # 3. Verified across all thinking levels
+        for lvl in ["low", "medium", "high", "maximum", "absolute_peak"]:
+            req = main.AiChatRequest(
+                messages=[main.ChatMessage(role="user", content="Write long script")],
+                reasoning_level=lvl
+            )
+            self.assertEqual(req.reasoning_level, lvl)
 
     # ==========================================================================
     # 3. AUTONOMOUS ERROR DETECTION & SELF-HEALING AUDIT

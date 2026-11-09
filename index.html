@@ -1877,7 +1877,10 @@
           sources: data.sources,
           duration_seconds: data.duration_seconds,
           execution_steps: data.execution_steps,
-          coding_loop: data.coding_loop
+          coding_loop: data.coding_loop,
+          state_ledger: data.state_ledger,
+          auto_continued: data.auto_continued,
+          north_star_goal: data.north_star_goal
         });
 
         // Persist conversation to chat history
@@ -2195,6 +2198,21 @@
           `;
         }
 
+        let stateLedgerBadgeHtml = '';
+        if (meta.state_ledger) {
+          const cleanLedgerText = meta.state_ledger.replace(/^System Message \(State Ledger\):\s*/i, '');
+          stateLedgerBadgeHtml = `
+            <div class="mb-2 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-[11px] font-mono text-emerald-300 flex items-center justify-between shadow-sm">
+              <span class="flex items-center space-x-2 truncate">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="font-bold text-white tracking-wide uppercase text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40">State Ledger</span>
+                <span class="truncate text-emerald-300/90">${escapeHtml(cleanLedgerText)}</span>
+              </span>
+              ${meta.auto_continued ? '<span class="text-[9px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase font-bold ml-2 flex-shrink-0 tracking-wider">Auto-Continued</span>' : ''}
+            </div>
+          `;
+        }
+
         const formattedBody = formatMarkdownText(content);
 
         msgDiv.innerHTML = `
@@ -2203,6 +2221,7 @@
               S
             </div>
             <div class="min-w-0 flex-1">
+              ${stateLedgerBadgeHtml}
               ${codingLoopBadgeHtml}
               ${activityTraceHtml}
               ${toolChipHtml}

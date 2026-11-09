@@ -53,7 +53,10 @@ from google.cloud.firestore_v1 import DELETE_FIELD
 import vfx_service
 import mcp_bridge
 import coding_loop
-from coding_loop import StrokeCodingLoop, RobloxDomainTestRunner, ErrorAnalyser, CodingArchivist
+from coding_loop import (
+    StrokeCodingLoop, RobloxDomainTestRunner, ErrorAnalyser, CodingArchivist,
+    StateLedger, stitch_continuations, is_response_incomplete
+)
 import terminal_service
 from terminal_service import TerminalManager, get_terminal_tools_schema, get_terminal_openai_tool_schemas, ToolDispatcher
 
@@ -2741,8 +2744,12 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
 
     last_user_message = next((m.content for m in reversed(payload.messages) if m.role == "user"), "")
-    
+    first_user_message = next((m.content for m in payload.messages if m.role == "user"), "")
+    north_star_goal = first_user_message or last_user_message
+    agent_ledger = StateLedger(north_star_goal=north_star_goal)
+
     system_instruction = (
+        f"{agent_ledger.get_north_star_header()}\n"
         "You are Stroke, an autonomous Roblox game development, 3D visual effects (VFX), and Luau engineering assistant.\n"
         "You run 100% locally and offline on the user's computer with sandboxed workspace access through a private internal background terminal service and local Roblox Studio integration.\n\n"
         "CORE OPERATING PRINCIPLES:\n"
@@ -3247,8 +3254,51 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                             "role": "assistant",
                             "content": assistant_turn_content
                         })
+
+                        # Rolling Memory & State Ledger Strategy:
+                        # Record successful tool actions and prune messy intermediate history
+                        if not any(is_failure for et in executed_tools):
+                            agent_ledger.record_resolved_check(tool_name_used or "workspace_action")
+
+                        if len(current_agent_messages) > 6:
+                            current_agent_messages = StateLedger.prune_intermediate_history(
+                                messages=current_agent_messages,
+                                north_star_goal=north_star_goal,
+                                state_ledger=agent_ledger
+                            )
                     else:
                         ai_reply_text = raw_content
+
+                        # Automatic Continuation on Token Window Exhaustion (MANDATORY FOR ALL THINKING LEVELS)
+                        finish_reason = choice_msg.get("finish_reason")
+                        if is_response_incomplete(ai_reply_text, finish_reason):
+                            cont_attempts = 0
+                            max_cont = 5
+                            while cont_attempts < max_cont and is_response_incomplete(ai_reply_text, finish_reason):
+                                cont_attempts += 1
+                                execution_steps.append({
+                                    "name": f"Auto-Continue ({cont_attempts}/{max_cont})",
+                                    "detail": "Token budget exhausted before task completion. Automatically continuing seamlessly without user input."
+                                })
+                                cont_messages = list(current_agent_messages)
+                                cont_messages.append({"role": "assistant", "content": ai_reply_text})
+                                cont_messages.append({
+                                    "role": "user",
+                                    "content": "continue without repeating; seamlessly continue directly where you left off until completely finished."
+                                })
+                                cont_completion = await run_llama_inference(
+                                    llama_engine,
+                                    messages=cont_messages,
+                                    temperature=reasoning_temp,
+                                    max_tokens=reasoning_max_tokens
+                                )
+                                cont_choice = cont_completion["choices"][0]
+                                choice_msg = cont_choice
+                                finish_reason = cont_choice.get("finish_reason")
+                                cont_text = cont_choice.get("message", {}).get("content") or ""
+                                if not cont_text.strip():
+                                    break
+                                ai_reply_text = stitch_continuations(ai_reply_text, cont_text)
                         break
 
                 # Clean any lingering unexecuted tool call tags from user-visible reply
@@ -3336,6 +3386,25 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     ai_reply_text = ollama_res.json().get("message", {}).get("content", "")
                     provider_used = "ollama-local"
                     model_used = payload.model or "llama3.2"
+
+                    # Auto-continue for Ollama across all thinking levels
+                    if is_response_incomplete(ai_reply_text, ollama_res.json().get("done_reason")):
+                        cont_attempts = 0
+                        while cont_attempts < 4 and is_response_incomplete(ai_reply_text):
+                            cont_attempts += 1
+                            ollama_messages.append({"role": "assistant", "content": ai_reply_text})
+                            ollama_messages.append({"role": "user", "content": "continue without repeating; seamlessly continue directly where you left off until completely finished."})
+                            c_res = await client.post(
+                                f"{OLLAMA_HOST}/api/chat",
+                                json={"model": payload.model or "llama3.2", "messages": ollama_messages, "stream": False}
+                            )
+                            if c_res.status_code == 200:
+                                c_text = c_res.json().get("message", {}).get("content", "")
+                                if not c_text.strip():
+                                    break
+                                ai_reply_text = stitch_continuations(ai_reply_text, c_text)
+                            else:
+                                break
         except Exception as exc:
             print(f"[STROKE AGENT NOTICE] Local Ollama unavailable: {exc}", flush=True)
 
@@ -3660,7 +3729,16 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                         temperature=0.25,
                         max_tokens=1024
                     )
-                    return res["choices"][0]["message"]["content"]
+                    content = res["choices"][0]["message"]["content"]
+                    # Auto-continue if repair code was cut off by token limit
+                    if is_response_incomplete(content, res["choices"][0].get("finish_reason")):
+                        cont_msgs = list(repair_msgs)
+                        cont_msgs.append({"role": "assistant", "content": content})
+                        cont_msgs.append({"role": "user", "content": "continue without repeating; complete the code block until properly closed."})
+                        c_res = sync_llama_chat_completion(engine, messages=cont_msgs, temperature=0.25, max_tokens=1024)
+                        c_text = c_res["choices"][0]["message"]["content"]
+                        content = stitch_continuations(content, c_text)
+                    return content
                 except Exception as repair_exc:
                     print(f"[STROKE CODING LOOP] Local repair note: {repair_exc}", flush=True)
 
@@ -3672,7 +3750,19 @@ async def chat_with_neural_ai(payload: AiChatRequest):
                     timeout=25.0
                 )
                 if resp.status_code == 200:
-                    return resp.json().get("message", {}).get("content", "")
+                    content = resp.json().get("message", {}).get("content", "")
+                    if is_response_incomplete(content):
+                        cont_msgs = list(repair_msgs)
+                        cont_msgs.append({"role": "assistant", "content": content})
+                        cont_msgs.append({"role": "user", "content": "continue without repeating; complete the code block until properly closed."})
+                        c_resp = httpx.post(
+                            f"{OLLAMA_HOST}/api/chat",
+                            json={"model": payload.model or "llama3.2", "messages": cont_msgs, "stream": False},
+                            timeout=25.0
+                        )
+                        if c_resp.status_code == 200:
+                            content = stitch_continuations(content, c_resp.json().get("message", {}).get("content", ""))
+                    return content
             except Exception:
                 pass
             return ""
@@ -3770,6 +3860,9 @@ async def chat_with_neural_ai(payload: AiChatRequest):
         "reasoning_level": reasoning_level,
         "creativity": reasoning_temp,
         "temperature": reasoning_temp,
+        "state_ledger": agent_ledger.get_ledger_summary(),
+        "north_star_goal": north_star_goal,
+        "auto_continued": bool("cont_attempts" in locals() and cont_attempts > 0),
         "learning_recorded": learning_recorded,
         "god_tier_vfx_learned": god_tier_vfx_learned,
         "learned_vfx_name": learned_vfx_name,

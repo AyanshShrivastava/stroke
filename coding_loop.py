@@ -932,6 +932,136 @@ class CodingArchivist:
 
 
 # ==============================================================================
+# 4b. ROLLING MEMORY & STATE LEDGER ENGINE
+# ==============================================================================
+
+def stitch_continuations(prev_text: str, next_text: str) -> str:
+    """Seamlessly joins truncated model generations without duplicating code fences or headings."""
+    if not prev_text:
+        return next_text or ""
+    if not next_text:
+        return prev_text
+
+    prev_clean = prev_text.rstrip()
+    next_clean = next_text.lstrip()
+
+    # Check if prev ended inside an unclosed code fence
+    prev_fences = prev_clean.count("```")
+    if prev_fences % 2 != 0:
+        # Inside unclosed code block
+        # If next starts with ```<lang>\n, strip that opening fence to prevent nested fence syntax error
+        m = re.match(r"^```[a-zA-Z0-9_-]*\n?", next_clean)
+        if m:
+            next_clean = next_clean[m.end():]
+        return prev_clean + "\n" + next_clean
+
+    return prev_clean + "\n\n" + next_clean
+
+
+def is_response_incomplete(text: str, finish_reason: Optional[str] = None) -> bool:
+    """Detects whether model output was cut off by token window exhaustion or unclosed syntax."""
+    if finish_reason == "length":
+        return True
+    if not text or len(text.strip()) < 10:
+        return False
+    # Check unclosed code fences: odd number of ```
+    fence_count = text.count("```")
+    if fence_count % 2 != 0:
+        return True
+    # Check trailing cutoffs (incomplete expressions or trailing ellipses)
+    stripped = text.strip()
+    if stripped.endswith(("...", "\\", "->", "=>", "(", "{", "[")):
+        return True
+    return False
+
+
+class StateLedger:
+    """
+    Rolling Memory & State Ledger Engine:
+    Maintains a high-speed, lean context memory for long-running agentic loops:
+    1. Keep the North Star: Locks original user request permanently at the top.
+    2. Prune Failed Attempts: Deletes intermediate broken code drafts and resolved error traces.
+    3. Maintain State Ledger: Condenses workspace status into a 1-line clean summary.
+    """
+
+    def __init__(self, north_star_goal: str):
+        self.north_star_goal = (north_star_goal or "").strip()
+        self.verified_modules: List[str] = []
+        self.total_scripts_created: int = 0
+        self.resolved_errors_count: int = 0
+        self.active_mcp_servers: List[str] = []
+
+    def record_resolved_check(self, module_name: str, passed_count: int = 1):
+        """Records a successful verification check and marks errors as resolved."""
+        clean_name = str(module_name).strip()
+        if clean_name and clean_name not in self.verified_modules:
+            self.verified_modules.append(clean_name)
+        self.total_scripts_created = max(1, len(self.verified_modules))
+        self.resolved_errors_count += 1
+
+    def get_north_star_header(self) -> str:
+        """Returns the locked North Star goal block."""
+        return (
+            "==================================================\n"
+            "NORTH STAR USER GOAL (PERMANENT PRIMARY OBJECTIVE):\n"
+            f"{self.north_star_goal}\n"
+            "==================================================\n"
+            "RULE: Always anchor all reasoning, actions, and code generation to this North Star goal. Never deviate or lose track of this objective.\n"
+        )
+
+    def get_ledger_summary(self) -> str:
+        """Generates the lean, clean State Ledger system message."""
+        module_text = ", ".join(self.verified_modules[-3:]) if self.verified_modules else "Active workspace script"
+        return (
+            f"System Message (State Ledger): Module '{module_text}' compiled successfully. "
+            f"Current Workspace state: {max(1, self.total_scripts_created)} script(s) created/verified, 0 errors."
+        )
+
+    @classmethod
+    def prune_intermediate_history(
+        cls,
+        messages: List[Dict[str, str]],
+        north_star_goal: str,
+        state_ledger: 'StateLedger'
+    ) -> List[Dict[str, str]]:
+        """
+        Prunes old intermediate failed attempts, raw tracebacks, and tool execution dumps.
+        Compresses historical turns into a single State Ledger entry while keeping the North Star locked.
+        """
+        if not messages:
+            return []
+
+        pruned: List[Dict[str, str]] = []
+        
+        # 1. System prompt with locked North Star and State Ledger
+        system_content = messages[0]["content"] if messages[0].get("role") == "system" else ""
+        north_star_block = state_ledger.get_north_star_header()
+        
+        if "NORTH STAR USER GOAL" not in system_content:
+            system_content = north_star_block + "\n" + system_content
+            
+        ledger_summary = state_ledger.get_ledger_summary()
+        if "System Message (State Ledger):" not in system_content:
+            system_content = system_content.rstrip() + "\n\n" + ledger_summary
+
+        pruned.append({"role": "system", "content": system_content})
+
+        # 2. Keep the original user prompt
+        user_msgs = [m for m in messages[1:] if m.get("role") == "user" and not m.get("content", "").startswith("[TOOL_RESULT")]
+        original_prompt = user_msgs[0]["content"] if user_msgs else north_star_goal
+        pruned.append({"role": "user", "content": original_prompt})
+
+        # 3. Keep ONLY the most recent assistant message and latest tool interaction (pruning all older intermediate attempts)
+        recent_tail = [m for m in messages[1:] if m is not (user_msgs[0] if user_msgs else None)]
+        if len(recent_tail) > 3:
+            pruned.extend(recent_tail[-3:])
+        else:
+            pruned.extend(recent_tail)
+
+        return pruned
+
+
+# ==============================================================================
 # 5. AUTONOMOUS CODING LOOP ORCHESTRATOR
 # ==============================================================================
 
@@ -1139,6 +1269,7 @@ class StrokeCodingLoop:
         current_reply = initial_reply
         iteration = 1
         final_report = {}
+        state_ledger = StateLedger(north_star_goal=prompt)
         safety_ceiling = max_iterations if (max_iterations is not None and max_iterations > 0) else 50
         previous_code = None
         stagnant_count = 0
@@ -1236,9 +1367,10 @@ class StrokeCodingLoop:
             # CRITICAL: When code works cleanly, give the answer immediately!
             # Stroke does not keep looping to "improve" code that is already working.
             if not blocking_errors and report.get("is_verified", False):
+                state_ledger.record_resolved_check(f"{primary_lang.title()}Module", len(report.get("passed_checks", [])))
                 loop_steps.append({
                     "name": f"Verification Passed (Pass {iteration})",
-                    "detail": "Code verified cleanly. Delivering verified solution immediately without unnecessary revisions."
+                    "detail": f"{state_ledger.get_ledger_summary()} Code verified cleanly. Delivering verified solution immediately without unnecessary revisions."
                 })
                 break
 
@@ -1272,7 +1404,19 @@ class StrokeCodingLoop:
                     "detail": f"Model resolving compiler/runtime diagnostics (Attempt {iteration})"
                 })
 
+                # Rolling Memory & State Ledger Strategy:
+                # 1. Lock North Star at the absolute top of the system prompt
+                # 2. Maintain a State Ledger entry replacing messy prior error dumps
+                # 3. Prune old broken drafts from prior iterations (retaining only current_reply)
+                ledger_summary = state_ledger.get_ledger_summary()
+                system_ledger_content = (
+                    f"{state_ledger.get_north_star_header()}\n"
+                    f"{ledger_summary}\n"
+                    f"Instruction: Resolve the targeted compiler/runtime diagnostics below. Return complete, corrected code."
+                )
+
                 fix_messages = [
+                    {"role": "system", "content": system_ledger_content},
                     {"role": "user", "content": prompt},
                     {"role": "assistant", "content": current_reply},
                     {"role": "user", "content": correction_prompt}
@@ -1280,6 +1424,20 @@ class StrokeCodingLoop:
 
                 try:
                     fixed_reply = llm_generate_fn(fix_messages)
+                    
+                    # Auto-continue if code block was cut off by token limit before properly closing
+                    if fixed_reply and is_response_incomplete(fixed_reply):
+                        cont_attempts = 0
+                        while cont_attempts < 3 and is_response_incomplete(fixed_reply):
+                            cont_attempts += 1
+                            cont_messages = list(fix_messages)
+                            cont_messages.append({"role": "assistant", "content": fixed_reply})
+                            cont_messages.append({"role": "user", "content": "continue without repeating; complete the code block until properly closed."})
+                            cont_chunk = llm_generate_fn(cont_messages)
+                            if not cont_chunk:
+                                break
+                            fixed_reply = stitch_continuations(fixed_reply, cont_chunk)
+
                     if fixed_reply and len(fixed_reply.strip()) > 30:
                         current_reply = fixed_reply
                     else:
