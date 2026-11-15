@@ -31,6 +31,7 @@ import paths_service
 import backup_service
 import file_service
 import workspace_service
+from agent_orchestrator import get_reasoning_profile, ReasoningProfile
 
 try:
     from luaparser import ast as lua_ast
@@ -1189,7 +1190,9 @@ class SmartImplementationPlanner:
         cls,
         goal_spec: GoalSpecification,
         inspected_files: List[InspectedProjectFile],
-        llm_fn: Optional[Any] = None
+        llm_fn: Optional[Any] = None,
+        planning_depth: str = "linear",
+        max_steps: int = 4
     ) -> SmartPlan:
         to_modify = []
         to_create = []
@@ -1207,14 +1210,42 @@ class SmartImplementationPlanner:
             default_name = f"solution.{'luau' if goal_spec.target_language == 'luau' else 'py'}"
             to_create.append(default_name)
 
-        steps = [
-            f"1. Implement {goal_spec.target_language.title()} module fulfilling: {goal_spec.primary_objective}",
-            "2. Ensure syntax balance and authentic service resolution",
-            "3. Run automated domain test checks (AST & compiler verification)",
-            "4. Validate that existing code and conventions are preserved"
-        ]
+        lang_title = goal_spec.target_language.title()
 
-        test_strat = f"Static AST analysis + {goal_spec.target_language.title()} bytecode verification"
+        if planning_depth in ("multi_agent_strategic", "hierarchical_decomposed"):
+            steps = [
+                f"1. Strategic Decomposition: Architect {lang_title} components fulfilling North Star goal: '{goal_spec.primary_objective}'",
+                "2. Context & Lock Management: Verify baseline SHA-256 snapshots and register file ownership locks",
+                f"3. Core Implementation: Construct balanced {lang_title} source with authentic Roblox/system service resolution",
+                "4. VFX & Memory Safeguards: Implement explicit Debris / :Destroy() resource cleanup and platform throttling",
+                "5. Domain Guard Verification: Implement multi-hit debounce dictionary and living entity (Humanoid.Health) filters",
+                "6. Structural AST Balancing: Validate block closures, delimiter nesting, and eliminate unresolved globals",
+                "7. Real Compiler Verification: Execute native Luau/Python compiler in private background terminal with code 0 exit requirement",
+                "8. Independent Code Review: Review applied diffs against plan with specialized ReviewerAgent audit criteria",
+                "9. Final Evidence Synthesis: Generate evidence-backed transparency matrix without simulated success"
+            ]
+        elif planning_depth == "tree_of_thought":
+            steps = [
+                f"1. Intent Analysis: Evaluate alternative implementation paths for '{goal_spec.primary_objective}'",
+                f"2. Dependency Mapping: Inspect {len(inspected_files)} workspace file(s) and resolve symbol references",
+                f"3. Balanced Implementation: Author {lang_title} module adhering to syntax and service conventions",
+                "4. Debounce & Spatial Guard: Enforce OverlapParams and hit-caching logic",
+                "5. Static & Compiler Checks: Run AST validation and compiler verification suite",
+                "6. Plan Alignment Review: Audit output files to prevent extraneous modifications"
+            ]
+        elif planning_depth == "none":
+            steps = [
+                f"1. Direct Synthesis: Immediately generate {lang_title} code fulfilling user request without preliminary planning."
+            ]
+        else:  # linear
+            steps = [
+                f"1. Implement {lang_title} module fulfilling: {goal_spec.primary_objective}",
+                "2. Ensure syntax balance and authentic service resolution",
+                "3. Run automated domain test checks (AST & compiler verification)",
+                "4. Validate that existing code and conventions are preserved"
+            ]
+
+        test_strat = f"Static AST analysis + {lang_title} bytecode verification ({planning_depth} planning depth)"
         risk = "Zero deletions allowed; pre-modification SHA-256 backup created before writing."
 
         return SmartPlan(
@@ -1337,7 +1368,8 @@ class ChangeReviewer:
         goal_spec: GoalSpecification,
         plan: SmartPlan,
         edits: List[FileChangeResult],
-        test_report: Dict[str, Any]
+        test_report: Dict[str, Any],
+        review_mode: str = "formal_audit"
     ) -> Dict[str, Any]:
         passed_tests = test_report.get("is_verified", False) or test_report.get("static_status") == "PASS"
         has_errors = any(f.get("type") == "error" for f in test_report.get("failed_checks", []))
@@ -1347,19 +1379,56 @@ class ChangeReviewer:
         actual_set = {e.relative_path for e in edits if e.action in ("created", "modified")}
         unplanned_files = list(actual_set - planned_set)
 
-        approved = passed_tests and not has_errors and len(unplanned_files) == 0
+        reasons = []
+        reviewer_role = "Automated Reviewer"
+        domain_notes = []
+
+        if review_mode == "none":
+            approved = True
+            reasons.append("Fast path: code review disabled in Low mode")
+        elif review_mode == "basic_syntax_check":
+            approved = passed_tests and not has_errors
+            if not approved:
+                reasons.append("Syntax or bytecode compilation failed")
+        elif review_mode == "plan_alignment":
+            approved = passed_tests and not has_errors and len(unplanned_files) == 0
+            if not passed_tests or has_errors:
+                reasons.append("Tests or compiler checks failed")
+            if unplanned_files:
+                reasons.append(f"Unplanned files touched outside plan: {unplanned_files}")
+        elif review_mode == "specialized_reviewer_agent":
+            # Absolute Peak: Independent ReviewerAgent audit
+            reviewer_role = "Specialized ReviewerAgent"
+            # Audit domain warnings for performance and memory
+            warnings = [f for f in test_report.get("failed_checks", []) if f.get("type") == "warning"]
+            for w in warnings:
+                msg = w.get("message", "")
+                if "Debris" in msg or "cleanup" in msg.lower():
+                    domain_notes.append(f"Memory Notice: {msg}")
+                if "debounce" in msg.lower():
+                    domain_notes.append(f"Debounce Notice: {msg}")
+
+            approved = passed_tests and not has_errors and len(unplanned_files) == 0
+            if not passed_tests or has_errors:
+                reasons.append("Compiler or test suite verification failed")
+            if unplanned_files:
+                reasons.append(f"Extraneous file modifications rejected: {unplanned_files}")
+        else:  # formal_audit (Maximum)
+            approved = passed_tests and not has_errors and len(unplanned_files) == 0
+            if not passed_tests or has_errors:
+                reasons.append("Tests or compiler checks failed")
+            if unplanned_files:
+                reasons.append(f"Unnecessary files modified outside plan: {unplanned_files}")
 
         verdict = "APPROVED" if approved else "CHANGES_REQUESTED"
-        reasons = []
-        if not passed_tests or has_errors:
-            reasons.append("Tests or compiler checks failed")
-        if unplanned_files:
-            reasons.append(f"Unnecessary files modified outside plan: {unplanned_files}")
 
         return {
             "verdict": verdict,
             "approved": approved,
+            "reviewer_role": reviewer_role,
+            "review_mode": review_mode,
             "reasons": reasons,
+            "domain_notes": domain_notes,
             "planned_files_count": len(planned_set),
             "actual_files_modified_count": len(actual_set),
             "unplanned_files": unplanned_files,
@@ -1381,6 +1450,8 @@ class SmartCodingWorkflowResult:
     final_reply: str
     iterations: int
     markdown_report: str
+    reasoning_level: str = "medium"
+    reasoning_profile: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -1396,6 +1467,8 @@ class SmartCodingWorkflowResult:
             "final_reply": self.final_reply,
             "iterations": self.iterations,
             "markdown_report": self.markdown_report,
+            "reasoning_level": self.reasoning_level,
+            "reasoning_profile": self.reasoning_profile
         }
 
 
@@ -1572,7 +1645,8 @@ class StrokeCodingLoop:
         user_email: Optional[str] = None,
         max_iterations: Optional[int] = None,
         include_markdown_report: bool = True,
-        workspace_path: Optional[str] = None
+        workspace_path: Optional[str] = None,
+        reasoning_level: Optional[str] = "medium"
     ) -> Tuple[str, Dict[str, Any], List[Dict[str, str]]]:
         """
         Executes the Write -> Test -> Diagnose -> Fix -> Retest coding loop across ALL code blocks.
@@ -1587,6 +1661,7 @@ class StrokeCodingLoop:
             # Not a code generation response
             return initial_reply, {"is_verified": False, "passed_checks": [], "failed_checks": [], "untested_limitations": []}, loop_steps
 
+        profile = get_reasoning_profile(reasoning_level)
         primary_lang = blocks[0]["language"]
         total_lines = sum(len(b["code"].splitlines()) for b in blocks)
 
@@ -1594,7 +1669,7 @@ class StrokeCodingLoop:
         goal_spec = GoalUnderstandingEngine.analyze_goal(prompt)
         loop_steps.append({
             "name": "Understanding request...",
-            "detail": f"Target: {primary_lang.title()} | Goal: {goal_spec.primary_objective[:90]} | Identified {len(blocks)} code block(s) to verify"
+            "detail": f"Target: {primary_lang.title()} | Reasoning: {profile.label} | Goal: {goal_spec.primary_objective[:80]} | Identified {len(blocks)} code block(s)"
         })
 
         # Step 2: Generate
@@ -1803,7 +1878,7 @@ class StrokeCodingLoop:
             testing_strategy="AST & compiler domain checks",
             risk_mitigation="Zero deletions"
         )
-        self_review = ChangeReviewer.review_changes(goal_spec, review_plan, [], final_report)
+        self_review = ChangeReviewer.review_changes(goal_spec, review_plan, [], final_report, review_mode=profile.code_review_mode)
         final_report["self_review"] = self_review
 
         # Step 10: Final Response
@@ -1838,13 +1913,14 @@ class StrokeCodingLoop:
         user_email: Optional[str] = None,
         max_iterations: Optional[int] = None,
         target_file: Optional[str] = None,
-        include_markdown_report: bool = True
+        include_markdown_report: bool = True,
+        reasoning_level: Optional[str] = "medium"
     ) -> SmartCodingWorkflowResult:
         """
         The Rebuilt 10-Stage Stroke Smart Coding Workflow:
           1. Understand the user's actual goal (GoalUnderstandingEngine).
           2. Inspect relevant project files & record baseline SHA-256 (ProjectInspectionEngine).
-          3. Create structured implementation plan (SmartImplementationPlanner).
+          3. Create structured implementation plan (SmartImplementationPlanner with depth profile).
           4. Make controlled code changes with backups & conflict checks (ControlledChangeManager).
           5. Run appropriate tests (RobloxDomainTestRunner / Python compiler).
           6. Read actual error output (real compiler lines, messages, suggestions).
@@ -1855,13 +1931,14 @@ class StrokeCodingLoop:
         """
         stages_executed: List[Dict[str, str]] = []
         applied_edits: List[FileChangeResult] = []
+        profile = get_reasoning_profile(reasoning_level)
 
         # STAGE 1: Understand user's actual goal
         goal_spec = GoalUnderstandingEngine.analyze_goal(prompt, target_file=target_file)
         stages_executed.append({
             "stage": "1",
             "name": "Understand User Goal",
-            "detail": f"Target: {goal_spec.target_language.title()} | Objective: {goal_spec.primary_objective[:90]} | Requirements: {len(goal_spec.explicit_requirements)}"
+            "detail": f"Target: {goal_spec.target_language.title()} | Reasoning: {profile.label} ({profile.planning_depth}) | Objective: {goal_spec.primary_objective[:80]}"
         })
 
         # STAGE 2: Inspect relevant project files
@@ -1874,11 +1951,17 @@ class StrokeCodingLoop:
         })
 
         # STAGE 3: Create implementation plan
-        plan = SmartImplementationPlanner.create_plan(goal_spec, inspected_files, llm_fn=llm_generate_fn)
+        plan = SmartImplementationPlanner.create_plan(
+            goal_spec,
+            inspected_files,
+            llm_fn=llm_generate_fn,
+            planning_depth=profile.planning_depth,
+            max_steps=profile.planning_budget_steps
+        )
         stages_executed.append({
             "stage": "3",
             "name": "Create Implementation Plan",
-            "detail": f"Planned modifications: {plan.target_files_to_modify} | Creations: {plan.target_files_to_create}"
+            "detail": f"Planned modifications: {plan.target_files_to_modify} | Creations: {plan.target_files_to_create} ({profile.planning_depth} depth)"
         })
 
         # STAGE 4: Make controlled code changes (Initial generation)
@@ -1923,7 +2006,7 @@ class StrokeCodingLoop:
 
         # STAGES 5 to 8: Test -> Read Errors -> Fix Failures -> Re-run Tests
         iteration = 1
-        safety_ceiling = max_iterations if (max_iterations is not None and max_iterations > 0) else 50
+        safety_ceiling = max_iterations if (max_iterations is not None and max_iterations > 0) else profile.max_coding_iterations
         seen_code_hashes: Set[str] = set()
         seen_error_signatures: Dict[str, int] = {}
         stagnant_count = 0
@@ -2120,11 +2203,11 @@ class StrokeCodingLoop:
             iteration += 1
 
         # STAGE 9: Review its own changes
-        review = ChangeReviewer.review_changes(goal_spec, plan, applied_edits, test_report)
+        review = ChangeReviewer.review_changes(goal_spec, plan, applied_edits, test_report, review_mode=profile.code_review_mode)
         stages_executed.append({
             "stage": "9",
             "name": "Review Own Changes",
-            "detail": f"Self-review verdict: {review['verdict']} | Approved: {review['approved']} | Unplanned files modified: {len(review['unplanned_files'])}"
+            "detail": f"Self-review verdict: {review['verdict']} | Approved: {review['approved']} | Reviewer: {review.get('reviewer_role', 'Reviewer')} | Mode: {review.get('review_mode', 'formal')} | Unplanned files modified: {len(review['unplanned_files'])}"
         })
 
         # STAGE 10: Report what genuinely succeeded
@@ -2162,6 +2245,8 @@ class StrokeCodingLoop:
             stages_executed=stages_executed,
             final_reply=final_reply,
             iterations=effective_iterations,
-            markdown_report=report_md
+            markdown_report=report_md,
+            reasoning_level=profile.level,
+            reasoning_profile=profile.to_dict()
         )
 

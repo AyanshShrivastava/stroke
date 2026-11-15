@@ -142,6 +142,341 @@ class TaskBudget:
         }
 
 
+# =============================================================================
+# 2b. 8-DIMENSION REASONING PROFILES (LOW, MEDIUM, HIGH, MAXIMUM, ABSOLUTE PEAK)
+# =============================================================================
+
+@dataclass
+class ReasoningProfile:
+    """
+    Comprehensive multi-dimensional reasoning profile controlling:
+    1. Planning depth
+    2. Agent delegation
+    3. Parallel execution
+    4. Tool-call budgets
+    5. Context management
+    6. Verification depth
+    7. Testing iterations
+    8. Independent code review
+    """
+    level: str  # "low", "medium", "high", "maximum", "absolute_peak"
+    label: str  # "Low", "Medium", "High", "Maximum", "Absolute Peak"
+    description: str
+
+    # 1. Planning Depth
+    planning_depth: str  # "none", "linear", "tree_of_thought", "hierarchical_decomposed", "multi_agent_strategic"
+    planning_budget_steps: int
+    requires_explicit_plan: bool
+
+    # 2. Agent Delegation
+    agent_delegation_mode: str  # "none", "assisted", "specialized_subagent", "multi_agent_pipeline", "full_parallel_orchestrator"
+    delegated_roles: List[str]
+
+    # 3. Parallel Execution
+    parallel_execution_allowed: bool
+    max_concurrency: int
+    allow_parallel_read_tools: bool
+    allow_isolated_subagent_workspaces: bool
+
+    # 4. Tool-Call Budgets
+    max_tool_turns: int
+    max_tool_calls: int
+    tool_timeout_seconds: float
+    max_tools_to_select: int
+    max_tool_turns_chat: int
+    tool_execution_enabled: bool
+
+    # 5. Context Management
+    context_strategy: str  # "ephemeral_minimal", "rolling_window", "state_ledger", "state_ledger_with_pruning", "multi_agent_sandboxed_context"
+    max_history_turns: int
+    anchor_north_star_goal: bool
+    prune_intermediate_attempts: bool
+
+    # 6. Verification Depth
+    verification_depth: str  # "fast_syntax_only", "syntax_and_bytecode", "ast_and_domain_rules", "compiler_and_terminal_assertions", "exhaustive_multi_system"
+    require_compiler_verification: bool
+    verify_roblox_datamodel: bool
+    verify_debounce_and_memory: bool
+    verify_mcp_reflection: bool
+
+    # 7. Testing Iterations
+    max_coding_iterations: int
+    allow_self_healing_loop: bool
+    infinite_loop_stagnation_ceiling: int
+
+    # 8. Independent Code Review
+    code_review_mode: str  # "none", "basic_syntax_check", "plan_alignment", "formal_audit", "specialized_reviewer_agent"
+    require_independent_reviewer: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def to_task_budget(
+        self,
+        max_turns_override: Optional[int] = None,
+        max_tool_calls_override: Optional[int] = None,
+        max_time_override: Optional[float] = None
+    ) -> TaskBudget:
+        turns = self.max_tool_turns
+        calls = self.max_tool_calls
+        timeout = self.tool_timeout_seconds
+
+        if max_turns_override is not None and max_turns_override >= 0:
+            turns = max_turns_override
+        if max_tool_calls_override is not None and max_tool_calls_override >= 0:
+            calls = max_tool_calls_override
+        if max_time_override is not None and max_time_override > 0:
+            timeout = max_time_override
+
+        token_map = {
+            "low": 768,
+            "medium": 1024,
+            "high": 2048,
+            "maximum": 3072,
+            "absolute_peak": 4096
+        }
+        tokens = token_map.get(self.level, 2048)
+
+        return TaskBudget(
+            max_turns=turns,
+            max_tool_calls=calls,
+            max_time_seconds=timeout,
+            max_tokens=tokens
+        )
+
+    def get_system_instructions(self) -> str:
+        if self.level == "low":
+            return (
+                "REASONING LEVEL: LOW (Direct Execution).\n"
+                "- Goal: Deliver direct, ultra-fast responses without preliminary planning overhead.\n"
+                "- Tool policy: Tool execution is disabled; rely entirely on immediate synthesis.\n"
+                "- Coding policy: Single-pass generation with fast syntax verification."
+            )
+        elif self.level == "medium":
+            return (
+                "REASONING LEVEL: MEDIUM (Balanced).\n"
+                "- Goal: Deliver balanced, well-structured solutions with clear step-by-step reasoning.\n"
+                "- Tool policy: Execute focused read/write tools when helpful to inspect workspace context.\n"
+                "- Verification: Verify basic syntax, Roblox DataModel conventions, and bytecode structure."
+            )
+        elif self.level == "high":
+            return (
+                "REASONING LEVEL: HIGH (Deep Planning & Investigation).\n"
+                "- Goal: Thoroughly analyze tasks using tree-of-thought exploration before making changes.\n"
+                "- Tool policy: Inspect dependencies, project files, and terminal environment across multiple turns.\n"
+                "- Verification: Enforce AST balance, authentic spatial queries, and multi-hit debounce guards."
+            )
+        elif self.level == "maximum":
+            return (
+                "REASONING LEVEL: MAXIMUM (Autonomous Staged Engineering).\n"
+                "- Goal: Decompose complex engineering tasks into a hierarchical plan with verified sub-tasks.\n"
+                "- Tool policy: Run compiler checks, static analysis, and automated test suites repeatedly.\n"
+                "- Review: Perform formal self-audit comparing modified files strictly against the implementation plan."
+            )
+        else:  # absolute_peak
+            return (
+                "==================================================\n"
+                "REASONING LEVEL: ABSOLUTE PEAK (The Ultimate Multi-Agent Orchestration Layer)\n"
+                "==================================================\n"
+                "You are operating in ABSOLUTE PEAK mode with full multi-agent orchestration, parallel specialized sub-agents, and exhaustive multi-system verification.\n"
+                "You actively bridge code, visual effects, and workspace structure simultaneously through full MCP orchestration:\n\n"
+                "1. MULTI-AGENT SPECIALIZATION & DELEGATION:\n"
+                "- Orchestrate specialized roles: Researcher, Planner, Developer, Tester, Reviewer, and Debugger.\n"
+                "- Prevent conflicting edits through FileOwnershipManager locking and isolated workspace sandboxes.\n"
+                "- Anchor all reasoning to the locked North Star goal; prune resolved traces to maintain razor-sharp context.\n\n"
+                "2. ADVANCED VFX PIPELINE (MCP ORCHESTRATION):\n"
+                "- Never provide a static single ParticleEmitter script. Actively construct and deploy full visual effects directly into the workspace using studio_execute_luau.\n"
+                "- Layered Emitters: Read layout, create parent Attachments, and instantiate multiple synchronized ParticleEmitters, Trails, and Beams.\n"
+                "- Tween & Lighting Synchronization: Generate accompanying Luau scripts to handle dynamic property updates (e.g. matching particle bursts with screen shakes, custom camera blur, and lighting fades).\n"
+                "- Debris & Memory Clean-up: Automatically structure code using game:GetService('Debris'):AddItem(...) or object pooling so heavy VFX never cause performance drops.\n\n"
+                "3. LARGE-SCALE MAP BUILDING & ENVIRONMENTAL GENERATION:\n"
+                "- Direct Explorer Manipulation: Manipulate parts, terrain, and instances directly inside the Explorer window via MCP.\n"
+                "- Procedural Generation & Placement: Write and instantly execute scripts via MCP to procedurally place terrain, rocks, vegetation, and modular assets using math.noise.\n"
+                "- StreamingEnabled & Optimization: Turn off CanCollide/CastShadow on repetitive detail meshes, configure collision groups, and organize folder hierarchies for Roblox StreamingEnabled compliance.\n\n"
+                "4. EXHAUSTIVE MULTI-SYSTEM VERIFICATION & INDEPENDENT AUDIT:\n"
+                "- Bridge code, visuals, and physics simultaneously. Verify damage hitboxes with OverlapParams, ensure living entity guards, test via background terminal compiler, and run independent ReviewerAgent audit before concluding."
+            )
+
+
+REASONING_PROFILES: Dict[str, ReasoningProfile] = {
+    "low": ReasoningProfile(
+        level="low",
+        label="Low",
+        description="Direct, ultra-fast responses without preliminary planning overhead or tool execution.",
+        planning_depth="none",
+        planning_budget_steps=0,
+        requires_explicit_plan=False,
+        agent_delegation_mode="none",
+        delegated_roles=[],
+        parallel_execution_allowed=False,
+        max_concurrency=1,
+        allow_parallel_read_tools=False,
+        allow_isolated_subagent_workspaces=False,
+        max_tool_turns=0,
+        max_tool_calls=0,
+        tool_timeout_seconds=30.0,
+        max_tools_to_select=0,
+        max_tool_turns_chat=1,
+        tool_execution_enabled=False,
+        context_strategy="ephemeral_minimal",
+        max_history_turns=2,
+        anchor_north_star_goal=False,
+        prune_intermediate_attempts=False,
+        verification_depth="fast_syntax_only",
+        require_compiler_verification=False,
+        verify_roblox_datamodel=False,
+        verify_debounce_and_memory=False,
+        verify_mcp_reflection=False,
+        max_coding_iterations=1,
+        allow_self_healing_loop=False,
+        infinite_loop_stagnation_ceiling=1,
+        code_review_mode="none",
+        require_independent_reviewer=False
+    ),
+    "medium": ReasoningProfile(
+        level="medium",
+        label="Medium",
+        description="Balanced reasoning with linear step outlines, essential tool checks, and quick validation.",
+        planning_depth="linear",
+        planning_budget_steps=3,
+        requires_explicit_plan=False,
+        agent_delegation_mode="assisted",
+        delegated_roles=["developer"],
+        parallel_execution_allowed=False,
+        max_concurrency=1,
+        allow_parallel_read_tools=False,
+        allow_isolated_subagent_workspaces=False,
+        max_tool_turns=2,
+        max_tool_calls=4,
+        tool_timeout_seconds=60.0,
+        max_tools_to_select=6,
+        max_tool_turns_chat=4,
+        tool_execution_enabled=True,
+        context_strategy="rolling_window",
+        max_history_turns=6,
+        anchor_north_star_goal=True,
+        prune_intermediate_attempts=False,
+        verification_depth="syntax_and_bytecode",
+        require_compiler_verification=False,
+        verify_roblox_datamodel=True,
+        verify_debounce_and_memory=False,
+        verify_mcp_reflection=False,
+        max_coding_iterations=3,
+        allow_self_healing_loop=True,
+        infinite_loop_stagnation_ceiling=2,
+        code_review_mode="basic_syntax_check",
+        require_independent_reviewer=False
+    ),
+    "high": ReasoningProfile(
+        level="high",
+        label="High",
+        description="Deep multi-stage planning with tree-of-thought analysis, parallel inspections, and AST verification.",
+        planning_depth="tree_of_thought",
+        planning_budget_steps=6,
+        requires_explicit_plan=True,
+        agent_delegation_mode="specialized_subagent",
+        delegated_roles=["researcher", "developer", "tester"],
+        parallel_execution_allowed=True,
+        max_concurrency=2,
+        allow_parallel_read_tools=True,
+        allow_isolated_subagent_workspaces=False,
+        max_tool_turns=6,
+        max_tool_calls=12,
+        tool_timeout_seconds=120.0,
+        max_tools_to_select=12,
+        max_tool_turns_chat=8,
+        tool_execution_enabled=True,
+        context_strategy="state_ledger",
+        max_history_turns=12,
+        anchor_north_star_goal=True,
+        prune_intermediate_attempts=True,
+        verification_depth="ast_and_domain_rules",
+        require_compiler_verification=True,
+        verify_roblox_datamodel=True,
+        verify_debounce_and_memory=True,
+        verify_mcp_reflection=False,
+        max_coding_iterations=6,
+        allow_self_healing_loop=True,
+        infinite_loop_stagnation_ceiling=3,
+        code_review_mode="plan_alignment",
+        require_independent_reviewer=False
+    ),
+    "maximum": ReasoningProfile(
+        level="maximum",
+        label="Maximum",
+        description="Autonomous staged engineering with hierarchical DAG planning, terminal assertions, and formal review.",
+        planning_depth="hierarchical_decomposed",
+        planning_budget_steps=10,
+        requires_explicit_plan=True,
+        agent_delegation_mode="multi_agent_pipeline",
+        delegated_roles=["researcher", "planner", "developer", "tester", "reviewer"],
+        parallel_execution_allowed=True,
+        max_concurrency=3,
+        allow_parallel_read_tools=True,
+        allow_isolated_subagent_workspaces=True,
+        max_tool_turns=15,
+        max_tool_calls=25,
+        tool_timeout_seconds=180.0,
+        max_tools_to_select=16,
+        max_tool_turns_chat=15,
+        tool_execution_enabled=True,
+        context_strategy="state_ledger_with_pruning",
+        max_history_turns=20,
+        anchor_north_star_goal=True,
+        prune_intermediate_attempts=True,
+        verification_depth="compiler_and_terminal_assertions",
+        require_compiler_verification=True,
+        verify_roblox_datamodel=True,
+        verify_debounce_and_memory=True,
+        verify_mcp_reflection=True,
+        max_coding_iterations=15,
+        allow_self_healing_loop=True,
+        infinite_loop_stagnation_ceiling=3,
+        code_review_mode="formal_audit",
+        require_independent_reviewer=True
+    ),
+    "absolute_peak": ReasoningProfile(
+        level="absolute_peak",
+        label="Absolute Peak",
+        description="The ultimate multi-agent orchestration architecture: parallel specialized agents (Researcher, Planner, Developer, Tester, Reviewer, Debugger), locked North Star context, multi-system Roblox & VFX synchronization, and exhaustive verification.",
+        planning_depth="multi_agent_strategic",
+        planning_budget_steps=15,
+        requires_explicit_plan=True,
+        agent_delegation_mode="full_parallel_orchestrator",
+        delegated_roles=["orchestrator", "researcher", "planner", "developer", "tester", "reviewer", "debugger"],
+        parallel_execution_allowed=True,
+        max_concurrency=5,
+        allow_parallel_read_tools=True,
+        allow_isolated_subagent_workspaces=True,
+        max_tool_turns=20,
+        max_tool_calls=35,
+        tool_timeout_seconds=240.0,
+        max_tools_to_select=24,
+        max_tool_turns_chat=25,
+        tool_execution_enabled=True,
+        context_strategy="multi_agent_sandboxed_context",
+        max_history_turns=40,
+        anchor_north_star_goal=True,
+        prune_intermediate_attempts=True,
+        verification_depth="exhaustive_multi_system",
+        require_compiler_verification=True,
+        verify_roblox_datamodel=True,
+        verify_debounce_and_memory=True,
+        verify_mcp_reflection=True,
+        max_coding_iterations=25,
+        allow_self_healing_loop=True,
+        infinite_loop_stagnation_ceiling=4,
+        code_review_mode="specialized_reviewer_agent",
+        require_independent_reviewer=True
+    )
+}
+
+def get_reasoning_profile(level: Optional[str]) -> ReasoningProfile:
+    """Retrieves the active 8-dimension ReasoningProfile for any level name."""
+    lvl = (level or "medium").strip().lower().replace(" ", "_").replace("-", "_")
+    return REASONING_PROFILES.get(lvl, REASONING_PROFILES["medium"])
+
+
 def create_budget_for_reasoning_level(
     level: str,
     max_turns_override: Optional[int] = None,
@@ -149,50 +484,14 @@ def create_budget_for_reasoning_level(
     max_time_override: Optional[float] = None
 ) -> TaskBudget:
     """
-    Constructs hard, bounded budgets per reasoning level.
+    Constructs hard, bounded budgets per reasoning level derived from ReasoningProfile.
     Never uses infinite or 999 budgets.
     """
-    lvl = (level or "medium").strip().lower()
-    if lvl == "low":
-        turns = 0
-        calls = 0
-        timeout = 30.0
-        tokens = 768
-    elif lvl == "medium":
-        turns = 2
-        calls = 4
-        timeout = 60.0
-        tokens = 1024
-    elif lvl == "high":
-        turns = 6
-        calls = 12
-        timeout = 120.0
-        tokens = 2048
-    elif lvl == "maximum":
-        # Hard ceiling for Maximum (bounded, not 999)
-        turns = 15
-        calls = 25
-        timeout = 180.0
-        tokens = 3072
-    else:  # absolute_peak
-        # Hard ceiling for Absolute Peak
-        turns = 20
-        calls = 35
-        timeout = 240.0
-        tokens = 4096
-
-    if max_turns_override is not None and max_turns_override >= 0:
-        turns = max_turns_override
-    if max_tool_calls_override is not None and max_tool_calls_override >= 0:
-        calls = max_tool_calls_override
-    if max_time_override is not None and max_time_override > 0:
-        timeout = max_time_override
-
-    return TaskBudget(
-        max_turns=turns,
-        max_tool_calls=calls,
-        max_time_seconds=timeout,
-        max_tokens=tokens
+    profile = get_reasoning_profile(level)
+    return profile.to_task_budget(
+        max_turns_override=max_turns_override,
+        max_tool_calls_override=max_tool_calls_override,
+        max_time_override=max_time_override
     )
 
 
@@ -235,6 +534,8 @@ class AgentTask:
     user_uid: str = "anonymous"
     state: TaskState = TaskState.PLANNED
     budget: TaskBudget = field(default_factory=TaskBudget)
+    reasoning_level: str = "medium"
+    profile: Optional[ReasoningProfile] = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     idempotency_keys: Set[str] = field(default_factory=set)
@@ -272,6 +573,8 @@ class AgentTask:
             "active_goal": self.active_goal,
             "user_uid": self.user_uid,
             "state": self.state.value,
+            "reasoning_level": self.reasoning_level,
+            "profile": self.profile.to_dict() if self.profile else None,
             "budget": self.budget.to_dict(),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -674,8 +977,8 @@ class TaskManager:
         max_tool_calls_override: Optional[int] = None
     ) -> AgentTask:
         tid = task_id or f"task_{uuid.uuid4().hex[:12]}"
-        budget = create_budget_for_reasoning_level(
-            reasoning_level,
+        profile = get_reasoning_profile(reasoning_level)
+        budget = profile.to_task_budget(
             max_turns_override=max_turns_override,
             max_tool_calls_override=max_tool_calls_override
         )
@@ -684,7 +987,9 @@ class TaskManager:
             active_goal=active_goal.strip(),
             user_uid=user_uid,
             state=TaskState.PLANNED,
-            budget=budget
+            budget=budget,
+            reasoning_level=reasoning_level,
+            profile=profile
         )
         task.record_progress("Task planned", f"Reasoning: {reasoning_level}, Max turns: {budget.max_turns}")
         cls._tasks[tid] = task

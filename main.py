@@ -79,7 +79,8 @@ import agent_orchestrator
 import parallel_agent_system
 from agent_orchestrator import (
     TaskState, TaskBudget, AgentTask, TaskManager,
-    AgentExecutionGate, ToolOutputObserver, create_budget_for_reasoning_level
+    AgentExecutionGate, ToolOutputObserver, create_budget_for_reasoning_level,
+    ReasoningProfile, get_reasoning_profile, REASONING_PROFILES
 )
 import auth_service
 from auth_service import (
@@ -2599,6 +2600,23 @@ async def get_models_catalog(user: AuthenticatedUser = Depends(get_current_user)
     }
 
 
+@app.get("/api/models/reasoning-profiles", tags=["BYOK Models & Providers"])
+async def get_reasoning_profiles_endpoint(user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)):
+    """
+    GET /api/models/reasoning-profiles
+    Returns all 5 formal reasoning profiles across 8 architectural dimensions:
+    planning depth, agent delegation, parallel execution, tool call budgets,
+    context management, verification depth, testing iterations, and independent code review.
+    """
+    profiles = {k: v.to_dict() for k, v in REASONING_PROFILES.items()}
+    return {
+        "status": "success",
+        "profiles": profiles,
+        "levels": list(REASONING_PROFILES.keys()),
+        "default": "medium"
+    }
+
+
 @app.get("/api/models/live/{provider}", tags=["BYOK Models & Providers"])
 async def get_live_models_endpoint(
     provider: str,
@@ -3094,6 +3112,7 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
     if raw_level not in valid_levels:
         raw_level = "medium"
     reasoning_level = raw_level
+    profile = get_reasoning_profile(reasoning_level)
 
     # Initialize or retrieve active agent task state machine with bounded budgets
     task_user_uid = user.uid if (isinstance(user, AuthenticatedUser) or hasattr(user, "uid")) else "anonymous"
@@ -3114,57 +3133,10 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
         user_temp = 0.35
     reasoning_temp = user_temp
 
-    if reasoning_level == "low":
-        max_tool_turns = 0
-        reasoning_max_tokens = 768
-        max_coding_iterations = 1
-        system_instruction += "\n\nREASONING LEVEL: LOW (Fast). Deliver direct, concise answers with minimal preliminary planning."
-    elif reasoning_level == "medium":
-        max_tool_turns = task_budget.max_turns
-        reasoning_max_tokens = 1024
-        max_coding_iterations = 3
-        system_instruction += "\n\nREASONING LEVEL: MEDIUM (Balanced). Break moderately complex tasks into clear steps, verify key assumptions, and use tools when helpful."
-    elif reasoning_level == "high":
-        max_tool_turns = task_budget.max_turns
-        reasoning_max_tokens = 2048
-        max_coding_iterations = 6
-        system_instruction += "\n\nREASONING LEVEL: HIGH (Deep Planning). Plan implementation thoroughly, inspect project files and terminal state, and investigate errors."
-    elif reasoning_level == "maximum":
-        max_tool_turns = task_budget.max_turns
-        reasoning_max_tokens = 3072
-        max_coding_iterations = 15  # Bounded hard ceiling
-        system_instruction += (
-            "\n\nREASONING LEVEL: MAXIMUM (Autonomous Staged Engineering). "
-            "Execute tools, inspect dependencies, run compiler checks and tests repeatedly until fully solved and verified."
-        )
-    else:  # absolute_peak
-        max_tool_turns = task_budget.max_turns
-        reasoning_max_tokens = 4096
-        max_coding_iterations = 20  # Bounded hard ceiling
-        system_instruction += (
-            "\n\n==================================================\n"
-            "REASONING LEVEL: ABSOLUTE PEAK (The Ultimate Agentic Layer)\n"
-            "==================================================\n"
-            "You are operating in ABSOLUTE PEAK mode with deep multi-step tool turns, autonomous MCP orchestration, and rigorous compiler verification.\n"
-            "You actively bridge the gap between code, visual effects, and workspace structure simultaneously through full MCP orchestration:\n\n"
-            "1. ADVANCED VFX PIPELINE (MCP ORCHESTRATION):\n"
-            "- Never just provide a static single ParticleEmitter script. Actively construct and deploy full visual effects directly into the workspace using studio_execute_luau.\n"
-            "- Layered Emitters: Read layout, create parent Attachments, and instantiate multiple synchronized ParticleEmitters, Trails, and Beams.\n"
-            "- Tween & Lighting Synchronization: Generate accompanying Luau scripts to handle dynamic property updates (e.g. matching a particle burst with screen shakes, custom camera blur, and PointLight/SpotLight brightness fades).\n"
-            "- Debris & Memory Clean-up: Automatically structure code using a safe Debris service (game:GetService('Debris'):AddItem(...)) or object pooling so heavy VFX never cause performance drops or frame-rate degradation.\n\n"
-            "2. LARGE-SCALE MAP BUILDING & ENVIRONMENTAL GENERATION:\n"
-            "- Direct Explorer Manipulation: Manipulate parts, terrain, and instances directly inside the Explorer window via MCP.\n"
-            "- Procedural Generation & Placement: Write and instantly execute scripts via MCP to procedurally place trees, rocks, terrain, and modular building pieces based on strict geometric rules or Perlin noise (math.noise).\n"
-            "- StreamingEnabled & Optimization: Configure map properties for peak performance, dynamically set up collision groups, turn off CanCollide and CastShadow on repetitive detail meshes, and organize map folder hierarchies (Geometry, Props, LightingFX) so it fully complies with Roblox StreamingEnabled.\n"
-            "- Atmosphere & Post-Processing: Drop in and configure fine-tuned Atmosphere, Sky, BloomEffect, and ColorCorrectionEffect in game:GetService('Lighting') to visually tie the map theme together.\n\n"
-            "3. FULL MULTI-SYSTEM SYNCHRONIZATION (THE ULTIMATE AGENTIC LAYER):\n"
-            "- Simultaneously bridge code, visuals, and structure. For complex events (e.g. 'Meteor Strike Event', 'Boss Awakening', 'Domain Expansion'):\n"
-            "  * Drop physical models/parts into the map via MCP.\n"
-            "  * Create the massive explosion particle VFX pipeline with layered emitters.\n"
-            "  * Wire up camera shakes and post-processing lighting bursts.\n"
-            "  * Write server-side code calculating blast-radius damage to nearby Humanoid characters.\n"
-            "  * Execute checks and retest until the entire multi-system architecture is verified and functional."
-        )
+    max_tool_turns = profile.max_tool_turns_chat if profile.tool_execution_enabled else 0
+    reasoning_max_tokens = task_budget.max_tokens
+    max_coding_iterations = profile.max_coding_iterations
+    system_instruction += f"\n\n{profile.get_system_instructions()}"
 
     api_messages = [{"role": "system", "content": system_instruction}]
     for idx, msg in enumerate(payload.messages):
@@ -3280,23 +3252,31 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
             target_provider = active_cfg.get("active_provider") or "custom"
 
     reasoning_level = (payload.reasoning_level or active_cfg.get("reasoning_level") or "medium").lower()
-    # Dynamic turn limit based on reasoning level
-    turn_limits = {"low": 1, "medium": 4, "high": 8, "maximum": 12, "absolute_peak": 25}
-    max_tool_turns = turn_limits.get(reasoning_level, 6)
+    profile = get_reasoning_profile(reasoning_level)
+    max_tool_turns = max(1, profile.max_tool_turns_chat)
 
     execution_steps.append({
         "name": "BYOK Neural Synthesis",
-        "detail": f"Inference via {target_provider.upper()} ({target_model}) [Reasoning: {reasoning_level.upper()}, Tools max turns: {max_tool_turns}]"
+        "detail": f"Inference via {target_provider.upper()} ({target_model}) [Reasoning: {profile.label}, Tools max turns: {max_tool_turns}]"
     })
 
+    if profile.level == "absolute_peak":
+        execution_steps.append({
+            "name": "Absolute Peak Multi-Agent Orchestration",
+            "detail": f"Delegated roles: {', '.join(profile.delegated_roles)} | Concurrency: {profile.max_concurrency} | Sandboxed workspaces: {profile.allow_isolated_subagent_workspaces}"
+        })
+
     # Two-tier dynamic tool selection
-    agent_tools = mcp_bridge.select_active_tools_for_query(
-        last_user_message,
-        history=api_messages,
-        max_tools=12 if reasoning_level in ("high", "maximum", "absolute_peak") else 8
-    )
-    if not getattr(payload, 'web_search', True):
-        agent_tools = [t for t in agent_tools if t.get("function", {}).get("name") != "web_search"]
+    if profile.tool_execution_enabled:
+        agent_tools = mcp_bridge.select_active_tools_for_query(
+            last_user_message,
+            history=api_messages,
+            max_tools=profile.max_tools_to_select
+        )
+        if not getattr(payload, 'web_search', True):
+            agent_tools = [t for t in agent_tools if t.get("function", {}).get("name") != "web_search"]
+    else:
+        agent_tools = []
 
     current_agent_messages = list(api_messages)
     tool_turn_count = 0
@@ -3593,7 +3573,8 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
                 llm_generate_fn=llm_repair_callback,
                 user_email=user_email,
                 max_iterations=max_coding_iterations,
-                include_markdown_report=False
+                include_markdown_report=False,
+                reasoning_level=profile.level
             )
             execution_steps.extend(loop_steps)
         except Exception as loop_exc:
@@ -3722,6 +3703,8 @@ async def chat_with_neural_ai_stream(payload: AiChatRequest, user: Authenticated
     raw_level = (payload.reasoning_level or ("high" if payload.think_mode else "medium")).lower().strip().replace(" ", "_").replace("-", "_")
     valid_levels = ("low", "medium", "high", "maximum", "absolute_peak")
     reasoning_level = raw_level if raw_level in valid_levels else "medium"
+    profile = get_reasoning_profile(reasoning_level)
+    system_instruction += f"\n\n{profile.get_system_instructions()}"
 
     active_cfg = ai_provider_service.get_active_model_config()
     is_inference_mocked = globals().get("_DEFAULT_RUN_LLAMA_INFERENCE") != run_llama_inference
