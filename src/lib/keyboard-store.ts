@@ -942,3 +942,160 @@ export async function streamAiChat(
     }
   }
 }
+
+export type ParallelAgentRole =
+  "researcher" | "planner" | "developer" | "tester" | "reviewer" | "debugger" | "orchestrator";
+export type ParallelAgentStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "awaiting_dependency"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "retrying";
+
+export interface ParallelAgentLogEntry {
+  timestamp: number;
+  level: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ParallelAgentContextInfo {
+  agent_id: string;
+  role: ParallelAgentRole;
+  name: string;
+  status: ParallelAgentStatus;
+  status_message: string;
+  created_at: number;
+  started_at?: number;
+  finished_at?: number;
+  logs_count: number;
+  recent_logs: ParallelAgentLogEntry[];
+  owned_files: string[];
+  retry_count: number;
+  max_retries: number;
+  error?: string;
+  output_artifacts?: Record<string, unknown>;
+}
+
+export interface ParallelAgentJob {
+  job_id: string;
+  user_goal: string;
+  workspace_path: string;
+  user_uid: string;
+  status: "planned" | "running" | "verifying" | "completed" | "failed" | "cancelled";
+  created_at: number;
+  updated_at: number;
+  completed_at?: number;
+  error?: string;
+  agents: Record<string, ParallelAgentContextInfo>;
+  final_verification?: Record<string, unknown>;
+  events_count: number;
+  recent_events: Array<{
+    job_id: string;
+    type: string;
+    timestamp: number;
+    data: Record<string, unknown>;
+  }>;
+}
+
+export async function runParallelAgentJob(payload: {
+  user_goal: string;
+  workspace_path?: string;
+  model_id?: string;
+  provider_id?: string;
+  use_isolated_sandbox?: boolean;
+}): Promise<{ status: string; job_id: string; job: ParallelAgentJob }> {
+  const res = await fetch("/api/orchestrator/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail || "Failed to start parallel agent job");
+  }
+  return await res.json();
+}
+
+export async function listParallelAgentJobs(): Promise<ParallelAgentJob[]> {
+  try {
+    const res = await fetch("/api/orchestrator/jobs");
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.jobs || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getParallelAgentJob(jobId: string): Promise<ParallelAgentJob | null> {
+  try {
+    const res = await fetch(`/api/orchestrator/jobs/${encodeURIComponent(jobId)}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function cancelParallelAgentJob(jobId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/orchestrator/jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: "POST",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function streamParallelAgentJob(
+  jobId: string,
+  onEvent: (event: Record<string, unknown>) => void,
+  onDone?: () => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  try {
+    const res = await fetch(`/api/orchestrator/jobs/${encodeURIComponent(jobId)}/stream`, {
+      signal,
+    });
+    if (!res.ok) return;
+    const reader = res.body?.getReader();
+    if (!reader) return;
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(":")) continue;
+        if (trimmed.startsWith("data: ")) {
+          const raw = trimmed.slice(6).trim();
+          if (raw === "[DONE]") {
+            onDone?.();
+            return;
+          }
+          try {
+            const parsed = JSON.parse(raw);
+            onEvent(parsed);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+    onDone?.();
+  } catch {
+    // network or abort
+  }
+}

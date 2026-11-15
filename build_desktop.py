@@ -99,6 +99,7 @@ def run_build():
         "multimodal_service",
         "luau_analyzer",
         "agent_orchestrator",
+        "parallel_agent_system",
         "auth_service",
         "local_firestore",
         "eval_harness",

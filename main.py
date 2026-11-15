@@ -76,6 +76,7 @@ import credentials_vault_service
 import ai_provider_service
 import isolated_workspace
 import agent_orchestrator
+import parallel_agent_system
 from agent_orchestrator import (
     TaskState, TaskBudget, AgentTask, TaskManager,
     AgentExecutionGate, ToolOutputObserver, create_budget_for_reasoning_level
@@ -3839,11 +3840,120 @@ async def approve_agent_task(task_id: str, user: Optional[auth_service.Authentic
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot approve task '{task_id}' (task not in awaiting_approval state).")
     return {"status": "approved", "task_id": task_id}
- 
- 
+
+
 # =============================================================================
-# OBSERVABILITY & AUDIT ENDPOINTS
+# ADVANCED PARALLEL MULTI-AGENT ORCHESTRATION ENDPOINTS
 # =============================================================================
+
+class RunParallelAgentJobRequest(BaseModel):
+    user_goal: str
+    workspace_path: Optional[str] = None
+    model_id: Optional[str] = None
+    provider_id: Optional[str] = None
+    use_isolated_sandbox: bool = False
+
+
+@app.post("/api/orchestrator/run", tags=["Multi-Agent Orchestration"])
+async def run_parallel_agent_job(
+    req: RunParallelAgentJobRequest,
+    background_tasks: BackgroundTasks,
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
+):
+    """
+    Spawns an advanced parallel multi-agent job delegating to:
+    Researcher -> Planner -> Developer -> [Tester || Reviewer] -> Debugger -> Verification Gate.
+    """
+    user_uid = user.uid if user else "default_user"
+    ws = req.workspace_path or os.getcwd()
+    job = parallel_agent_system.global_multi_agent_orchestrator.create_job(
+        user_goal=req.user_goal,
+        workspace_path=ws,
+        user_uid=user_uid
+    )
+    background_tasks.add_task(
+        parallel_agent_system.global_multi_agent_orchestrator.run_job,
+        job.job_id,
+        req.model_id,
+        req.provider_id,
+        req.use_isolated_sandbox
+    )
+    return {
+        "status": "started",
+        "job_id": job.job_id,
+        "job": job.to_dict()
+    }
+
+
+@app.get("/api/orchestrator/jobs", tags=["Multi-Agent Orchestration"])
+async def list_parallel_agent_jobs(
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
+):
+    """Lists all active and completed parallel multi-agent jobs."""
+    user_uid = user.uid if user else "default_user"
+    return {"jobs": parallel_agent_system.global_multi_agent_orchestrator.list_jobs(user_uid=user_uid)}
+
+
+@app.get("/api/orchestrator/jobs/{job_id}", tags=["Multi-Agent Orchestration"])
+async def get_parallel_agent_job(
+    job_id: str,
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
+):
+    """Retrieves real-time state, independent agent statuses, logs, and artifacts for a job."""
+    job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
+    return job.to_dict()
+
+
+@app.post("/api/orchestrator/jobs/{job_id}/cancel", tags=["Multi-Agent Orchestration"])
+async def cancel_parallel_agent_job(
+    job_id: str,
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
+):
+    """Cancels an active parallel agent job and immediately halts running sub-agents."""
+    success = parallel_agent_system.global_multi_agent_orchestrator.cancel_job(job_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Cannot cancel job '{job_id}' (not found or already terminal).")
+    return {"status": "cancelled", "job_id": job_id}
+
+
+@app.get("/api/orchestrator/jobs/{job_id}/stream", tags=["Multi-Agent Orchestration"])
+async def stream_parallel_agent_job(
+    job_id: str,
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
+):
+    """Streams real-time SSE events (agent thoughts, file locks, tool calls, and test results)."""
+    job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
+
+    async def event_generator():
+        last_index = 0
+        while True:
+            current_events = job.events
+            if last_index < len(current_events):
+                for evt in current_events[last_index:]:
+                    yield f"data: {json.dumps(evt)}\n\n"
+                last_index = len(current_events)
+
+            if job.status in (parallel_agent_system.JobStatus.COMPLETED, parallel_agent_system.JobStatus.FAILED, parallel_agent_system.JobStatus.CANCELLED):
+                yield f"data: {json.dumps({'type': 'job_terminal', 'status': job.status.value, 'job_id': job_id})}\n\n"
+                yield "data: [DONE]\n\n"
+                break
+
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 
 @app.get("/observability/events", tags=["Observability & Telemetry"])
 async def get_observability_events(

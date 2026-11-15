@@ -11,6 +11,7 @@ import {
   MessageSquare,
   HardDrive,
   Cpu,
+  Bot,
 } from "lucide-react";
 import { auth, signOut as firebaseSignOut } from "@/lib/firebase";
 import { KeyLogo } from "./KeyLogo";
@@ -184,6 +185,15 @@ export function AppShell({ activeId, children }: { activeId?: string; children: 
         <div className="flex items-center justify-between">
           <ThemeToggle />
           <div className="flex items-center gap-1">
+            <Link
+              to="/agents"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+              title="Parallel Multi-Agent Team"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              <span>Agents</span>
+            </Link>
             <Link
               to="/models"
               onClick={() => setOpen(false)}
