@@ -131,6 +131,10 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
         "roblox_diagnose_errors", "diagnose_errors",
         "roblox_verify_object", "verify_object"
     }
+    diagnostic_tools = {
+        "hunt_bugs", "run_diagnostics",
+        "get_bug_report", "discover_tests"
+    }
 
     if role == AgentRole.RESEARCHER:
         return AgentPermissions(
@@ -146,7 +150,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_in_files", "fs_search_in_files", "inspect_file", "fs_inspect_file",
                 "web_search", "search_vfx_database", "studio_get_console",
                 "studio_search_scripts", "script_search", "github_get_file_contents"
-            } | project_read_tools | roblox_specialist_tools,
+            } | project_read_tools | roblox_specialist_tools | diagnostic_tools,
             disallowed_tools={
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch", "run_command", "terminal_run"
@@ -182,7 +186,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch", "inspect_file", "fs_inspect_file"
-            } | project_read_tools | roblox_specialist_tools
+            } | project_read_tools | roblox_specialist_tools | diagnostic_tools
         )
     elif role == AgentRole.TESTER:
         return AgentPermissions(
@@ -197,7 +201,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "run_tests", "check_luau_syntax", "check_python_syntax",
                 "terminal_run", "run_command"
-            } | project_read_tools | roblox_specialist_tools,
+            } | project_read_tools | roblox_specialist_tools | diagnostic_tools,
             disallowed_tools={
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch"
@@ -215,7 +219,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "read_file", "fs_read_file", "list_directory", "fs_list_directory",
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "inspect_file", "fs_inspect_file"
-            } | project_read_tools | roblox_specialist_tools,
+            } | project_read_tools | roblox_specialist_tools | diagnostic_tools,
             disallowed_tools={
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch", "run_command", "terminal_run"
@@ -234,7 +238,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "edit_file", "fs_edit_file", "apply_patch", "fs_apply_patch",
                 "run_tests", "check_luau_syntax", "check_python_syntax"
-            } | project_read_tools | roblox_specialist_tools
+            } | project_read_tools | roblox_specialist_tools | diagnostic_tools
         )
     return AgentPermissions()
 

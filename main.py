@@ -44,6 +44,7 @@ import hmac
 import base64
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple, Set
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, status, Request, Response, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse, StreamingResponse
@@ -4872,6 +4873,82 @@ async def system_paths_endpoint():
         "is_elevated": paths_service.is_elevated_privilege()
     }
 
+
+# ==============================================================================
+# AUTOMATED BUG-HUNTING & SYSTEM DIAGNOSTICS ENDPOINTS
+# ==============================================================================
+
+class DiagnosticHuntPayload(BaseModel):
+    workspace_path: Optional[str] = None
+    run_full_tests: bool = False
+
+
+class BrokenImportScanPayload(BaseModel):
+    workspace_path: Optional[str] = None
+
+
+@app.post("/diagnostics/hunt", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
+async def diagnostics_hunt_endpoint(payload: DiagnosticHuntPayload):
+    """Executes a complete automated diagnostic bug hunt across all Stroke subsystems."""
+    import bug_hunter_service
+    hunter = bug_hunter_service.StrokeBugHunter(workspace_path=payload.workspace_path)
+    report = hunter.hunt_bugs(run_full_tests=payload.run_full_tests)
+    return {"status": "success", "report": report.to_dict()}
+
+
+@app.get("/diagnostics/tests", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
+async def diagnostics_tests_endpoint(workspace: Optional[str] = None):
+    """Discovers and catalogs all backend pytest suites and frontend vitest specs."""
+    import bug_hunter_service
+    ws = Path(workspace).resolve() if workspace else Path.cwd().resolve()
+    backend = bug_hunter_service.TestDiscoveryEngine.discover_backend_tests(ws)
+    frontend = bug_hunter_service.TestDiscoveryEngine.discover_frontend_tests(ws)
+    return {
+        "status": "success",
+        "workspace": str(ws),
+        "backend_tests": backend,
+        "frontend_tests": frontend
+    }
+
+
+@app.get("/diagnostics/report", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
+async def diagnostics_report_endpoint(workspace: Optional[str] = None):
+    """Returns the latest STROKE_TEST_REPORT markdown content or runs a quick diagnostic report."""
+    import bug_hunter_service
+    hunter = bug_hunter_service.StrokeBugHunter(workspace_path=workspace)
+    if hunter.docs_file.exists():
+        with open(hunter.docs_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"status": "success", "file": str(hunter.docs_file), "content": content}
+
+    report = hunter.hunt_bugs(run_full_tests=False)
+    md_content = bug_hunter_service.BugReportGenerator.generate_markdown_report(report)
+    return {"status": "success", "file": str(hunter.docs_file), "content": md_content}
+
+
+@app.post("/diagnostics/probe-endpoints", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
+async def diagnostics_probe_endpoints():
+    """Probes critical FastAPI endpoints measuring latency, status codes, and schemas."""
+    import bug_hunter_service
+    probes, issues = bug_hunter_service.ApiProbeDiagnostic.probe_all_endpoints()
+    return {
+        "status": "success",
+        "probes": probes,
+        "issues": [i.to_dict() for i in issues]
+    }
+
+
+@app.post("/diagnostics/broken-imports", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
+async def diagnostics_broken_imports_endpoint(payload: BrokenImportScanPayload):
+    """Statically scans all Python files for unguarded broken imports."""
+    import bug_hunter_service
+    ws = Path(payload.workspace_path).resolve() if payload.workspace_path else Path.cwd().resolve()
+    data, issues = bug_hunter_service.BrokenImportScanner.scan_project_imports(ws)
+    return {
+        "status": "success",
+        "import_scan": data,
+        "issues": [i.to_dict() for i in issues]
+    }
 
 
 # ==============================================================================

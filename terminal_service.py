@@ -1867,8 +1867,12 @@ class ToolDispatcher:
         "roblox_diagnose_errors", "diagnose_errors",
         "roblox_verify_object", "verify_object"
     }
+    DIAGNOSTIC_TOOLS = {
+        "hunt_bugs", "run_diagnostics",
+        "get_bug_report", "discover_tests"
+    }
 
-    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS | FILE_TOOLS | PROJECT_TOOLS | ROBLOX_SPECIALIST_TOOLS | DYNAMIC_TOOLS
+    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS | FILE_TOOLS | PROJECT_TOOLS | ROBLOX_SPECIALIST_TOOLS | DIAGNOSTIC_TOOLS | DYNAMIC_TOOLS
 
     @classmethod
     def is_supported(cls, tool_name: str) -> bool:
@@ -2244,6 +2248,34 @@ class ToolDispatcher:
                     ws = args.get("workspace_path") or args.get("workspace")
                     return await roblox_specialist_service.PlaytestAndVerificationEngine.verify_object(target_path, workspace_path=ws)
 
+            elif name in cls.DIAGNOSTIC_TOOLS:
+                import bug_hunter_service
+                ws = args.get("workspace_path") or args.get("workspace")
+                hunter = bug_hunter_service.StrokeBugHunter(workspace_path=ws)
+
+                if name in ("hunt_bugs", "run_diagnostics"):
+                    run_full = args.get("run_full_tests", False) if "run_full_tests" in args else args.get("full", False)
+                    report = hunter.hunt_bugs(run_full_tests=run_full)
+                    return {"status": "success", "report": report.to_dict()}
+
+                elif name == "get_bug_report":
+                    if hunter.docs_file.exists():
+                        with open(hunter.docs_file, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        return {"status": "success", "file": str(hunter.docs_file), "content": content}
+                    else:
+                        report = hunter.hunt_bugs(run_full_tests=False)
+                        return {"status": "success", "file": str(hunter.docs_file), "content": bug_hunter_service.BugReportGenerator.generate_markdown_report(report)}
+
+                elif name == "discover_tests":
+                    b_disc = bug_hunter_service.TestDiscoveryEngine.discover_backend_tests(hunter.workspace_path)
+                    f_disc = bug_hunter_service.TestDiscoveryEngine.discover_frontend_tests(hunter.workspace_path)
+                    return {
+                        "status": "success",
+                        "backend": b_disc,
+                        "frontend": f_disc
+                    }
+
             return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
         except Exception as exc:
             return {"status": "error", "message": f"Tool execution failed: {str(exc)}"}
@@ -2271,6 +2303,8 @@ class ToolDispatcher:
         elif name in cls.PROJECT_TOOLS:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
         elif name in cls.ROBLOX_SPECIALIST_TOOLS:
+            return _run_coroutine_sync(cls.dispatch_async(name, args))
+        elif name in cls.DIAGNOSTIC_TOOLS:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
         elif name in cls.WEB_SEARCH_TOOLS:
             q = args.get("query") or args.get("q") or args.get("search") or args.get("search_query") or ""
