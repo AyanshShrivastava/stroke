@@ -10,6 +10,7 @@ import {
   X,
   MessageSquare,
   HardDrive,
+  Cpu,
 } from "lucide-react";
 import { auth, signOut as firebaseSignOut } from "@/lib/firebase";
 import { KeyLogo } from "./KeyLogo";
@@ -182,15 +183,26 @@ export function AppShell({ activeId, children }: { activeId?: string; children: 
       <div className="space-y-1 pt-1 border-t border-sidebar-border/60">
         <div className="flex items-center justify-between">
           <ThemeToggle />
-          <Link
-            to="/integrations"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
-            title="Settings & Integrations"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            <span>Settings</span>
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link
+              to="/models"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+              title="AI Models & BYOK Providers"
+            >
+              <Cpu className="h-3.5 w-3.5" />
+              <span>Models</span>
+            </Link>
+            <Link
+              to="/integrations"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+              title="Settings & Integrations"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Settings</span>
+            </Link>
+          </div>
         </div>
 
         <button

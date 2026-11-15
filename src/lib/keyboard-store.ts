@@ -229,10 +229,12 @@ export function loadUserPreferences(): { model: string; reasoningLevel: string }
   return { model: "llama-3.3-70b-versatile", reasoningLevel: "medium" };
 }
 
-export function saveUserPreferences(prefs: { model: string; reasoningLevel: string }) {
+export function saveUserPreferences(updates: Partial<{ model: string; reasoningLevel: string }>) {
   if (!isBrowser()) return;
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    const current = loadUserPreferences();
+    const merged = { ...current, ...updates };
+    localStorage.setItem(PREFS_KEY, JSON.stringify(merged));
   } catch {
     // quota or security error
   }
@@ -826,4 +828,117 @@ export async function saveActiveModelConfig(
     throw new Error(err.detail || "Failed to update active model");
   }
   return await res.json();
+}
+
+export interface LiveModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  context_length?: number;
+  description?: string;
+  owned_by?: string;
+}
+
+export async function fetchLiveProviderModels(
+  provider: string,
+  apiKey?: string,
+  baseUrl?: string,
+): Promise<LiveModelInfo[]> {
+  try {
+    let res: Response;
+    if (apiKey || baseUrl) {
+      res = await fetch(`/api/models/live/${encodeURIComponent(provider)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey, base_url: baseUrl }),
+      });
+    } else {
+      res = await fetch(`/api/models/live/${encodeURIComponent(provider)}`, {
+        credentials: "omit",
+      });
+    }
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.models || [];
+  } catch {
+    return [];
+  }
+}
+
+export interface StreamChatCallbacks {
+  onStep?: (step: { name: string; detail: string }) => void;
+  onThinking?: (delta: string) => void;
+  onContent?: (delta: string) => void;
+  onError?: (error: string) => void;
+  onDone?: (info: { finish_reason: string; provider: string; model: string }) => void;
+}
+
+export async function streamAiChat(
+  payload: {
+    messages: { role: string; content: string }[];
+    model?: string;
+    reasoning_level?: string;
+    temperature?: number;
+    attachments?: unknown[];
+    task_id?: string;
+  },
+  callbacks: StreamChatCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch("/api/ai/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    callbacks.onError?.(err.detail || "Stream request failed");
+    return;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) {
+    callbacks.onError?.("No response stream available");
+    return;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(":")) continue;
+      if (trimmed.startsWith("data: ")) {
+        const raw = trimmed.slice(6).trim();
+        if (raw === "[DONE]") {
+          return;
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.type === "step" && callbacks.onStep) {
+            callbacks.onStep(parsed.step);
+          } else if (parsed.type === "thinking" && callbacks.onThinking) {
+            callbacks.onThinking(parsed.delta);
+          } else if (parsed.type === "content" && callbacks.onContent) {
+            callbacks.onContent(parsed.delta);
+          } else if (parsed.type === "error" && callbacks.onError) {
+            callbacks.onError(parsed.error);
+          } else if (parsed.type === "done" && callbacks.onDone) {
+            callbacks.onDone(parsed);
+          }
+        } catch {
+          // ignore malformed SSE line
+        }
+      }
+    }
+  }
 }

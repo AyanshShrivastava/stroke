@@ -909,6 +909,135 @@ class GroqProvider(BaseAiProvider):
         except asyncio.CancelledError:
             raise
 
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: str = "llama-3.3-70b-versatile",
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        params = parameters or InferenceParameters()
+        api_key = credentials_vault_service.vault.get_credential("groq", user_id)
+        if not api_key:
+            raise ProviderAuthenticationError(
+                "Groq API key not configured. Add your Groq API key in Settings -> Models.",
+                provider="groq",
+                model=model_id
+            )
+
+        validated_params = validate_parameters_for_model(model_id, params)
+        payload: Dict[str, Any] = {
+            "model": model_id,
+            "messages": messages,
+            "stream": True
+        }
+
+        if "temperature" in validated_params:
+            payload["temperature"] = validated_params["temperature"]
+        if "max_tokens" in validated_params:
+            payload["max_tokens"] = validated_params["max_tokens"]
+        if "top_p" in validated_params:
+            payload["top_p"] = validated_params["top_p"]
+        if "tools" in validated_params and validated_params["tools"]:
+            payload["tools"] = validated_params["tools"]
+            payload["tool_choice"] = "auto"
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.BASE_URL}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                ) as res:
+                    if res.status_code == 401:
+                        raise ProviderAuthenticationError(
+                            "Groq authentication failed (HTTP 401): Invalid API key.",
+                            provider="groq",
+                            model=model_id
+                        )
+                    elif res.status_code == 403:
+                        raise ProviderPermissionError(
+                            f"Groq permission denied (HTTP 403)",
+                            provider="groq",
+                            model=model_id
+                        )
+                    elif res.status_code == 429:
+                        retry_header = res.headers.get("retry-after")
+                        retry_sec = float(retry_header) if retry_header and retry_header.isdigit() else None
+                        raise ProviderRateLimitError(
+                            "Groq rate limit reached (HTTP 429). Try switching models or check your Groq limits.",
+                            provider="groq",
+                            model=model_id,
+                            retry_after_sec=retry_sec
+                        )
+                    elif res.status_code >= 500:
+                        raise ProviderServiceError(
+                            f"Groq service error (HTTP {res.status_code})",
+                            provider="groq",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+                    elif res.status_code != 200:
+                        raise ProviderError(
+                            f"Groq stream request failed (HTTP {res.status_code})",
+                            provider="groq",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+
+                    async for line in res.aiter_lines():
+                        line = line.strip()
+                        if not line or line.startswith(":"):
+                            continue
+                        if line.startswith("data: "):
+                            raw_data = line[6:].strip()
+                            if raw_data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(raw_data)
+                            except Exception:
+                                continue
+                            choices = chunk.get("choices", [])
+                            if not choices:
+                                continue
+                            choice = choices[0]
+                            delta = choice.get("delta", {})
+                            content = delta.get("content") or ""
+                            thinking = delta.get("reasoning_content") or delta.get("thinking") or delta.get("reasoning")
+                            finish_reason = choice.get("finish_reason")
+
+                            tool_calls = None
+                            if delta.get("tool_calls"):
+                                tool_calls = []
+                                for tc in delta["tool_calls"]:
+                                    fn = tc.get("function", {})
+                                    raw_args = fn.get("arguments", "")
+                                    try:
+                                        args = json.loads(raw_args) if isinstance(raw_args, str) and raw_args.strip() else (raw_args or {})
+                                    except Exception:
+                                        args = {"raw": raw_args}
+                                    tool_calls.append(NormalizedToolCall(
+                                        id=tc.get("id", ""),
+                                        name=fn.get("name", ""),
+                                        arguments=args if isinstance(args, dict) else {}
+                                    ))
+
+                            if content or thinking or finish_reason or tool_calls:
+                                yield StreamChunk(
+                                    delta_content=content,
+                                    delta_thinking=thinking,
+                                    finish_reason=finish_reason,
+                                    tool_calls=tool_calls
+                                )
+        except httpx.TimeoutException:
+            raise ProviderTimeoutError(f"Groq stream timed out for model '{model_id}'", "groq", model_id)
+        except asyncio.CancelledError:
+            raise
+
 
 class GeminiProvider(BaseAiProvider):
     """
@@ -1117,6 +1246,139 @@ class GeminiProvider(BaseAiProvider):
         except asyncio.CancelledError:
             raise
 
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: str = "gemini-2.0-flash",
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        params = parameters or InferenceParameters()
+        api_key = credentials_vault_service.vault.get_credential("gemini", user_id)
+        if not api_key:
+            raise ProviderAuthenticationError(
+                "Google Gemini API key not configured. Add your Gemini API key in Settings -> Models.",
+                provider="gemini",
+                model=model_id
+            )
+
+        sys_inst, contents = self._convert_messages_to_gemini(messages)
+        validated_params = validate_parameters_for_model(model_id, params)
+
+        payload: Dict[str, Any] = {"contents": contents}
+        if sys_inst:
+            payload["systemInstruction"] = {"parts": [{"text": sys_inst}]}
+
+        gen_config: Dict[str, Any] = {}
+        if "temperature" in validated_params:
+            gen_config["temperature"] = validated_params["temperature"]
+        if "max_tokens" in validated_params:
+            gen_config["maxOutputTokens"] = validated_params["max_tokens"]
+        if "top_p" in validated_params:
+            gen_config["topP"] = validated_params["top_p"]
+        if "top_k" in validated_params:
+            gen_config["topK"] = validated_params["top_k"]
+
+        if "thinking" in model_id.lower() and parameters and parameters.reasoning_effort:
+            budget_map = {"low": 1024, "medium": 4096, "high": 8192, "maximum": 16384, "absolute_peak": 24576}
+            gen_config["thinkingConfig"] = {
+                "thinkingBudget": budget_map.get(parameters.reasoning_effort, 4096)
+            }
+
+        if gen_config:
+            payload["generationConfig"] = gen_config
+
+        if "tools" in validated_params and validated_params["tools"]:
+            payload["tools"] = self._convert_tools_to_gemini(validated_params["tools"])
+
+        url = f"{self.BASE_URL}/models/{model_id}:streamGenerateContent?alt=sse&key={api_key}"
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    url,
+                    headers={"Content-Type": "application/json"},
+                    json=payload
+                ) as res:
+                    if res.status_code == 400 and "API_KEY_INVALID" in res.text:
+                        raise ProviderAuthenticationError(
+                            "Google Gemini authentication failed (HTTP 400): Invalid API key.",
+                            provider="gemini",
+                            model=model_id
+                        )
+                    elif res.status_code == 403:
+                        raise ProviderPermissionError(
+                            f"Gemini access denied (HTTP 403)",
+                            provider="gemini",
+                            model=model_id
+                        )
+                    elif res.status_code == 429:
+                        raise ProviderRateLimitError(
+                            f"Gemini quota exceeded (HTTP 429)",
+                            provider="gemini",
+                            model=model_id
+                        )
+                    elif res.status_code >= 500:
+                        raise ProviderServiceError(
+                            f"Google Gemini service error (HTTP {res.status_code})",
+                            provider="gemini",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+                    elif res.status_code != 200:
+                        raise ProviderError(
+                            f"Google Gemini API error (HTTP {res.status_code})",
+                            provider="gemini",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+
+                    async for line in res.aiter_lines():
+                        line = line.strip()
+                        if not line or line.startswith(":"):
+                            continue
+                        if line.startswith("data: "):
+                            raw_data = line[6:].strip()
+                            try:
+                                data = json.loads(raw_data)
+                            except Exception:
+                                continue
+                            candidates = data.get("candidates", [])
+                            if not candidates:
+                                continue
+                            cand = candidates[0]
+                            finish_reason = cand.get("finishReason")
+                            parts = cand.get("content", {}).get("parts", [])
+                            for idx, part in enumerate(parts):
+                                if "text" in part:
+                                    if part.get("thought"):
+                                        yield StreamChunk(
+                                            delta_content="",
+                                            delta_thinking=part["text"],
+                                            finish_reason=finish_reason
+                                        )
+                                    else:
+                                        yield StreamChunk(
+                                            delta_content=part["text"],
+                                            finish_reason=finish_reason
+                                        )
+                                elif "functionCall" in part:
+                                    fc = part["functionCall"]
+                                    yield StreamChunk(
+                                        delta_content="",
+                                        finish_reason=finish_reason,
+                                        tool_calls=[NormalizedToolCall(
+                                            id=f"gemini_call_{idx}",
+                                            name=fc.get("name", ""),
+                                            arguments=fc.get("args", {})
+                                        )]
+                                    )
+        except httpx.TimeoutException:
+            raise ProviderTimeoutError(f"Gemini stream timed out for model '{model_id}'", "gemini", model_id)
+        except asyncio.CancelledError:
+            raise
+
 
 class OpenRouterProvider(BaseAiProvider):
     """
@@ -1246,6 +1508,134 @@ class OpenRouterProvider(BaseAiProvider):
                     )
         except httpx.TimeoutException:
             raise ProviderTimeoutError(f"OpenRouter request timed out for model '{model_id}'", "openrouter", model_id)
+        except asyncio.CancelledError:
+            raise
+
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: str = "anthropic/claude-3.5-sonnet",
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        params = parameters or InferenceParameters()
+        api_key = credentials_vault_service.vault.get_credential("openrouter", user_id)
+        if not api_key:
+            raise ProviderAuthenticationError(
+                "OpenRouter API key not configured. Add your OpenRouter API key in Settings -> Models.",
+                provider="openrouter",
+                model=model_id
+            )
+
+        validated_params = validate_parameters_for_model(model_id, params)
+        payload: Dict[str, Any] = {
+            "model": model_id,
+            "messages": messages,
+            "stream": True
+        }
+
+        if "temperature" in validated_params:
+            payload["temperature"] = validated_params["temperature"]
+        if "max_tokens" in validated_params:
+            payload["max_tokens"] = validated_params["max_tokens"]
+        if "top_p" in validated_params:
+            payload["top_p"] = validated_params["top_p"]
+        if "tools" in validated_params and validated_params["tools"]:
+            payload["tools"] = validated_params["tools"]
+            payload["tool_choice"] = "auto"
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.BASE_URL}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "HTTP-Referer": "https://stroke.dev",
+                        "X-Title": "Stroke AI",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                ) as res:
+                    if res.status_code == 401:
+                        raise ProviderAuthenticationError(
+                            "OpenRouter authentication failed (HTTP 401): Invalid API key.",
+                            provider="openrouter",
+                            model=model_id
+                        )
+                    elif res.status_code == 402:
+                        raise ProviderRateLimitError(
+                            "OpenRouter credit exhausted (HTTP 402): Please add credits to your OpenRouter account.",
+                            provider="openrouter",
+                            model=model_id
+                        )
+                    elif res.status_code == 429:
+                        raise ProviderRateLimitError(
+                            "OpenRouter rate limit reached (HTTP 429)",
+                            provider="openrouter",
+                            model=model_id
+                        )
+                    elif res.status_code >= 500:
+                        raise ProviderServiceError(
+                            f"OpenRouter upstream service error (HTTP {res.status_code})",
+                            provider="openrouter",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+                    elif res.status_code != 200:
+                        raise ProviderError(
+                            f"OpenRouter stream error (HTTP {res.status_code})",
+                            provider="openrouter",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+
+                    async for line in res.aiter_lines():
+                        line = line.strip()
+                        if not line or line.startswith(":"):
+                            continue
+                        if line.startswith("data: "):
+                            raw_data = line[6:].strip()
+                            if raw_data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(raw_data)
+                            except Exception:
+                                continue
+                            choices = chunk.get("choices", [])
+                            if not choices:
+                                continue
+                            choice = choices[0]
+                            delta = choice.get("delta", {})
+                            content = delta.get("content") or ""
+                            thinking = delta.get("reasoning_content") or delta.get("thinking") or delta.get("reasoning")
+                            finish_reason = choice.get("finish_reason")
+
+                            tool_calls = None
+                            if delta.get("tool_calls"):
+                                tool_calls = []
+                                for tc in delta["tool_calls"]:
+                                    fn = tc.get("function", {})
+                                    raw_args = fn.get("arguments", "")
+                                    try:
+                                        args = json.loads(raw_args) if isinstance(raw_args, str) and raw_args.strip() else (raw_args or {})
+                                    except Exception:
+                                        args = {"raw": raw_args}
+                                    tool_calls.append(NormalizedToolCall(
+                                        id=tc.get("id", ""),
+                                        name=fn.get("name", ""),
+                                        arguments=args if isinstance(args, dict) else {}
+                                    ))
+
+                            if content or thinking or finish_reason or tool_calls:
+                                yield StreamChunk(
+                                    delta_content=content,
+                                    delta_thinking=thinking,
+                                    finish_reason=finish_reason,
+                                    tool_calls=tool_calls
+                                )
+        except httpx.TimeoutException:
+            raise ProviderTimeoutError(f"OpenRouter stream timed out for model '{model_id}'", "openrouter", model_id)
         except asyncio.CancelledError:
             raise
 
@@ -1380,6 +1770,132 @@ class RemoteOpenAiCompatibleProvider(BaseAiProvider):
                     )
         except httpx.TimeoutException:
             raise ProviderTimeoutError(f"{self.provider_name} request timed out for model '{model_id}'", self.provider_name, model_id)
+        except asyncio.CancelledError:
+            raise
+
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: str = "gpt-4o",
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        params = parameters or InferenceParameters()
+        api_key = credentials_vault_service.vault.get_credential(self.provider_name, user_id)
+        if not api_key:
+            raise ProviderAuthenticationError(
+                f"{self.provider_name.capitalize()} API key not configured. Add your API key in Settings -> Models.",
+                provider=self.provider_name,
+                model=model_id
+            )
+
+        validated_params = validate_parameters_for_model(model_id, params)
+        meta = resolve_model_metadata(model_id, self.provider_name)
+
+        payload: Dict[str, Any] = {
+            "model": model_id,
+            "messages": messages,
+            "stream": True
+        }
+
+        if meta.supports_reasoning_controls:
+            if parameters and parameters.reasoning_effort:
+                effort_map = {"low": "low", "medium": "medium", "high": "high", "maximum": "high", "absolute_peak": "high"}
+                payload["reasoning_effort"] = effort_map.get(parameters.reasoning_effort, "medium")
+        else:
+            if "temperature" in validated_params:
+                payload["temperature"] = validated_params["temperature"]
+
+        if "max_tokens" in validated_params:
+            payload["max_tokens"] = validated_params["max_tokens"]
+        if "tools" in validated_params and validated_params["tools"]:
+            payload["tools"] = validated_params["tools"]
+            payload["tool_choice"] = "auto"
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                ) as res:
+                    if res.status_code == 401:
+                        raise ProviderAuthenticationError(
+                            f"{self.provider_name.capitalize()} authentication failed (HTTP 401): Invalid API key.",
+                            provider=self.provider_name,
+                            model=model_id
+                        )
+                    elif res.status_code == 429:
+                        raise ProviderRateLimitError(
+                            f"{self.provider_name.capitalize()} rate limit or quota exceeded (HTTP 429)",
+                            provider=self.provider_name,
+                            model=model_id
+                        )
+                    elif res.status_code >= 500:
+                        raise ProviderServiceError(
+                            f"{self.provider_name.capitalize()} server error (HTTP {res.status_code})",
+                            provider=self.provider_name,
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+                    elif res.status_code != 200:
+                        raise ProviderError(
+                            f"{self.provider_name.capitalize()} stream error (HTTP {res.status_code})",
+                            provider=self.provider_name,
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+
+                    async for line in res.aiter_lines():
+                        line = line.strip()
+                        if not line or line.startswith(":"):
+                            continue
+                        if line.startswith("data: "):
+                            raw_data = line[6:].strip()
+                            if raw_data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(raw_data)
+                            except Exception:
+                                continue
+                            choices = chunk.get("choices", [])
+                            if not choices:
+                                continue
+                            choice = choices[0]
+                            delta = choice.get("delta", {})
+                            content = delta.get("content") or ""
+                            thinking = delta.get("reasoning_content") or delta.get("thinking") or delta.get("reasoning")
+                            finish_reason = choice.get("finish_reason")
+
+                            tool_calls = None
+                            if delta.get("tool_calls"):
+                                tool_calls = []
+                                for tc in delta["tool_calls"]:
+                                    fn = tc.get("function", {})
+                                    raw_args = fn.get("arguments", "")
+                                    try:
+                                        args = json.loads(raw_args) if isinstance(raw_args, str) and raw_args.strip() else (raw_args or {})
+                                    except Exception:
+                                        args = {"raw": raw_args}
+                                    tool_calls.append(NormalizedToolCall(
+                                        id=tc.get("id", ""),
+                                        name=fn.get("name", ""),
+                                        arguments=args if isinstance(args, dict) else {}
+                                    ))
+
+                            if content or thinking or finish_reason or tool_calls:
+                                yield StreamChunk(
+                                    delta_content=content,
+                                    delta_thinking=thinking,
+                                    finish_reason=finish_reason,
+                                    tool_calls=tool_calls
+                                )
+        except httpx.TimeoutException:
+            raise ProviderTimeoutError(f"{self.provider_name} stream timed out for model '{model_id}'", self.provider_name, model_id)
         except asyncio.CancelledError:
             raise
 
@@ -1543,6 +2059,112 @@ class AnthropicProvider(BaseAiProvider):
         except asyncio.CancelledError:
             raise
 
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: str = "claude-3-5-sonnet-20241022",
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        params = parameters or InferenceParameters()
+        api_key = credentials_vault_service.vault.get_credential("anthropic", user_id)
+        if not api_key:
+            raise ProviderAuthenticationError(
+                "Anthropic API key not configured. Add your Anthropic API key in Settings -> Models.",
+                provider="anthropic",
+                model=model_id
+            )
+
+        sys_prompt, anth_messages = self._convert_messages_to_anthropic(messages)
+        validated_params = validate_parameters_for_model(model_id, params)
+
+        payload: Dict[str, Any] = {
+            "model": model_id,
+            "messages": anth_messages,
+            "max_tokens": validated_params.get("max_tokens", 4096),
+            "stream": True
+        }
+        if sys_prompt:
+            payload["system"] = sys_prompt
+        if "temperature" in validated_params:
+            payload["temperature"] = validated_params["temperature"]
+        if "tools" in validated_params and validated_params["tools"]:
+            payload["tools"] = self._convert_tools_to_anthropic(validated_params["tools"])
+
+        if "3-7" in model_id and parameters and parameters.reasoning_effort:
+            budget_map = {"low": 1024, "medium": 4096, "high": 8192, "maximum": 16384, "absolute_peak": 32000}
+            payload["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": budget_map.get(parameters.reasoning_effort, 4096)
+            }
+            payload.pop("temperature", None)
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.BASE_URL}/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                ) as res:
+                    if res.status_code == 401:
+                        raise ProviderAuthenticationError(
+                            "Anthropic authentication failed (HTTP 401): Invalid API key.",
+                            provider="anthropic",
+                            model=model_id
+                        )
+                    elif res.status_code == 429:
+                        raise ProviderRateLimitError(
+                            "Anthropic rate limit reached (HTTP 429)",
+                            provider="anthropic",
+                            model=model_id
+                        )
+                    elif res.status_code >= 500:
+                        raise ProviderServiceError(
+                            f"Anthropic service error (HTTP {res.status_code})",
+                            provider="anthropic",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+                    elif res.status_code != 200:
+                        raise ProviderError(
+                            f"Anthropic stream error (HTTP {res.status_code})",
+                            provider="anthropic",
+                            model=model_id,
+                            status_code=res.status_code
+                        )
+
+                    async for line in res.aiter_lines():
+                        line = line.strip()
+                        if not line or line.startswith(":"):
+                            continue
+                        if line.startswith("data: "):
+                            raw_data = line[6:].strip()
+                            try:
+                                data = json.loads(raw_data)
+                            except Exception:
+                                continue
+                            ev_type = data.get("type", "")
+                            if ev_type == "content_block_delta":
+                                delta = data.get("delta", {})
+                                d_type = delta.get("type", "")
+                                if d_type == "text_delta":
+                                    yield StreamChunk(delta_content=delta.get("text", ""))
+                                elif d_type == "thinking_delta":
+                                    yield StreamChunk(delta_content="", delta_thinking=delta.get("thinking", ""))
+                            elif ev_type == "message_delta":
+                                stop_reason = data.get("delta", {}).get("stop_reason")
+                                if stop_reason:
+                                    yield StreamChunk(delta_content="", finish_reason=stop_reason)
+        except httpx.TimeoutException:
+            raise ProviderTimeoutError(f"Anthropic stream timed out for model '{model_id}'", "anthropic", model_id)
+        except asyncio.CancelledError:
+            raise
+
 
 class CustomProvider(BaseAiProvider):
     """
@@ -1578,6 +2200,36 @@ class CustomProvider(BaseAiProvider):
         else:
             adapter = RemoteOpenAiCompatibleProvider(base_url=base_url, provider_name="custom")
             return await adapter.chat_complete(messages, parameters, effective_model, user_id)
+
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: str = "custom",
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        params = parameters or InferenceParameters()
+        meta = credentials_vault_service.vault.get_metadata("custom", user_id)
+        base_url = meta.get("base_url", "").strip()
+        custom_format = meta.get("format", "openai").strip().lower()
+        effective_model = model_id or meta.get("model_id", "default")
+
+        if not base_url:
+            raise ProviderRuntimeMissingError(
+                "Custom provider Base URL not configured. Configure Base URL in Settings -> Models.",
+                provider="custom",
+                model=effective_model
+            )
+
+        if custom_format == "anthropic":
+            adapter = AnthropicProvider()
+            adapter.BASE_URL = base_url.rstrip("/")
+            async for chunk in adapter.stream_chat(messages, parameters, effective_model, user_id):
+                yield chunk
+        else:
+            adapter = RemoteOpenAiCompatibleProvider(base_url=base_url, provider_name="custom")
+            async for chunk in adapter.stream_chat(messages, parameters, effective_model, user_id):
+                yield chunk
 
 
 # ==============================================================================
@@ -1720,6 +2372,189 @@ async def test_provider_connection(
         return False, f"Network error reaching {provider}: {str(exc)}", None
 
 
+async def fetch_live_provider_models(
+    provider: str,
+    user_id: Optional[str] = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Fetches actual, live available models from the provider's API.
+    Never returns fake or mock models when querying live endpoints.
+    """
+    prov = provider.strip().lower()
+    key = api_key or credentials_vault_service.vault.get_credential(prov, user_id)
+    def _catalog_models_for(ptype: ProviderType) -> List[Dict[str, Any]]:
+        return [
+            {
+                "id": m.model_id,
+                "name": m.display_name,
+                "provider": getattr(m.provider, "value", str(m.provider)),
+                "context_length": m.context_limit,
+                "description": m.description
+            }
+            for m in MODEL_REGISTRY.values()
+            if m.provider == ptype
+        ]
+
+    models: List[Dict[str, Any]] = []
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            if prov == "groq":
+                if not key:
+                    return _catalog_models_for(ProviderType.GROQ)
+                res = await client.get(
+                    "https://api.groq.com/openai/v1/models",
+                    headers={"Authorization": f"Bearer {key}"}
+                )
+                if res.status_code == 200:
+                    for item in res.json().get("data", []):
+                        mid = item.get("id", "")
+                        models.append({
+                            "id": mid,
+                            "name": mid,
+                            "provider": "groq",
+                            "context_length": item.get("context_window", 131072),
+                            "owned_by": item.get("owned_by", "Groq"),
+                            "active": item.get("active", True)
+                        })
+                    return models
+                elif res.status_code == 401:
+                    raise ProviderAuthenticationError("Invalid Groq API key.", "groq", "")
+                raise ProviderServiceError(f"Groq models failed (HTTP {res.status_code})", "groq", "", res.status_code)
+
+            elif prov == "gemini":
+                if not key:
+                    return _catalog_models_for(ProviderType.GEMINI)
+                res = await client.get(
+                    f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+                )
+                if res.status_code == 200:
+                    for m in res.json().get("models", []):
+                        methods = m.get("supportedGenerationMethods", [])
+                        if "generateContent" in methods:
+                            clean_id = m.get("name", "").replace("models/", "")
+                            models.append({
+                                "id": clean_id,
+                                "name": m.get("displayName", clean_id),
+                                "provider": "gemini",
+                                "context_length": m.get("inputTokenLimit", 1048576),
+                                "output_limit": m.get("outputTokenLimit", 8192),
+                                "description": m.get("description", "")
+                            })
+                    return models
+                elif res.status_code == 400 and "API_KEY_INVALID" in res.text:
+                    raise ProviderAuthenticationError("Invalid Google Gemini API key.", "gemini", "")
+                raise ProviderServiceError(f"Gemini models failed (HTTP {res.status_code})", "gemini", "", res.status_code)
+
+            elif prov == "openrouter":
+                if not key:
+                    return _catalog_models_for(ProviderType.OPENROUTER)
+                res = await client.get(
+                    "https://openrouter.ai/api/v1/models",
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "HTTP-Referer": "https://stroke.dev",
+                        "X-Title": "Stroke AI"
+                    }
+                )
+                if res.status_code == 200:
+                    for item in res.json().get("data", []):
+                        models.append({
+                            "id": item.get("id", ""),
+                            "name": item.get("name") or item.get("id", ""),
+                            "provider": "openrouter",
+                            "context_length": item.get("context_length", 128000),
+                            "description": item.get("description", "")
+                        })
+                    return models
+                elif res.status_code == 401:
+                    raise ProviderAuthenticationError("Invalid OpenRouter API key.", "openrouter", "")
+                raise ProviderServiceError(f"OpenRouter models failed (HTTP {res.status_code})", "openrouter", "", res.status_code)
+
+            elif prov == "openai":
+                if not key:
+                    return _catalog_models_for(ProviderType.OPENAI)
+                res = await client.get(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {key}"}
+                )
+                if res.status_code == 200:
+                    for item in res.json().get("data", []):
+                        mid = item.get("id", "")
+                        if any(mid.startswith(p) for p in ("gpt-", "o1", "o3", "chatgpt")):
+                            models.append({
+                                "id": mid,
+                                "name": mid,
+                                "provider": "openai",
+                                "context_length": 128000,
+                                "owned_by": item.get("owned_by", "OpenAI")
+                            })
+                    return models
+                elif res.status_code == 401:
+                    raise ProviderAuthenticationError("Invalid OpenAI API key.", "openai", "")
+                raise ProviderServiceError(f"OpenAI models failed (HTTP {res.status_code})", "openai", "", res.status_code)
+
+            elif prov == "anthropic":
+                catalog = [
+                    {"id": "claude-3-7-sonnet-20250219", "name": "Claude 3.7 Sonnet (Hybrid Reasoning)", "provider": "anthropic", "context_length": 200000, "description": "Flagship hybrid reasoning and coding model."},
+                    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "provider": "anthropic", "context_length": 200000, "description": "State-of-the-art coding, tool use, and multi-step reasoning."},
+                    {"id": "claude-3-5-haiku-20241022", "name": "Claude 3.5 Haiku", "provider": "anthropic", "context_length": 200000, "description": "Fastest Claude model for rapid iteration and lightweight tasks."},
+                    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "provider": "anthropic", "context_length": 200000, "description": "High capability deep analysis model."}
+                ]
+                if key:
+                    try:
+                        res = await client.get(
+                            "https://api.anthropic.com/v1/models",
+                            headers={"x-api-key": key, "anthropic-version": "2023-06-01"}
+                        )
+                        if res.status_code == 200:
+                            api_models = []
+                            for item in res.json().get("data", []):
+                                api_models.append({
+                                    "id": item.get("id", ""),
+                                    "name": item.get("display_name") or item.get("id", ""),
+                                    "provider": "anthropic",
+                                    "context_length": 200000
+                                })
+                            if api_models:
+                                return api_models
+                    except Exception:
+                        pass
+                return catalog
+
+            elif prov == "custom":
+                meta = credentials_vault_service.vault.get_metadata("custom", user_id)
+                url = (base_url or meta.get("base_url") or "").rstrip("/")
+                custom_model = meta.get("model_id") or "default"
+                if url:
+                    try:
+                        headers = {"Authorization": f"Bearer {key}"} if key else {}
+                        res = await client.get(f"{url}/models", headers=headers)
+                        if res.status_code == 200:
+                            for item in res.json().get("data", []):
+                                mid = item.get("id", "")
+                                models.append({
+                                    "id": mid,
+                                    "name": mid,
+                                    "provider": "custom",
+                                    "context_length": item.get("context_window", 128000)
+                                })
+                            if models:
+                                return models
+                    except Exception:
+                        pass
+                return [{"id": custom_model, "name": custom_model, "provider": "custom", "context_length": 128000}]
+
+            return [m.model_dump() for m in MODEL_REGISTRY.values() if getattr(m.provider, "value", str(m.provider)) == prov]
+    except Exception as exc:
+        logger.warning("Error fetching live models for %s: %s", provider, exc)
+        if isinstance(exc, ProviderError):
+            raise
+        raise ProviderServiceError(f"Failed to fetch live models for {provider}: {str(exc)}", provider, "")
+
+
 # ==============================================================================
 # 8. ACTIVE MODEL PREFERENCE PERSISTENCE
 # ==============================================================================
@@ -1810,6 +2645,21 @@ class LlamaCppProvider(BaseAiProvider):
             )
         raise ProviderRuntimeMissingError("Local GGUF model weights missing.", "local_gguf", model_id or "llama3.2-1b")
 
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: Optional[str] = None,
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        resp = await self.chat_complete(messages, parameters, model_id, user_id)
+        yield StreamChunk(
+            delta_content=resp.content,
+            delta_thinking=resp.thinking,
+            finish_reason=resp.finish_reason,
+            tool_calls=resp.tool_calls
+        )
+
 
 class OllamaProvider(BaseAiProvider):
     provider_type = ProviderType.OLLAMA
@@ -1822,6 +2672,41 @@ class OllamaProvider(BaseAiProvider):
         user_id: Optional[str] = None
     ) -> ProviderResponse:
         raise ProviderUnavailableError("Ollama daemon down.", "ollama", model_id or "llama3.2")
+
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: Optional[str] = None,
+        user_id: Optional[str] = None
+    ) -> AsyncIterator[StreamChunk]:
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+        payload = {
+            "model": model_id or "llama3.2",
+            "messages": messages,
+            "stream": True
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream("POST", f"{host}/api/chat", json=payload) as res:
+                    if res.status_code != 200:
+                        raise ProviderUnavailableError(f"Ollama returned HTTP {res.status_code}", "ollama", model_id or "llama3.2")
+                    async for line in res.aiter_lines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            data = json.loads(line)
+                            content = data.get("message", {}).get("content", "")
+                            done = data.get("done", False)
+                            yield StreamChunk(
+                                delta_content=content,
+                                finish_reason="stop" if done else None
+                            )
+                        except Exception:
+                            continue
+        except (httpx.ConnectError, httpx.TimeoutException):
+            raise ProviderUnavailableError("Ollama daemon unreachable or offline.", "ollama", model_id or "llama3.2")
 
 
 # ==============================================================================
@@ -1963,6 +2848,75 @@ class AiProviderManager:
                         logger.warning("Configured fallback '%s' also failed: %s", fallback_provider_id, fb_exc)
 
             # Re-raise the primary provider error with clear guidance
+            raise
+
+    async def execute_stream_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        parameters: Optional[InferenceParameters] = None,
+        model_id: Optional[str] = None,
+        provider_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        allow_fallback: bool = True
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Executes streaming chat completion across BYOK providers with transparent fallback.
+        """
+        params = parameters or InferenceParameters()
+        active_cfg = get_active_model_config()
+
+        target_provider_id = (provider_id or active_cfg.get("active_provider") or "groq").lower()
+        target_model = model_id or active_cfg.get("active_model") or "llama-3.3-70b-versatile"
+        target_model = resolve_model_id(target_model)
+
+        # Legacy local fallback support
+        if target_provider_id in ("local_gguf", "llama_cpp", "local") or target_model == "llama3.2-1b":
+            try:
+                async for chunk in self.local_gguf.stream_chat(messages, params, target_model, user_id):
+                    yield chunk
+                return
+            except Exception as local_exc:
+                if allow_fallback:
+                    try:
+                        async for chunk in self.ollama.stream_chat(messages, params, target_model, user_id):
+                            yield chunk
+                        return
+                    except Exception:
+                        yield StreamChunk(
+                            delta_content="### [STROKE // LOCAL AI ENGINE OFFLINE]\n\nStroke's local Llama neural engine and Ollama instance are unavailable.",
+                            finish_reason="stop"
+                        )
+                        return
+                raise
+
+        primary_provider = self.get_provider(target_provider_id)
+        try:
+            async for chunk in primary_provider.stream_chat(
+                messages=messages,
+                parameters=params,
+                model_id=target_model,
+                user_id=user_id
+            ):
+                yield chunk
+        except (ProviderRateLimitError, ProviderServiceError, ProviderTimeoutError, ProviderUnavailableError) as exc:
+            fallback_provider_id = active_cfg.get("fallback_provider")
+            fallback_model = active_cfg.get("fallback_model")
+            user_permitted = active_cfg.get("allow_fallback", False) and allow_fallback
+
+            if user_permitted and fallback_provider_id and fallback_provider_id != target_provider_id:
+                fb_key = credentials_vault_service.vault.get_credential(fallback_provider_id, user_id)
+                if fb_key:
+                    logger.info("Primary stream provider '%s' failed (%s). Falling back to '%s'.", target_provider_id, exc, fallback_provider_id)
+                    fb_provider = self.get_provider(fallback_provider_id)
+                    fb_target_model = resolve_model_id(fallback_model or "")
+                    async for chunk in fb_provider.stream_chat(
+                        messages=messages,
+                        parameters=params,
+                        model_id=fb_target_model,
+                        user_id=user_id
+                    ):
+                        yield chunk
+                    return
             raise
 
     def execute_chat_sync(

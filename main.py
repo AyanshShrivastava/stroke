@@ -46,7 +46,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple, Set
 
 from fastapi import FastAPI, HTTPException, Query, status, Request, Response, BackgroundTasks, Depends
-from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse
+from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -2269,6 +2269,11 @@ class SetActiveModelRequest(BaseModel):
     allow_fallback: Optional[bool] = Field(None, description="Whether to allow auto-fallback on rate limits")
     model_config = ConfigDict(extra="allow")
 
+class FetchLiveModelsRequest(BaseModel):
+    api_key: Optional[str] = Field(None, description="Optional unsaved API key to query")
+    base_url: Optional[str] = Field(None, description="Optional custom base URL")
+    model_config = ConfigDict(extra="allow")
+
 class VerifyCodePayload(BaseModel):
     code: str = Field(..., description="The script or module to test and verify")
     language: Optional[str] = Field("luau", description="Programming language: luau, lua, python")
@@ -2591,6 +2596,53 @@ async def get_models_catalog(user: AuthenticatedUser = Depends(get_current_user)
         "status": "success",
         "models": models_list
     }
+
+
+@app.get("/api/models/live/{provider}", tags=["BYOK Models & Providers"])
+async def get_live_models_endpoint(
+    provider: str,
+    base_url: Optional[str] = None,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """GET /api/models/live/{provider} - Queries the provider API directly to return authentic live models."""
+    try:
+        user_uid = getattr(user, "uid", "anonymous")
+        models = await ai_provider_service.fetch_live_provider_models(
+            provider=provider,
+            user_id=user_uid,
+            base_url=base_url
+        )
+        return {"status": "success", "provider": provider, "models": models}
+    except ai_provider_service.ProviderAuthenticationError as auth_err:
+        raise HTTPException(status_code=401, detail=str(auth_err))
+    except ai_provider_service.ProviderError as pe:
+        raise HTTPException(status_code=pe.status_code, detail=str(pe))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch live models for {provider}: {str(exc)}")
+
+
+@app.post("/api/models/live/{provider}", tags=["BYOK Models & Providers"])
+async def post_live_models_endpoint(
+    provider: str,
+    payload: FetchLiveModelsRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """POST /api/models/live/{provider} - Queries the provider API with an optional unsaved key or custom base_url."""
+    try:
+        user_uid = getattr(user, "uid", "anonymous")
+        models = await ai_provider_service.fetch_live_provider_models(
+            provider=provider,
+            user_id=user_uid,
+            api_key=payload.api_key,
+            base_url=payload.base_url
+        )
+        return {"status": "success", "provider": provider, "models": models}
+    except ai_provider_service.ProviderAuthenticationError as auth_err:
+        raise HTTPException(status_code=401, detail=str(auth_err))
+    except ai_provider_service.ProviderError as pe:
+        raise HTTPException(status_code=pe.status_code, detail=str(pe))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch live models for {provider}: {str(exc)}")
 
 
 # Backward-compatible shim for legacy status checks
@@ -2991,6 +3043,7 @@ def analyze_attached_image(att: FileAttachment, user_prompt: str, model_id: Opti
 
 
 @app.post("/ai/chat", tags=["Neural AI & Search"])
+@app.post("/api/ai/chat", tags=["Neural AI & Search"])
 async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = Depends(get_current_user)):
     if not isinstance(user, AuthenticatedUser) and not hasattr(user, "uid"):
         user_email = payload.email or "test_developer@stroke.ai"
@@ -3628,6 +3681,126 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
         "task_state": agent_task.state.value,
         "task_budget": agent_task.budget.to_dict()
     }
+
+
+@app.post("/ai/chat/stream", tags=["Neural AI & Search"])
+@app.post("/api/ai/chat/stream", tags=["Neural AI & Search"])
+async def chat_with_neural_ai_stream(payload: AiChatRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    """
+    POST /ai/chat/stream & POST /api/ai/chat/stream
+    Real-time Server-Sent Events (SSE) streaming chat endpoint across BYOK providers.
+    Streams thinking delta, content delta, status steps, and completion signals.
+    """
+    if not isinstance(user, AuthenticatedUser) and not hasattr(user, "uid"):
+        user_email = payload.email or "test_developer@stroke.ai"
+        uid = "test_dev_uid"
+    else:
+        user_email = user.email or user.uid
+        uid = user.uid
+
+    if not payload.messages:
+        raise HTTPException(status_code=400, detail="Messages list cannot be empty.")
+
+    last_user_message = next((m.content for m in reversed(payload.messages) if m.role == "user"), "")
+    first_user_message = next((m.content for m in payload.messages if m.role == "user"), "")
+    active_goal = last_user_message or first_user_message
+    agent_ledger = StateLedger(north_star_goal=active_goal)
+
+    system_instruction = (
+        f"{agent_ledger.get_north_star_header()}\n"
+        "You are Stroke, an autonomous Roblox game development, 3D visual effects (VFX), and Luau engineering assistant.\n"
+        "You run locally with sandboxed workspace access through background terminal service and Roblox Studio integration.\n\n"
+        "CORE OPERATING PRINCIPLES:\n"
+        "1. Conversational Queries: Reply warmly, helpfully, and concisely in natural English prose without code dumps for greetings.\n"
+        "2. Coding Requests: Write complete, production-ready, clean Luau or Python code in fenced markdown code blocks.\n"
+        "3. Roblox Luau Best Practices: Authentic DataModel classes only (Part, Model, Attachment, ParticleEmitter, Beam, Trail, TweenService, Debris).\n"
+        "4. Background Terminal & Local Environment: Direct access to workspace terminal.\n"
+        "5. Directness: Answer directly without echoing directives."
+    )
+
+    raw_level = (payload.reasoning_level or ("high" if payload.think_mode else "medium")).lower().strip().replace(" ", "_").replace("-", "_")
+    valid_levels = ("low", "medium", "high", "maximum", "absolute_peak")
+    reasoning_level = raw_level if raw_level in valid_levels else "medium"
+
+    active_cfg = ai_provider_service.get_active_model_config()
+    is_inference_mocked = globals().get("_DEFAULT_RUN_LLAMA_INFERENCE") != run_llama_inference
+    if is_inference_mocked and not payload.model:
+        target_model = "llama3.2-1b"
+        target_provider = "local_gguf"
+    else:
+        target_model = payload.model or active_cfg.get("active_model") or "llama-3.3-70b-versatile"
+        meta = ai_provider_service.resolve_model_metadata(target_model)
+        target_provider = meta.provider.value if meta else (active_cfg.get("active_provider") or "groq")
+        if target_provider == "custom":
+            target_provider = active_cfg.get("active_provider") or "custom"
+
+    api_messages = [{"role": "system", "content": system_instruction}]
+    for idx, msg in enumerate(payload.messages):
+        content = msg.content
+        if idx == len(payload.messages) - 1 and payload.attachments:
+            att_text = "\n\n=== ATTACHED ASSETS & FILES ===\n"
+            for att in payload.attachments:
+                if att.is_image:
+                    att_text += f"[Attached Image: {att.name}] (Type: {att.type})\n"
+                else:
+                    ext = att.name.split(".")[-1].lower() if "." in att.name else "txt"
+                    att_text += f"--- ATTACHED FILE: {att.name} ---\n{att.content[:16000]}\n--- END OF FILE ---\n\n"
+            att_text += "=== END ATTACHMENTS ===\n"
+            content += att_text
+        api_messages.append({"role": msg.role, "content": content})
+
+    inf_params = InferenceParameters(
+        temperature=payload.temperature if payload.temperature is not None else payload.creativity,
+        reasoning_effort=reasoning_level,
+        max_tokens=None
+    )
+
+    async def stream_generator():
+        yield f"data: {json.dumps({'type': 'step', 'step': {'name': 'BYOK Neural Synthesis', 'detail': f'Streaming via {target_provider.upper()} ({target_model})'}})}\n\n"
+
+        accumulated_text = ""
+        accumulated_thinking = ""
+        finish_reason = "stop"
+
+        try:
+            async for chunk in global_ai_provider_manager.execute_stream_chat(
+                messages=api_messages,
+                parameters=inf_params,
+                model_id=target_model,
+                provider_id=target_provider,
+                user_id=user_email,
+                allow_fallback=active_cfg.get("allow_fallback", True)
+            ):
+                if chunk.delta_thinking:
+                    accumulated_thinking += chunk.delta_thinking
+                    yield f"data: {json.dumps({'type': 'thinking', 'delta': chunk.delta_thinking})}\n\n"
+                if chunk.delta_content:
+                    accumulated_text += chunk.delta_content
+                    yield f"data: {json.dumps({'type': 'content', 'delta': chunk.delta_content})}\n\n"
+                if chunk.finish_reason:
+                    finish_reason = chunk.finish_reason
+
+            yield f"data: {json.dumps({'type': 'done', 'finish_reason': finish_reason, 'provider': target_provider, 'model': target_model})}\n\n"
+            yield "data: [DONE]\n\n"
+        except ai_provider_service.ProviderAuthenticationError as auth_err:
+            yield f"data: {json.dumps({'type': 'error', 'error': f'Authentication failed: {str(auth_err)}', 'error_type': 'auth'})}\n\n"
+            yield "data: [DONE]\n\n"
+        except ai_provider_service.ProviderRateLimitError as rl_err:
+            yield f"data: {json.dumps({'type': 'error', 'error': f'Rate limit reached: {str(rl_err)}', 'error_type': 'rate_limit'})}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(exc), 'error_type': 'provider'})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 # =============================================================================
