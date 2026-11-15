@@ -1,6 +1,21 @@
-import React, { useRef, useState } from "react";
-import { ArrowUp, Square, Paperclip, X, Cpu, Brain, ChevronDown, Sparkles } from "lucide-react";
-import { AVAILABLE_MODELS, REASONING_LEVELS, type Attachment } from "@/lib/keyboard-store";
+import React, { useRef, useState, useEffect } from "react";
+import {
+  ArrowUp,
+  Square,
+  Plus,
+  X,
+  Cpu,
+  Brain,
+  ChevronDown,
+  Paperclip,
+  Check,
+  Sparkles,
+} from "lucide-react";
+import {
+  AVAILABLE_MODELS,
+  REASONING_LEVELS,
+  type Attachment,
+} from "@/lib/keyboard-store";
 
 interface ComposerProps {
   onSend: (text: string, attachments: Attachment[]) => void;
@@ -23,7 +38,7 @@ export function Composer({
   onSelectModel,
   reasoningLevel,
   onSelectReasoning,
-  placeholder = "Message Stroke Builder Core…",
+  placeholder = "Ask anything, @ to mention, / for actions",
 }: ComposerProps) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -31,10 +46,27 @@ export function Composer({
   const [showReasoningMenu, setShowReasoningMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
 
-  const activeModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
+  const activeModel =
+    AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
   const activeReasoning =
     REASONING_LEVELS.find((r) => r.id === reasoningLevel) || REASONING_LEVELS[1];
+
+  // Close menus on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        menuContainerRef.current &&
+        !menuContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowModelMenu(false);
+        setShowReasoningMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -77,124 +109,110 @@ export function Composer({
 
   function autoGrow(el: HTMLTextAreaElement) {
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
   }
 
+  const hasContent = Boolean(text.trim().length > 0 || attachments.length > 0);
+
   return (
-    <div className="relative mx-auto w-full max-w-3xl">
+    <div ref={menuContainerRef} className="relative mx-auto w-full max-w-3xl">
       {/* Model Selector Popover */}
       {showModelMenu && (
-        <div
-          className="absolute bottom-full left-0 mb-2 w-72 rounded-xl border border-border bg-popover p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95"
-          onMouseLeave={() => setShowModelMenu(false)}
-        >
-          <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="absolute bottom-full left-3 mb-2 w-72 rounded-xl border border-border bg-popover p-1.5 shadow-lg z-50 animate-in fade-in zoom-in-95">
+          <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Inference Engine
           </div>
-          <div className="space-y-0.5">
-            {AVAILABLE_MODELS.map((model) => (
-              <button
-                key={model.id}
-                type="button"
-                onClick={() => {
-                  onSelectModel(model.id);
-                  setShowModelMenu(false);
-                }}
-                className={`flex w-full items-start justify-between rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
-                  model.id === selectedModel
-                    ? "bg-primary text-primary-foreground font-medium"
-                    : "hover:bg-accent text-foreground"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span>{model.name}</span>
-                    <span
-                      className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                        model.id === selectedModel
-                          ? "bg-primary-foreground/20 text-primary-foreground"
-                          : model.isLocal
-                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                            : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {model.badge}
-                    </span>
+          <div className="max-h-64 overflow-y-auto space-y-0.5">
+            {AVAILABLE_MODELS.map((model) => {
+              const isSelected = model.id === selectedModel;
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectModel(model.id);
+                    setShowModelMenu(false);
+                  }}
+                  className={`flex w-full items-start justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors cursor-pointer ${
+                    isSelected
+                      ? "bg-accent text-accent-foreground font-medium"
+                      : "hover:bg-muted/70 text-foreground"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate">{model.name}</span>
+                      {model.isLocal && (
+                        <span className="rounded bg-emerald-500/10 px-1 py-0.2 font-mono text-[9px] text-emerald-600 dark:text-emerald-400">
+                          Local
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      {model.description}
+                    </p>
                   </div>
-                  <div
-                    className={`mt-0.5 text-[10px] leading-tight ${
-                      model.id === selectedModel
-                        ? "text-primary-foreground/80"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {model.description}
-                  </div>
-                </div>
-              </button>
-            ))}
+                  {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5 mt-0.5" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Reasoning Level Popover */}
       {showReasoningMenu && (
-        <div
-          className="absolute bottom-full left-24 mb-2 w-64 rounded-xl border border-border bg-popover p-1.5 shadow-xl z-50 animate-in fade-in zoom-in-95"
-          onMouseLeave={() => setShowReasoningMenu(false)}
-        >
-          <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="absolute bottom-full left-20 mb-2 w-64 rounded-xl border border-border bg-popover p-1.5 shadow-lg z-50 animate-in fade-in zoom-in-95">
+          <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Reasoning Effort
           </div>
           <div className="space-y-0.5">
-            {REASONING_LEVELS.map((level) => (
-              <button
-                key={level.id}
-                type="button"
-                onClick={() => {
-                  onSelectReasoning(level.id);
-                  setShowReasoningMenu(false);
-                }}
-                className={`flex w-full items-start justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
-                  level.id === reasoningLevel
-                    ? "bg-primary text-primary-foreground font-medium"
-                    : "hover:bg-accent text-foreground"
-                }`}
-              >
-                <div>
-                  <div className="font-medium">{level.label}</div>
-                  <div
-                    className={`text-[10px] ${
-                      level.id === reasoningLevel
-                        ? "text-primary-foreground/80"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {level.desc}
+            {REASONING_LEVELS.map((level) => {
+              const isSelected = level.id === reasoningLevel;
+              return (
+                <button
+                  key={level.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectReasoning(level.id);
+                    setShowReasoningMenu(false);
+                  }}
+                  className={`flex w-full items-start justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors cursor-pointer ${
+                    isSelected
+                      ? "bg-accent text-accent-foreground font-medium"
+                      : "hover:bg-muted/70 text-foreground"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-xs">{level.label}</div>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      {level.desc}
+                    </p>
                   </div>
-                </div>
-              </button>
-            ))}
+                  {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5 mt-0.5" />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Main Composer Box */}
-      <div className="rounded-2xl border border-input/80 bg-card p-2 shadow-sm transition-all focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10">
+      {/* Modern Floating Composer Card Container */}
+      <div className="rounded-2xl border border-border/70 bg-card/95 backdrop-blur-md p-2.5 shadow-sm transition-all focus-within:border-border focus-within:ring-1 focus-within:ring-ring/20">
         {/* Attachment preview pills */}
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-2 pb-2">
+          <div className="flex flex-wrap gap-1.5 px-1.5 pb-2">
             {attachments.map((att, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-2 py-0.5 text-xs text-foreground"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-foreground font-mono text-[11px]"
               >
                 <Paperclip className="h-3 w-3 text-muted-foreground" />
-                <span className="max-w-[150px] truncate">{att.name}</span>
+                <span className="max-w-[160px] truncate">{att.name}</span>
                 <button
                   type="button"
                   onClick={() => removeAttachment(idx)}
-                  className="rounded hover:bg-muted p-0.5 text-muted-foreground hover:text-foreground"
+                  className="rounded hover:bg-muted p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -203,7 +221,7 @@ export function Composer({
           </div>
         )}
 
-        {/* Input Textarea */}
+        {/* Textarea Input */}
         <textarea
           ref={textareaRef}
           value={text}
@@ -215,54 +233,22 @@ export function Composer({
           placeholder={placeholder}
           rows={1}
           disabled={disabled}
-          className="w-full resize-none border-0 bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 leading-relaxed"
-          style={{ maxHeight: "200px" }}
+          className="w-full resize-none border-0 bg-transparent px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-0 leading-relaxed font-sans"
+          style={{ maxHeight: "220px" }}
         />
 
         {/* Bottom Control Bar */}
-        <div className="flex items-center justify-between pt-1 px-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Model Selector Pill */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowModelMenu(!showModelMenu);
-                setShowReasoningMenu(false);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors"
-            >
-              <Cpu className="h-3 w-3 text-primary" />
-              <span>{activeModel.name}</span>
-              {activeModel.isLocal && (
-                <span className="rounded bg-emerald-500/15 px-1 py-0.2 font-mono text-[9px] text-emerald-600 dark:text-emerald-400">
-                  Local
-                </span>
-              )}
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </button>
-
-            {/* Reasoning Pill */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowReasoningMenu(!showReasoningMenu);
-                setShowModelMenu(false);
-              }}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors"
-            >
-              <Brain className="h-3 w-3 text-indigo-500" />
-              <span>{activeReasoning.label}</span>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </button>
-
-            {/* Attachment Button */}
+        <div className="flex items-center justify-between pt-1.5 px-0.5">
+          {/* Left Controls: Add Context (+) & Clean Model/Reasoning Capsule Pill */}
+          <div className="flex items-center gap-1.5">
+            {/* Add context / attach files button */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center justify-center rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              title="Attach files or context"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+              title="Add attachment or context (+)"
             >
-              <Paperclip className="h-3.5 w-3.5" />
+              <Plus className="h-4 w-4" />
             </button>
             <input
               ref={fileInputRef}
@@ -271,32 +257,58 @@ export function Composer({
               className="hidden"
               onChange={handleFileChange}
             />
+
+            {/* Clean Model Selector Pill */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowModelMenu(!showModelMenu);
+                setShowReasoningMenu(false);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+            >
+              <span>{activeModel.name}</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
+
+            {/* Clean Reasoning Level Pill */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowReasoningMenu(!showReasoningMenu);
+                setShowModelMenu(false);
+              }}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-normal text-muted-foreground/80 hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+            >
+              <span>{activeReasoning.label}</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
           </div>
 
-          {/* Send / Stop Button */}
-          <div>
+          {/* Right Controls: Send / Stop Action Button */}
+          <div className="flex items-center gap-1">
             {isGenerating ? (
               <button
                 type="button"
                 onClick={onStop}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all shadow-sm"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all cursor-pointer shadow-2xs"
                 title="Stop generation"
               >
-                <Square className="h-3.5 w-3.5 fill-current" />
+                <Square className="h-3 w-3 fill-current" />
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={(!text.trim() && attachments.length === 0) || disabled}
-                className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-all shadow-sm ${
-                  text.trim() || attachments.length > 0
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                    : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                disabled={!hasContent || disabled}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-all cursor-pointer shadow-2xs ${
+                  hasContent
+                    ? "bg-foreground text-background hover:opacity-90"
+                    : "bg-muted text-muted-foreground/40 cursor-not-allowed"
                 }`}
-                title="Send message (Enter)"
+                title="Send prompt (Enter)"
               >
-                <ArrowUp className="h-4 w-4" />
+                <ArrowUp className="h-3.5 w-3.5" />
               </button>
             )}
           </div>

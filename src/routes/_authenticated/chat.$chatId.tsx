@@ -19,10 +19,13 @@ import {
   Bot,
   AlertCircle,
   RefreshCw,
+  Terminal,
+  ArrowDown,
 } from "lucide-react";
 import { AppShell } from "@/components/keyboard/AppShell";
 import { ActivityFeed } from "@/components/chat/ActivityFeed";
 import { Composer } from "@/components/chat/Composer";
+import { TerminalPanel } from "@/components/terminal/TerminalPanel";
 import {
   compactMessages,
   fetchAiFull,
@@ -63,6 +66,8 @@ function ChatWindow({ chatId }: { chatId: string }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [nextSync, setNextSync] = useState(30);
   const [showArchivist, setShowArchivist] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(() => chat?.model || "llama3.2-local");
   const [reasoningLevel, setReasoningLevel] = useState<string>(
     () => chat?.reasoningLevel || "medium",
@@ -73,6 +78,19 @@ function ChatWindow({ chatId }: { chatId: string }) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const syncInProgressRef = useRef(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  function handleScroll() {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const isFar = scrollHeight - scrollTop - clientHeight > 160;
+    setShowScrollBottom(isFar);
+  }
+
+  function scrollToBottom() {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    setShowScrollBottom(false);
+  }
 
   // Auto scroll to latest message
   useEffect(() => {
@@ -389,6 +407,20 @@ function ChatWindow({ chatId }: { chatId: string }) {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
+              onClick={() => setShowTerminal(!showTerminal)}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors ${
+                showTerminal
+                  ? "bg-accent text-accent-foreground font-medium"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              title="Toggle integrated terminal"
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Terminal</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowArchivist(!showArchivist)}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors ${
                 showArchivist
@@ -409,7 +441,11 @@ function ChatWindow({ chatId }: { chatId: string }) {
         </div>
 
         {/* Message History Canvas */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-6 relative"
+        >
           <div className="mx-auto max-w-3xl space-y-6">
             {chat.messages.length === 0 && (
               <div className="pt-20 text-center select-none">
@@ -563,7 +599,24 @@ function ChatWindow({ chatId }: { chatId: string }) {
 
             <div ref={endRef} />
           </div>
+
+          {/* Floating Scroll to Bottom pill */}
+          {showScrollBottom && (
+            <div className="sticky bottom-3 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none z-10">
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-card/95 px-3 py-1 text-xs text-foreground shadow-md hover:bg-muted transition-all backdrop-blur-xs cursor-pointer animate-in fade-in zoom-in-95"
+              >
+                <ArrowDown className="h-3.5 w-3.5 text-primary" />
+                <span>Scroll to latest</span>
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Integrated Terminal Panel Drawer */}
+        <TerminalPanel isOpen={showTerminal} onClose={() => setShowTerminal(false)} />
 
         {/* Minimalist Floating Composer Dock */}
         <div className="shrink-0 p-3 pt-0">
@@ -575,7 +628,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
             onSelectModel={handleModelChange}
             reasoningLevel={reasoningLevel}
             onSelectReasoning={handleReasoningChange}
-            placeholder="Ask Builder Core for Luau scripts, VFX, refactoring, or tools…"
+            placeholder="Ask anything, @ to mention, / for actions"
           />
         </div>
       </div>

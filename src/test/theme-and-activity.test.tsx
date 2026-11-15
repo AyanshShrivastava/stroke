@@ -79,21 +79,18 @@ describe("ActivityFeed Component", () => {
       />,
     );
 
-    // Collapsed bar content
-    expect(screen.getByText("Execution Activity")).toBeInTheDocument();
-    expect(screen.getByText("1.8s")).toBeInTheDocument();
-    expect(screen.getByText("completed")).toBeInTheDocument();
-    expect(screen.getByText(/Self-healed/)).toBeInTheDocument();
+    // Collapsed header: formatWorkedDuration outputs "Worked for 2s"
+    expect(screen.getByText("Worked for 2s")).toBeInTheDocument();
 
-    // Click to expand
-    const button = screen.getByRole("button");
+    // Click to expand parent thinking tree
+    const button = screen.getByRole("button", { name: /Worked for 2s/i });
     fireEvent.click(button);
 
-    // Expanded details
-    expect(screen.getByText("Luau Syntax & Domain Verification")).toBeInTheDocument();
-    expect(screen.getByText("File Analysis")).toBeInTheDocument();
-    expect(screen.getByText("Read ServerScriptService/VFXController.luau")).toBeInTheDocument();
+    // Hierarchical tree stream details
+    expect(screen.getByText("Explored files, ran commands")).toBeInTheDocument();
+    expect(screen.getByText("Analyzed VFXController.luau")).toBeInTheDocument();
     expect(screen.getByText("Autonomous Tool Execution")).toBeInTheDocument();
+    expect(screen.getByText(/Luau syntax & tests verified/)).toBeInTheDocument();
   });
 });
 
@@ -116,7 +113,7 @@ describe("Composer Component", () => {
     expect(screen.getByText("Llama 3.2 1B")).toBeInTheDocument();
     expect(screen.getByText("Medium")).toBeInTheDocument();
 
-    const textarea = screen.getByPlaceholderText("Message Stroke Builder Core…");
+    const textarea = screen.getByPlaceholderText(/Ask anything/i);
     fireEvent.change(textarea, { target: { value: "Build fire VFX" } });
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 

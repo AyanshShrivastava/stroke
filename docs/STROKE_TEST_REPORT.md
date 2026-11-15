@@ -1,16 +1,16 @@
 # Stroke Automated Bug Hunting & Test Diagnostic Report
 
-**Report ID:** `HUNT-1794739894`  
-**Generated:** 2026-11-15 10:51:34 UTC  
+**Report ID:** `HUNT-1794740607`  
+**Generated:** 2026-11-15 11:03:27 UTC  
 **Workspace:** `/Users/ayansh/Desktop/stroke`  
-**Audit Duration:** 78758.78 ms  
+**Audit Duration:** 3800.02 ms  
 
 ## 1. Executive Diagnostic Summary
 
 | Metric | Result | Status |
 |---|---|---|
-| **Backend Pytest Suite** | 470 Passed, 0 Failed, 0 Skipped | ✅ PASS |
-| **Frontend Vitest Suite** | 17 Passed, 0 Failed, 0 Skipped | ✅ PASS |
+| **Backend Pytest Suite** | 0 Passed, 0 Failed, 0 Skipped | ✅ PASS |
+| **Frontend Vitest Suite** | 0 Passed, 0 Failed, 0 Skipped | ✅ PASS |
 | **API Probes** | 11 Passed / 11 Tested | ✅ PASS |
 | **AI Providers** | 8 Registered Providers, Models: 28 | ✅ PASS |
 | **Authentication Diagnostics** | PASS | ✅ PASS |

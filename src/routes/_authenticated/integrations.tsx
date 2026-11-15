@@ -27,12 +27,14 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AppShell } from "@/components/keyboard/AppShell";
 import { ThemeSelector } from "@/components/keyboard/ThemeToggle";
+import { auth, getCurrentUser } from "@/lib/firebase";
 import {
   loadGithub,
   saveGithub,
@@ -74,11 +76,14 @@ export const Route = createFileRoute("/_authenticated/integrations")({
   component: Integrations,
 });
 
-type TabId = "appearance" | "models" | "workspaces" | "github" | "mcp" | "memory";
+type TabId = "appearance" | "models" | "workspaces" | "github" | "mcp" | "memory" | "diagnostics";
 
 function Integrations() {
   const [activeTab, setActiveTab] = useState<TabId>("appearance");
   const [prefs, setPrefs] = useState(() => loadUserPreferences());
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diagMode, setDiagMode] = useState<"fast" | "full">("fast");
+  const [diagReport, setDiagReport] = useState<any>(null);
   const [gh, setGh] = useState({ pat: "", repo: "" });
   const [ghStatus, setGhStatus] = useState<{
     connected: boolean;
@@ -509,6 +514,45 @@ function Integrations() {
     }
   }
 
+  async function handleRunDiagnostics(fullTests: boolean = false) {
+    setDiagRunning(true);
+    setDiagMode(fullTests ? "full" : "fast");
+    setDiagReport(null);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      try {
+        const u = auth.currentUser || (await getCurrentUser());
+        if (u) {
+          const t = await u.getIdToken();
+          headers["Authorization"] = `Bearer ${t}`;
+        }
+      } catch {
+        // Continue with default headers
+      }
+
+      const res = await fetch("/diagnostics/hunt", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ run_full_tests: fullTests }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Diagnostics execution failed" }));
+        throw new Error(err.detail || `HTTP ${res.status}: Diagnostics failed`);
+      }
+
+      const data = await res.json();
+      setDiagReport(data.report);
+      toast.success(
+        `Diagnostics finished: ${data.report?.summary?.total_passed ?? 0} passed, ${data.report?.summary?.total_failed ?? 0} failed`,
+      );
+    } catch (e: any) {
+      toast.error(e.message || "Failed to run diagnostics");
+    } finally {
+      setDiagRunning(false);
+    }
+  }
+
   const tabs: Array<{ id: TabId; label: string; icon: typeof Sun }> = [
     { id: "appearance", label: "Appearance", icon: Sun },
     { id: "models", label: "Models & Engine", icon: Cpu },
@@ -516,6 +560,7 @@ function Integrations() {
     { id: "github", label: "GitHub Vault", icon: Github },
     { id: "mcp", label: "MCP & Studio", icon: Server },
     { id: "memory", label: "Storage & Quota", icon: Database },
+    { id: "diagnostics", label: "Health & Diagnostics", icon: Activity },
   ];
 
   return (
@@ -1311,6 +1356,161 @@ function Integrations() {
                     Reset Memory Cache
                   </Button>
                 </div>
+              </section>
+            </div>
+          )}
+
+          {/* Tab Content: Diagnostics & Bug Hunter */}
+          {activeTab === "diagnostics" && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <section className="rounded-xl border border-border bg-card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-primary" />
+                      Automated Diagnostic & Bug-Hunting System
+                    </h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Proactively validates API probes, provider credentials, auth enforcement,
+                      terminal sessions, MCP tools, filesystem sandboxing, and import integrity.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleRunDiagnostics(false)}
+                      disabled={diagRunning}
+                      className="text-xs"
+                    >
+                      {diagRunning && diagMode === "fast" ? (
+                        <>
+                          <RefreshCw className="mr-1.5 h-3 w-3 animate-spin" />
+                          Sweeping System…
+                        </>
+                      ) : (
+                        "Fast Health Sweep"
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleRunDiagnostics(true)}
+                      disabled={diagRunning}
+                      className="text-xs"
+                    >
+                      {diagRunning && diagMode === "full" ? (
+                        <>
+                          <RefreshCw className="mr-1.5 h-3 w-3 animate-spin" />
+                          Auditing Full Test Suite…
+                        </>
+                      ) : (
+                        "Deep Test Audit"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Diagnostics Summary or Initial State */}
+                {diagReport ? (
+                  <div className="mt-5 space-y-4">
+                    {/* Summary Counters */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-center">
+                        <div className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                          {diagReport.summary?.total_passed ?? 0}
+                        </div>
+                        <div className="text-[11px] font-medium text-emerald-600/80 dark:text-emerald-400/80 uppercase">
+                          Passed Checks
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-center">
+                        <div className="text-lg font-bold font-mono text-rose-600 dark:text-rose-400">
+                          {diagReport.summary?.total_failed ?? 0}
+                        </div>
+                        <div className="text-[11px] font-medium text-rose-600/80 dark:text-rose-400/80 uppercase">
+                          Failed Checks
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-center">
+                        <div className="text-lg font-bold font-mono text-amber-600 dark:text-amber-400">
+                          {diagReport.summary?.total_warnings ?? 0}
+                        </div>
+                        <div className="text-[11px] font-medium text-amber-600/80 dark:text-amber-400/80 uppercase">
+                          Warnings
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Subsystem Results List */}
+                    <div className="space-y-2 pt-2">
+                      <h3 className="text-xs font-semibold text-foreground">
+                        Subsystem Diagnostics Breakdown
+                      </h3>
+                      <div className="space-y-1.5 font-mono text-xs">
+                        {diagReport.results?.map((res: any, idx: number) => {
+                          const isPass = res.status === "passed";
+                          const isWarn = res.status === "warning";
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-start justify-between rounded-lg border p-3 ${
+                                isPass
+                                  ? "border-emerald-500/20 bg-emerald-500/5 text-foreground"
+                                  : isWarn
+                                    ? "border-amber-500/30 bg-amber-500/5 text-foreground"
+                                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                              }`}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 font-medium">
+                                  {isPass ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                  ) : isWarn ? (
+                                    <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                  ) : (
+                                    <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                                  )}
+                                  <span className="font-semibold">{res.target}</span>
+                                  <span className="text-[10px] text-muted-foreground uppercase">
+                                    {res.category}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-muted-foreground leading-relaxed pl-5 font-sans">
+                                  {res.message}
+                                </div>
+                                {res.error_details && (
+                                  <pre className="mt-1 ml-5 overflow-x-auto rounded bg-background/80 p-2 font-mono text-[10px] text-destructive border border-destructive/20 whitespace-pre-wrap">
+                                    {res.error_details}
+                                  </pre>
+                                )}
+                              </div>
+                              <span
+                                className={`text-[10px] font-bold uppercase rounded px-2 py-0.5 ${
+                                  isPass
+                                    ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                                    : isWarn
+                                      ? "bg-amber-500/20 text-amber-500"
+                                      : "bg-destructive/20 text-destructive"
+                                }`}
+                              >
+                                {res.status}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-6 rounded-lg border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                    <Activity className="mx-auto h-8 w-8 opacity-40 mb-2" />
+                    <p className="font-medium text-foreground">No diagnostics executed yet.</p>
+                    <p className="mt-1 text-[11px]">
+                      Click "Fast Health Sweep" to run instant probes or "Deep Test Audit" to audit
+                      the entire system.
+                    </p>
+                  </div>
+                )}
               </section>
             </div>
           )}
