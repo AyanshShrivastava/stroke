@@ -48,10 +48,14 @@ from enum import Enum
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, List, Optional, Set, Tuple
 
-# Base paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-TASKS_STORE_FILE = os.path.join(DATA_DIR, "agent_tasks.json")
+import paths_service
+
+def get_tasks_store_file() -> str:
+    app_dir = paths_service.get_app_data_dir()
+    os.makedirs(app_dir, exist_ok=True)
+    return str(app_dir / "agent_tasks.json")
+
+LEGACY_TASKS_STORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "agent_tasks.json")
 
 
 # =============================================================================
@@ -721,19 +725,23 @@ class TaskManager:
     @classmethod
     def _persist_tasks(cls):
         try:
-            os.makedirs(DATA_DIR, exist_ok=True)
+            target_path = get_tasks_store_file()
             snapshot = {tid: t.to_dict() for tid, t in cls._tasks.items()}
-            with open(TASKS_STORE_FILE, "w", encoding="utf-8") as f:
+            with open(target_path, "w", encoding="utf-8") as f:
                 json.dump(snapshot, f, indent=2, default=str)
         except Exception as exc:
             print(f"[STROKE AGENT ERROR] Failed to persist tasks: {exc}", flush=True)
 
     @classmethod
     def load_persisted_tasks(cls):
-        if not os.path.exists(TASKS_STORE_FILE):
-            return
+        target_path = get_tasks_store_file()
+        if not os.path.exists(target_path):
+            if os.path.exists(LEGACY_TASKS_STORE_FILE):
+                target_path = LEGACY_TASKS_STORE_FILE
+            else:
+                return
         try:
-            with open(TASKS_STORE_FILE, "r", encoding="utf-8") as f:
+            with open(target_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             for tid, tdict in data.items():
                 if tid not in cls._tasks:

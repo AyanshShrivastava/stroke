@@ -47,6 +47,10 @@ New-Item -ItemType Directory -Force -Path $modelsDir | Out-Null
 New-Item -ItemType Directory -Force -Path $backupsDir | Out-Null
 New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null
 
+# Locate source repository directory
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sourceDir = Split-Path -Parent $scriptDir
+
 # Create non-elevated user startup batch wrapper
 $cmdWrapper = [System.IO.Path]::Combine($installDir, "stroke.cmd")
 @"
@@ -54,17 +58,19 @@ $cmdWrapper = [System.IO.Path]::Combine($installDir, "stroke.cmd")
 set "STROKE_APP_DATA=%LOCALAPPDATA%\Stroke"
 set "STROKE_MODELS_DIR=%LOCALAPPDATA%\Stroke\Models"
 set "STROKE_BACKUPS_DIR=%LOCALAPPDATA%\Stroke\Backups"
-if exist "%~dp0venv\Scripts\python.exe" (
-    "%~dp0venv\Scripts\python.exe" "%~dp0main.py" %*
+if exist "$sourceDir\venv\Scripts\python.exe" (
+    "$sourceDir\venv\Scripts\python.exe" "$sourceDir\main.py" %*
 ) else (
-    python "%~dp0main.py" %*
+    python "$sourceDir\main.py" %*
 )
 "@ | Set-Content -Path $cmdWrapper -Encoding UTF8
 
 # Add to user PATH if not present (does NOT touch system PATH)
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$installDir*") {
-    [Environment]::SetEnvironmentVariable("Path", "$userPath;$installDir", "User")
+$pathParts = if ($userPath) { $userPath -split ";" } else { @() }
+if ($pathParts -notcontains $installDir) {
+    $newPath = if ([string]::IsNullOrWhiteSpace($userPath)) { $installDir } else { "$userPath;$installDir" }
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     Write-Host "[OK] Added $installDir to per-user PATH environment variable." -ForegroundColor Cyan
 }
 

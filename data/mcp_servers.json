@@ -6,7 +6,7 @@
       "enabled": true,
       "allow_local": false,
       "description": "Imported MCP server Roblox_Studio",
-      "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP",
+      "command": "~/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP",
       "args": [],
       "env": {}
     },

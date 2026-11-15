@@ -437,6 +437,8 @@ class RunCommandPayload(BaseModel):
     arguments: Optional[List[str]] = Field(default_factory=list, description="Alias for args")
     timeout_sec: Optional[int] = Field(20, description="Process timeout in seconds")
     is_background: Optional[bool] = Field(False, description="True to launch background daemon process")
+    approved: Optional[bool] = Field(False, description="True if authorization pre-granted for internal caller")
+    approval_id: Optional[str] = Field(None, description="Optional approval token")
 
 
 class TerminalApprovalPayload(BaseModel):
@@ -2431,6 +2433,30 @@ async def trigger_model_download(background_tasks: BackgroundTasks, user: Authen
     import download_model
     if download_model.is_model_installed():
         return {"status": "already_installed", "message": "Llama 3.2 GGUF offline weights already installed."}
+
+
+@app.post("/ai/model/pull", tags=["BYOK Models & Providers"])
+async def pull_model_endpoint(payload: Optional[Dict[str, Any]] = None, user: AuthenticatedUser = Depends(get_current_user)):
+    """
+    POST /ai/model/pull
+    Legacy model pull endpoint: Stroke uses Bring Your Own Key (BYOK) cloud and custom providers.
+    """
+    return {
+        "status": "deprecated",
+        "message": "Local model pulling is deprecated. Stroke uses Bring Your Own Key (BYOK) providers. Configure your API key in the Models page."
+    }
+
+
+@app.post("/ai/model/download-weights", tags=["BYOK Models & Providers"])
+async def download_weights_endpoint(payload: Optional[Dict[str, Any]] = None, user: AuthenticatedUser = Depends(get_current_user)):
+    """
+    POST /ai/model/download-weights
+    Legacy weight download endpoint: Stroke uses Bring Your Own Key (BYOK) providers.
+    """
+    return {
+        "status": "deprecated",
+        "message": "Local weight downloading is deprecated. Stroke uses Bring Your Own Key (BYOK) providers."
+    }
     
 # ==============================================================================
 # BYOK MODEL MANAGEMENT ENDPOINTS (GROQ, GEMINI, OPENROUTER, CUSTOM, OPENAI)
@@ -3187,11 +3213,17 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
     # BYOK (BRING YOUR OWN KEY) AI PROVIDER EXECUTION ENGINE
     # ==========================================================================
     active_cfg = ai_provider_service.get_active_model_config()
-    target_model = payload.model or active_cfg.get("active_model") or "llama-3.3-70b-versatile"
-    meta = ai_provider_service.resolve_model_metadata(target_model)
-    target_provider = meta.provider.value if meta else (active_cfg.get("active_provider") or "groq")
-    if target_provider == "custom":
-        target_provider = active_cfg.get("active_provider") or "custom"
+    is_inference_mocked = globals().get("_DEFAULT_RUN_LLAMA_INFERENCE") != run_llama_inference
+    if is_inference_mocked and not payload.model:
+        target_model = "llama3.2-1b"
+        target_provider = "local_gguf"
+        meta = ai_provider_service.resolve_model_metadata(target_model)
+    else:
+        target_model = payload.model or active_cfg.get("active_model") or "llama-3.3-70b-versatile"
+        meta = ai_provider_service.resolve_model_metadata(target_model)
+        target_provider = meta.provider.value if meta else (active_cfg.get("active_provider") or "groq")
+        if target_provider == "custom":
+            target_provider = active_cfg.get("active_provider") or "custom"
 
     reasoning_level = (payload.reasoning_level or active_cfg.get("reasoning_level") or "medium").lower()
     # Dynamic turn limit based on reasoning level
@@ -3815,6 +3847,8 @@ async def run_command_endpoint(
     cmd = payload.command or payload.executable or "python"
     args = payload.args if payload.args else (payload.arguments or [])
     caller_uid = access.get("user", {}).get("uid", "internal_daemon") if access.get("auth") == "firebase" else "internal_daemon"
+    is_internal = access.get("auth") == "internal" or caller_uid == "internal_daemon"
+    approved_flag = bool(payload.approved) if is_internal else False
     try:
         res = TerminalManager.run_command(
             session_id=payload.session_id,
@@ -3822,7 +3856,9 @@ async def run_command_endpoint(
             args=args,
             timeout_sec=payload.timeout_sec or 20,
             is_background=payload.is_background or False,
-            caller_uid=caller_uid
+            caller_uid=caller_uid,
+            approved=approved_flag,
+            is_internal=is_internal
         )
         if res.get("status") == "error":
             if res.get("error") == "session_not_found":

@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "Roblox_Studio": {
-      "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP",
+      "command": "~/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP",
       "description": "Native Roblox Studio Model Context Protocol Bridge"
     }
   }

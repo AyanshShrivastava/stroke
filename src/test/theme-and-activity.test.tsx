@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import React from "react";
-import {
-  getStoredTheme,
-  setStoredTheme,
-  getResolvedTheme,
-  applyTheme,
-} from "@/lib/theme";
+import { getStoredTheme, setStoredTheme, getResolvedTheme, applyTheme } from "@/lib/theme";
 import { ActivityFeed } from "@/components/chat/ActivityFeed";
 import { Composer } from "@/components/chat/Composer";
 
@@ -55,8 +50,16 @@ describe("ActivityFeed Component", () => {
 
   it("renders summary badges and expands detailed execution steps", () => {
     const mockSteps = [
-      { name: "File Analysis", detail: "Read ServerScriptService/VFXController.luau", status: "success" as const },
-      { name: "Autonomous Tool Execution", detail: "Ran studio_execute_luau", status: "success" as const },
+      {
+        name: "File Analysis",
+        detail: "Read ServerScriptService/VFXController.luau",
+        status: "success" as const,
+      },
+      {
+        name: "Autonomous Tool Execution",
+        detail: "Ran studio_execute_luau",
+        status: "success" as const,
+      },
     ];
     const mockCodingLoop = {
       iterations: 2,
@@ -73,7 +76,7 @@ describe("ActivityFeed Component", () => {
         codingLoop={mockCodingLoop}
         durationSeconds={1.8}
         taskState="completed"
-      />
+      />,
     );
 
     // Collapsed bar content
@@ -107,7 +110,7 @@ describe("Composer Component", () => {
         onSelectModel={onSelectModel}
         reasoningLevel="medium"
         onSelectReasoning={onSelectReasoning}
-      />
+      />,
     );
 
     expect(screen.getByText("Llama 3.2 1B")).toBeInTheDocument();

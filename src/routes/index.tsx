@@ -6,9 +6,16 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Stroke — AI dev studio for Roblox & code" },
-      { name: "description", content: "Stroke is an all-in-one AI coding agent, tuned for AAA Roblox Studio engineering." },
+      {
+        name: "description",
+        content:
+          "Stroke is an all-in-one AI coding agent, tuned for AAA Roblox Studio engineering.",
+      },
       { property: "og:title", content: "Stroke — AI dev studio for Roblox & code" },
-      { property: "og:description", content: "All-in-one AI coding agent, tuned for AAA Roblox Studio engineering." },
+      {
+        property: "og:description",
+        content: "All-in-one AI coding agent, tuned for AAA Roblox Studio engineering.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

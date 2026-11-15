@@ -1774,6 +1774,40 @@ class LlamaCppProvider(BaseAiProvider):
         model_id: Optional[str] = None,
         user_id: Optional[str] = None
     ) -> ProviderResponse:
+        import main
+        is_mocked = hasattr(main, "run_llama_inference") and getattr(main, "_DEFAULT_RUN_LLAMA_INFERENCE", None) != main.run_llama_inference
+        engine = main.get_local_llama_engine()
+        if is_mocked or engine is not None:
+            start_t = time.time()
+            tools_arg = parameters.tools if parameters else None
+            res = await main.run_llama_inference(engine, messages=messages, tools=tools_arg)
+            duration_ms = round((time.time() - start_t) * 1000, 2)
+            choice = res["choices"][0]
+            msg = choice.get("message", {})
+            content = msg.get("content") or ""
+            finish_reason = choice.get("finish_reason", "stop")
+            tool_calls = []
+            if msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    fn = tc.get("function", {})
+                    try:
+                        args = json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else (fn.get("arguments") or {})
+                    except Exception:
+                        args = {}
+                    tool_calls.append(NormalizedToolCall(
+                        id=tc.get("id", ""),
+                        name=fn.get("name", ""),
+                        arguments=args
+                    ))
+            return ProviderResponse(
+                content=content,
+                model=model_id or "llama3.2-local",
+                provider="local_gguf",
+                duration_ms=duration_ms,
+                tool_calls=tool_calls,
+                finish_reason=finish_reason,
+                raw_response=res
+            )
         raise ProviderRuntimeMissingError("Local GGUF model weights missing.", "local_gguf", model_id or "llama3.2-1b")
 
 

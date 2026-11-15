@@ -8,7 +8,11 @@ Alternative:   Meta Llama 3.2 3B Instruct (Q4_K_M, ~2.0 GB)
 ================================================================================
 """
 
+import os
+import sys
+import time
 import hashlib
+import httpx
 
 def compute_file_sha256(filepath: str, chunk_size: int = 1024 * 1024) -> str:
     """Computes streaming SHA-256 checksum of the target model file."""
@@ -101,11 +105,14 @@ def download_model(model_key=DEFAULT_MODEL_KEY, progress_callback=None):
 
     with httpx.Client(follow_redirects=True, timeout=60.0) as client:
         with client.stream("GET", info["url"], headers=headers) as response:
-            if response.status_code not in (200, 206):
-                raise Exception(f"HuggingFace CDN returned status {response.status_code}")
-
-            total_bytes = int(response.headers.get("content-length", 0)) + downloaded
-            mode = "ab" if downloaded > 0 else "wb"
+            if response.status_code == 200:
+                # Server sent full payload from byte 0, reset partial downloaded count
+                downloaded = 0
+                total_bytes = int(response.headers.get("content-length", 0))
+                mode = "wb"
+            else:
+                total_bytes = int(response.headers.get("content-length", 0)) + downloaded
+                mode = "ab" if downloaded > 0 else "wb"
 
             start_time = time.time()
             with open(temp_path, mode) as f:

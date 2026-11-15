@@ -65,7 +65,10 @@ export const Route = createFileRoute("/_authenticated/integrations")({
   head: () => ({
     meta: [
       { title: "Settings — Stroke" },
-      { name: "description", content: "Appearance, models, GitHub, MCP and workspace configuration." },
+      {
+        name: "description",
+        content: "Appearance, models, GitHub, MCP and workspace configuration.",
+      },
     ],
   }),
   component: Integrations,
@@ -115,14 +118,15 @@ function Integrations() {
   const [showKey, setShowKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; status_code?: number } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+    status_code?: number;
+  } | null>(null);
 
   async function loadBYOKData() {
     try {
-      const [pList, aCfg] = await Promise.all([
-        fetchModelProviders(),
-        fetchActiveModelConfig(),
-      ]);
+      const [pList, aCfg] = await Promise.all([fetchModelProviders(), fetchActiveModelConfig()]);
       if (pList && pList.length > 0) setProviders(pList);
       if (aCfg) {
         setActiveModelCfg(aCfg);
@@ -171,7 +175,9 @@ function Integrations() {
           last_indexed_at: d.last_indexed_at || 0,
         });
       }
-    } catch {}
+    } catch {
+      // Offline or uninitialized workspace index
+    }
   }
 
   async function triggerWorkspaceScan() {
@@ -180,7 +186,9 @@ function Integrations() {
       const r = await fetch("/api/project/index", { method: "POST" });
       const d = await r.json();
       if (d.status === "success") {
-        toast.success(`Indexed ${d.indexed_count} files (${formatBytes(d.total_bytes)}) in ${d.duration_ms}ms`);
+        toast.success(
+          `Indexed ${d.indexed_count} files (${formatBytes(d.total_bytes)}) in ${d.duration_ms}ms`,
+        );
         await refreshIndexStatus();
       } else {
         toast.error(d.message || "Indexing failed");
@@ -293,7 +301,9 @@ function Integrations() {
       const data = await res.json();
       if (res.ok) {
         if (data.environment_token_present) {
-          toast.warning("Vault token cleared, but GITHUB_TOKEN environment variable remains active.");
+          toast.warning(
+            "Vault token cleared, but GITHUB_TOKEN environment variable remains active.",
+          );
         } else {
           toast.success("GitHub token cleared from vault.");
         }
@@ -324,7 +334,9 @@ function Integrations() {
     try {
       const d = await estimateStorage();
       setStorageDiag(d);
-    } catch {}
+    } catch {
+      // Storage estimation unavailable in current environment
+    }
   }
 
   async function handleExport() {
@@ -364,7 +376,11 @@ function Integrations() {
   }
 
   async function handleClearAllData() {
-    if (!window.confirm("Are you sure you want to delete all local conversations and cached data? This action cannot be undone.")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete all local conversations and cached data? This action cannot be undone.",
+      )
+    ) {
       return;
     }
     await idbClearAllChats();
@@ -398,9 +414,10 @@ function Integrations() {
       } else {
         toast.error(res.message);
       }
-    } catch (e: any) {
-      setTestResult({ success: false, message: e.message || "Failed to test connection" });
-      toast.error(e.message || "Failed to test connection");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to test connection";
+      setTestResult({ success: false, message: msg });
+      toast.error(msg);
     } finally {
       setIsTesting(false);
     }
@@ -423,23 +440,27 @@ function Integrations() {
       toast.success(`${selectedProvider.toUpperCase()} key securely stored in OS vault`);
       setApiKeyInput("");
       await loadBYOKData();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to save API key");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to save API key");
     } finally {
       setIsSaving(false);
     }
   }
 
   async function handleDeleteKey(provider: string) {
-    if (!window.confirm(`Are you sure you want to remove the API key for ${provider.toUpperCase()} from your OS credential vault?`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to remove the API key for ${provider.toUpperCase()} from your OS credential vault?`,
+      )
+    ) {
       return;
     }
     try {
       await deleteProviderCredential(provider);
       toast.success(`${provider.toUpperCase()} key removed from vault`);
       await loadBYOKData();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to remove key");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to remove key");
     }
   }
 
@@ -452,8 +473,8 @@ function Integrations() {
       setActiveModelCfg(updated);
       handleSaveModelPrefs(model, updated.reasoning_level || prefs.reasoningLevel);
       toast.success(`Active model set to ${model} (${provider})`);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to set active model");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to set active model");
     }
   }
 
@@ -463,8 +484,8 @@ function Integrations() {
       setActiveModelCfg(updated);
       handleSaveModelPrefs(prefs.model, level);
       toast.success(`Reasoning effort set to ${level.toUpperCase()}`);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to update reasoning effort");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to update reasoning effort");
     }
   }
 
@@ -473,8 +494,8 @@ function Integrations() {
       const updated = await saveActiveModelConfig({ allow_fallback: allow });
       setActiveModelCfg(updated);
       toast.success(allow ? "Fallback enabled" : "Fallback disabled");
-    } catch (e: any) {
-      toast.error(e.message || "Failed to update fallback preference");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to update fallback preference");
     }
   }
 
@@ -483,8 +504,8 @@ function Integrations() {
       const updated = await saveActiveModelConfig({ fallback_provider: fallbackProvider });
       setActiveModelCfg(updated);
       toast.success(`Fallback provider set to ${fallbackProvider}`);
-    } catch (e: any) {
-      toast.error(e.message || "Failed to set fallback provider");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to set fallback provider");
     }
   }
 
@@ -507,7 +528,8 @@ function Integrations() {
               Settings & Integrations
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
-              Configure appearance, local neural models, GitHub vault, MCP tools, and workspace indexing.
+              Configure appearance, local neural models, GitHub vault, MCP tools, and workspace
+              indexing.
             </p>
           </div>
 
@@ -543,7 +565,8 @@ function Integrations() {
                   Interface Theme
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Select your preferred color appearance. In system mode, Stroke tracks your operating system’s dark/light preferences.
+                  Select your preferred color appearance. In system mode, Stroke tracks your
+                  operating system’s dark/light preferences.
                 </p>
                 <div className="mt-4">
                   <ThemeSelector />
@@ -598,7 +621,8 @@ function Integrations() {
                       AI Provider & Key Management
                     </h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Connect your API keys for supported providers. Keys are encrypted and stored in your OS Keychain / machine vault.
+                      Connect your API keys for supported providers. Keys are encrypted and stored
+                      in your OS Keychain / machine vault.
                     </p>
                   </div>
                 </div>
@@ -653,7 +677,10 @@ function Integrations() {
                 {(() => {
                   const currProv = providers.find((p) => p.provider === selectedProvider);
                   const isConfigured = currProv?.configured;
-                  const portalLinks: Record<string, { url: string; label: string; placeholder: string; desc: string }> = {
+                  const portalLinks: Record<
+                    string,
+                    { url: string; label: string; placeholder: string; desc: string }
+                  > = {
                     groq: {
                       url: "https://console.groq.com/keys",
                       label: "Get free Groq key at console.groq.com",
@@ -722,7 +749,9 @@ function Integrations() {
                               placeholder="https://api.openai.com/v1"
                               className="mt-1 font-mono text-xs"
                             />
-                            <p className="mt-1 text-[10px] text-muted-foreground">Endpoint serving /chat/completions or /models</p>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              Endpoint serving /chat/completions or /models
+                            </p>
                           </div>
                           <div>
                             <Label className="text-xs font-medium">Model ID</Label>
@@ -732,7 +761,9 @@ function Integrations() {
                               placeholder="e.g. meta-llama/Llama-3-70b-chat"
                               className="mt-1 font-mono text-xs"
                             />
-                            <p className="mt-1 text-[10px] text-muted-foreground">Default model identifier for this custom host</p>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              Default model identifier for this custom host
+                            </p>
                           </div>
                           <div className="sm:col-span-2 flex items-center gap-4 pt-1">
                             <span className="text-xs text-muted-foreground">API Format:</span>
@@ -781,7 +812,11 @@ function Integrations() {
                               type={showKey ? "text" : "password"}
                               value={apiKeyInput}
                               onChange={(e) => setApiKeyInput(e.target.value)}
-                              placeholder={isConfigured ? `Key is saved (${currProv?.masked_key}). Enter new key to replace.` : meta.placeholder}
+                              placeholder={
+                                isConfigured
+                                  ? `Key is saved (${currProv?.masked_key}). Enter new key to replace.`
+                                  : meta.placeholder
+                              }
                               className="font-mono text-xs pr-10"
                             />
                             <button
@@ -789,7 +824,11 @@ function Integrations() {
                               onClick={() => setShowKey(!showKey)}
                               className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
                             >
-                              {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              {showKey ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
                             </button>
                           </div>
                           <Button
@@ -800,7 +839,9 @@ function Integrations() {
                             size="sm"
                             className="text-xs shrink-0"
                           >
-                            {isTesting ? <RefreshCw className="h-3 w-3 animate-spin mr-1.5" /> : null}
+                            {isTesting ? (
+                              <RefreshCw className="h-3 w-3 animate-spin mr-1.5" />
+                            ) : null}
                             Test Connection
                           </Button>
                           <Button
@@ -894,7 +935,9 @@ function Integrations() {
                                       type="button"
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => handleSetActiveModel(selectedProvider, model.id)}
+                                      onClick={() =>
+                                        handleSetActiveModel(selectedProvider, model.id)
+                                      }
                                       className="text-xs h-7 px-2.5"
                                     >
                                       Set as Default
@@ -917,7 +960,8 @@ function Integrations() {
                     Neural Reasoning Effort & Multi-Turn Verification
                   </h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Scales autonomous thought tokens, verification passes, and agentic tool dispatch turns.
+                    Scales autonomous thought tokens, verification passes, and agentic tool dispatch
+                    turns.
                   </p>
                   <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
                     {REASONING_LEVELS.map((level) => {
@@ -953,7 +997,8 @@ function Integrations() {
                         Transparent Provider Fallback (Opt-in)
                       </h3>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Automatically route queries to a backup configured provider if the primary provider hits rate limits (429) or times out.
+                        Automatically route queries to a backup configured provider if the primary
+                        provider hits rate limits (429) or times out.
                       </p>
                     </div>
                     <label className="flex items-center gap-2 text-xs cursor-pointer font-medium">
@@ -982,7 +1027,8 @@ function Integrations() {
                         <option value="openai">OpenAI</option>
                       </select>
                       <span className="text-[11px] text-muted-foreground">
-                        Stroke will never switch to an unconfigured provider or hide fallback events from logs.
+                        Stroke will never switch to an unconfigured provider or hide fallback events
+                        from logs.
                       </span>
                     </div>
                   )}
@@ -1000,7 +1046,9 @@ function Integrations() {
                   Project Intelligence & Ingestion
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Index your approved workspace (.lua, .luau, .rbxmx, .rbxlx, Rojo/Wally configs). Stroke parses actual code, extracts symbols, excludes secrets, and injects relevant context.
+                  Index your approved workspace (.lua, .luau, .rbxmx, .rbxlx, Rojo/Wally configs).
+                  Stroke parses actual code, extracts symbols, excludes secrets, and injects
+                  relevant context.
                 </p>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2.5">
@@ -1022,9 +1070,20 @@ function Integrations() {
                       <span className="h-2 w-2 rounded-full bg-emerald-500" />
                       Active Workspace Index
                     </div>
-                    <div>Project: {indexStats.project_name || "Workspace"} ({indexStats.workspace_path})</div>
-                    <div>Indexed Files: {indexStats.total_files} ({formatBytes(indexStats.total_bytes)})</div>
-                    <div>Last Updated: {indexStats.last_indexed_at ? new Date(indexStats.last_indexed_at * 1000).toLocaleTimeString() : "Never"}</div>
+                    <div>
+                      Project: {indexStats.project_name || "Workspace"} ({indexStats.workspace_path}
+                      )
+                    </div>
+                    <div>
+                      Indexed Files: {indexStats.total_files} ({formatBytes(indexStats.total_bytes)}
+                      )
+                    </div>
+                    <div>
+                      Last Updated:{" "}
+                      {indexStats.last_indexed_at
+                        ? new Date(indexStats.last_indexed_at * 1000).toLocaleTimeString()
+                        : "Never"}
+                    </div>
                   </div>
                 )}
 
@@ -1046,12 +1105,15 @@ function Integrations() {
                   GitHub Integration & Vault
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tokens are machine-encrypted with AES/Fernet in Stroke's local vault (0600 mode) or read directly from the environment.
+                  Tokens are machine-encrypted with AES/Fernet in Stroke's local vault (0600 mode)
+                  or read directly from the environment.
                 </p>
 
                 <div className="mt-4 grid gap-3 max-w-lg">
                   <div className="space-y-1">
-                    <Label htmlFor="pat" className="text-xs">Personal Access Token</Label>
+                    <Label htmlFor="pat" className="text-xs">
+                      Personal Access Token
+                    </Label>
                     <Input
                       id="pat"
                       type="password"
@@ -1062,7 +1124,9 @@ function Integrations() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="repo" className="text-xs">Repository</Label>
+                    <Label htmlFor="repo" className="text-xs">
+                      Repository
+                    </Label>
                     <Input
                       id="repo"
                       value={gh.repo}
@@ -1072,7 +1136,9 @@ function Integrations() {
                     />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <Button onClick={handleSaveGithub} size="sm">Save to Vault</Button>
+                    <Button onClick={handleSaveGithub} size="sm">
+                      Save to Vault
+                    </Button>
                     {ghStatus.connected && (
                       <Button variant="outline" size="sm" onClick={handleDisconnectGithub}>
                         Disconnect
@@ -1092,7 +1158,9 @@ function Integrations() {
                           ? `Connected via GITHUB_TOKEN (@${ghStatus.username || "user"})`
                           : `Vault Connected (@${ghStatus.username || "user"})`}
                         {ghStatus.rate_limit_remaining !== undefined && (
-                          <span className="ml-1 opacity-75">· Rate: {ghStatus.rate_limit_remaining}</span>
+                          <span className="ml-1 opacity-75">
+                            · Rate: {ghStatus.rate_limit_remaining}
+                          </span>
                         )}
                       </span>
                     ) : (
@@ -1113,7 +1181,8 @@ function Integrations() {
                   Roblox Studio MCP Bridge
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Stroke connects to Roblox Studio via the authoritative JSON-RPC Model Context Protocol bridge.
+                  Stroke connects to Roblox Studio via the authoritative JSON-RPC Model Context
+                  Protocol bridge.
                 </p>
 
                 <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3 flex items-center justify-between text-xs font-mono">
@@ -1139,19 +1208,27 @@ function Integrations() {
                   Local Browser Persistence (IndexedDB)
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Chats, streaming histories, and durable cursors are stored locally in IndexedDB with transactional guarantees. Quotas vary by browser and disk availability.
+                  Chats, streaming histories, and durable cursors are stored locally in IndexedDB
+                  with transactional guarantees. Quotas vary by browser and disk availability.
                 </p>
 
                 {storageDiag && (
                   <div className="mt-4 space-y-3">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-mono text-muted-foreground">
-                        Storage Engine: <span className="font-semibold text-foreground">{storageDiag.engine}</span>
+                        Storage Engine:{" "}
+                        <span className="font-semibold text-foreground">{storageDiag.engine}</span>
                       </span>
                       <span className="font-mono text-muted-foreground">
-                        Usage: <span className="font-semibold text-foreground">{storageDiag.usageFormatted}</span> of {storageDiag.quotaFormatted}
+                        Usage:{" "}
+                        <span className="font-semibold text-foreground">
+                          {storageDiag.usageFormatted}
+                        </span>{" "}
+                        of {storageDiag.quotaFormatted}
                         {storageDiag.percentUsed !== null && (
-                          <span className="ml-1 opacity-75">({storageDiag.percentUsed.toFixed(1)}%)</span>
+                          <span className="ml-1 opacity-75">
+                            ({storageDiag.percentUsed.toFixed(1)}%)
+                          </span>
                         )}
                       </span>
                     </div>
@@ -1160,7 +1237,9 @@ function Integrations() {
                       <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
                         <div
                           className="h-full bg-primary/75 transition-all duration-300"
-                          style={{ width: `${Math.min(100, Math.max(1, storageDiag.percentUsed))}%` }}
+                          style={{
+                            width: `${Math.min(100, Math.max(1, storageDiag.percentUsed))}%`,
+                          }}
                         />
                       </div>
                     )}
@@ -1169,13 +1248,21 @@ function Integrations() {
 
                 {/* Data Backup / Portability Actions */}
                 <div className="mt-6 border-t border-border/60 pt-4">
-                  <h3 className="text-xs font-semibold text-foreground">Data Export, Import & Recovery</h3>
+                  <h3 className="text-xs font-semibold text-foreground">
+                    Data Export, Import & Recovery
+                  </h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Export your complete local conversation history to JSON, or import previously saved sessions.
+                    Export your complete local conversation history to JSON, or import previously
+                    saved sessions.
                   </p>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5 text-xs">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExport}
+                      className="gap-1.5 text-xs"
+                    >
                       <Download className="h-3.5 w-3.5" />
                       Export All Chats
                     </Button>
@@ -1217,7 +1304,8 @@ function Integrations() {
 
                 <div className="mt-4 space-y-3">
                   <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs font-mono">
-                    Stored project records: {memoryStats.count} ({formatBytes(memoryStats.total_bytes)} of 100 MB quota)
+                    Stored project records: {memoryStats.count} (
+                    {formatBytes(memoryStats.total_bytes)} of 100 MB quota)
                   </div>
                   <Button variant="secondary" size="sm" onClick={handleClearMemory}>
                     Reset Memory Cache

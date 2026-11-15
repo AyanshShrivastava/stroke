@@ -144,8 +144,22 @@ describe("Chat Persistence & Local Data Reliability", () => {
         archivedMessageIds: ["msg-1"],
         notes: [{ id: "n1", content: "Client-side prediction only for movement", at: Date.now() }],
         messages: [
-          { id: "msg-1", role: "user", text: "How do we handle replication?", at: Date.now(), status: "sent", seq: 1 },
-          { id: "msg-2", role: "builder", text: "Use RemoteEvents with rate limiting.", at: Date.now(), status: "sent", seq: 2 },
+          {
+            id: "msg-1",
+            role: "user",
+            text: "How do we handle replication?",
+            at: Date.now(),
+            status: "sent",
+            seq: 1,
+          },
+          {
+            id: "msg-2",
+            role: "builder",
+            text: "Use RemoteEvents with rate limiting.",
+            at: Date.now(),
+            status: "sent",
+            seq: 2,
+          },
         ],
       };
 

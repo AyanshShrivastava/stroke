@@ -17,7 +17,10 @@ export function getStoredTheme(): ThemeMode {
 
 export function getResolvedTheme(mode: ThemeMode): "light" | "dark" {
   if (mode === "system") {
-    if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+    ) {
       return "dark";
     }
     return "light";

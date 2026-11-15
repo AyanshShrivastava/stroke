@@ -56,10 +56,7 @@ export function StorageMeter() {
           {diag && diag.quotaReported ? ` / ${diag.quotaFormatted}` : ""}
         </span>
       </div>
-      <Progress
-        value={diag ? Math.max(1, diag.usagePercent) : 1}
-        className="h-1"
-      />
+      <Progress value={diag ? Math.max(1, diag.usagePercent) : 1} className="h-1" />
       <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
         <span>Engine: {diag?.engine || "IndexedDB"}</span>
         <Link to="/integrations" className="hover:text-foreground underline">
@@ -70,13 +67,7 @@ export function StorageMeter() {
   );
 }
 
-export function AppShell({
-  activeId,
-  children,
-}: {
-  activeId?: string;
-  children: ReactNode;
-}) {
+export function AppShell({ activeId, children }: { activeId?: string; children: ReactNode }) {
   const chats = useChats();
   const navigate = useNavigate();
   const router = useRouter();

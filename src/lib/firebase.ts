@@ -18,10 +18,12 @@ import {
 // Public client Firebase configuration.
 // No private secrets or service account keys are bundled or exposed.
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyStrokeClientKeyForDesktopVerification",
+  apiKey:
+    import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyStrokeClientKeyForDesktopVerification",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "stroke-cyber-matrix.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "stroke-cyber-matrix",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "stroke-cyber-matrix.firebasestorage.app",
+  storageBucket:
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "stroke-cyber-matrix.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "100000000000",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:100000000000:web:abcdef123456",
 };
@@ -55,7 +57,7 @@ export function getCurrentUser(): Promise<User | null> {
       () => {
         unsubscribe();
         resolve(null);
-      }
+      },
     );
   });
 }

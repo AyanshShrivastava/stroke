@@ -19,9 +19,15 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Authentication — Stroke" },
-      { name: "description", content: "Authenticate to your Stroke autonomous engineering workspace." },
+      {
+        name: "description",
+        content: "Authenticate to your Stroke autonomous engineering workspace.",
+      },
       { property: "og:title", content: "Authentication — Stroke" },
-      { property: "og:description", content: "Authenticate to your Stroke autonomous engineering workspace." },
+      {
+        property: "og:description",
+        content: "Authenticate to your Stroke autonomous engineering workspace.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -56,8 +62,10 @@ function AuthPage() {
       await signInWithEmailAndPassword(auth, email.trim(), password);
       toast.success("Signed in successfully");
       navigate({ to: "/boot" });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to sign in. Please verify your credentials.");
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to sign in. Please verify your credentials.",
+      );
     } finally {
       setBusy(false);
     }
@@ -88,8 +96,8 @@ function AuthPage() {
       }
       toast.success("Account created successfully!");
       navigate({ to: "/boot" });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create account.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to create account.");
     } finally {
       setBusy(false);
     }
@@ -104,11 +112,13 @@ function AuthPage() {
     setBusy(true);
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      setSentMessage(`A password reset link has been dispatched to ${email}. Please check your inbox.`);
+      setSentMessage(
+        `A password reset link has been dispatched to ${email}. Please check your inbox.`,
+      );
       setEmailSent(true);
       toast.success("Reset link sent");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send reset link.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to send reset link.");
     } finally {
       setBusy(false);
     }
@@ -124,8 +134,8 @@ function AuthPage() {
     try {
       await sendEmailVerification(user);
       toast.success("Verification email re-sent!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to resend verification email.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to resend verification email.");
     } finally {
       setBusy(false);
     }
@@ -198,7 +208,10 @@ function AuthPage() {
             </button>
           </form>
         ) : (
-          <form onSubmit={mode === "signin" ? handleSignIn : handleSignUp} className="mt-8 space-y-4">
+          <form
+            onSubmit={mode === "signin" ? handleSignIn : handleSignUp}
+            className="mt-8 space-y-4"
+          >
             <h1 className="text-2xl font-bold">
               {mode === "signup" ? "Create your developer account" : "Welcome back"}
             </h1>

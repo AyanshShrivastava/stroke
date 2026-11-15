@@ -174,10 +174,16 @@ class ModelDownloadSession:
                         raise IOError(f"CDN download failed with HTTP status: {response.status_code}")
 
                     content_length = int(response.headers.get("content-length", 0))
-                    total = content_length + existing_bytes if content_length > 0 else self.info.get("size_bytes", 0)
+                    if response.status_code == 200:
+                        existing_bytes = 0
+                        self.downloaded_bytes = 0
+                        total = content_length if content_length > 0 else self.info.get("size_bytes", 0)
+                        mode = "wb"
+                    else:
+                        total = content_length + existing_bytes if content_length > 0 else self.info.get("size_bytes", 0)
+                        mode = "ab" if existing_bytes > 0 else "wb"
                     self.total_bytes = total
 
-                    mode = "ab" if existing_bytes > 0 else "wb"
                     with open(self.temp_path, mode) as f:
                         for chunk in response.iter_bytes(chunk_size=1024 * 512):
                             if self._cancel_flag:

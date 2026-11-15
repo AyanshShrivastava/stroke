@@ -52,15 +52,17 @@ SOURCE_DIR="$(dirname "${SCRIPT_DIR}")"
 
 # Create user-level launcher script
 LAUNCHER="${USER_BIN}/stroke"
-cat << 'EOF' > "${LAUNCHER}"
+cat << EOF > "${LAUNCHER}"
 #!/usr/bin/env bash
-STROKE_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STROKE_HOME="${SOURCE_DIR}"
 PYTHON_EXEC="python3"
-if [ -f "${STROKE_HOME}/venv/bin/python" ]; then
-    PYTHON_EXEC="${STROKE_HOME}/venv/bin/python"
+if [ -f "\${STROKE_HOME}/venv/bin/python" ]; then
+    PYTHON_EXEC="\${STROKE_HOME}/venv/bin/python"
+elif [ -f "\${STROKE_HOME}/venv/bin/python3" ]; then
+    PYTHON_EXEC="\${STROKE_HOME}/venv/bin/python3"
 fi
-export STROKE_APP_DATA="${HOME}/Library/Application Support/Stroke"
-cd "${STROKE_HOME}" && exec "${PYTHON_EXEC}" main.py "$@"
+export STROKE_APP_DATA="\${HOME}/Library/Application Support/Stroke"
+cd "\${STROKE_HOME}" && exec "\${PYTHON_EXEC}" main.py "\$@"
 EOF
 chmod +x "${LAUNCHER}"
 

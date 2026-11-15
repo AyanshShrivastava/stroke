@@ -48,16 +48,22 @@ mkdir -p "${MODELS_DIR}"
 mkdir -p "${BACKUPS_DIR}"
 mkdir -p "${DOWNLOADS_DIR}"
 
+# Locate source directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$(dirname "${SCRIPT_DIR}")"
+
 # Create user launcher wrapper
-cat << 'EOF' > "${USER_BIN}/stroke"
+cat << EOF > "${USER_BIN}/stroke"
 #!/usr/bin/env bash
-STROKE_HOME="${HOME}/.local/share/Stroke"
+STROKE_HOME="${SOURCE_DIR}"
 PYTHON_EXEC="python3"
-if [ -f "${STROKE_HOME}/venv/bin/python" ]; then
-    PYTHON_EXEC="${STROKE_HOME}/venv/bin/python"
+if [ -f "\${STROKE_HOME}/venv/bin/python" ]; then
+    PYTHON_EXEC="\${STROKE_HOME}/venv/bin/python"
+elif [ -f "\${STROKE_HOME}/venv/bin/python3" ]; then
+    PYTHON_EXEC="\${STROKE_HOME}/venv/bin/python3"
 fi
-export STROKE_APP_DATA="${STROKE_HOME}"
-cd "${STROKE_HOME}" && exec "${PYTHON_EXEC}" main.py "$@"
+export STROKE_APP_DATA="\${HOME}/.local/share/Stroke"
+cd "\${STROKE_HOME}" && exec "\${PYTHON_EXEC}" main.py "\$@"
 EOF
 chmod +x "${USER_BIN}/stroke"
 

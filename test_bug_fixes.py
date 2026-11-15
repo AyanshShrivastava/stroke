@@ -75,50 +75,65 @@ class SystematicBugFixesTestSuite(unittest.TestCase):
 
     def test_05_json_serialization_safety_in_local_chat_sessions(self):
         """Reliability: _save_local_chat_sessions handles datetime and non-primitive objects via default=str."""
-        store_with_datetime = {
-            "user@domain.com": [
-                {
-                    "session_id": "sess-dt-test",
-                    "title": "Datetime Test",
-                    "timestamp": datetime.now(timezone.utc),
-                    "created_at": datetime.now(),
-                    "messages": [{"role": "user", "content": "hello"}]
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_chats = Path(tmpdir) / "chats.json"
+            with patch("main.LOCAL_CHATS_FILE", str(tmp_chats)):
+                store_with_datetime = {
+                    "user@domain.com": [
+                        {
+                            "session_id": "sess-dt-test",
+                            "title": "Datetime Test",
+                            "timestamp": datetime.now(timezone.utc),
+                            "created_at": datetime.now(),
+                            "messages": [{"role": "user", "content": "hello"}]
+                        }
+                    ]
                 }
-            ]
-        }
-        # Should not raise TypeError: Object of type datetime is not JSON serializable
-        try:
-            _save_local_chat_sessions(store_with_datetime)
-            save_succeeded = True
-        except TypeError:
-            save_succeeded = False
+                try:
+                    _save_local_chat_sessions(store_with_datetime)
+                    save_succeeded = True
+                except TypeError:
+                    save_succeeded = False
 
-        self.assertTrue(save_succeeded, "_save_local_chat_sessions crashed on datetime serialization!")
+                self.assertTrue(save_succeeded, "_save_local_chat_sessions crashed on datetime serialization!")
+                self.assertTrue(tmp_chats.exists())
 
     def test_06_json_serialization_safety_in_archivist_and_vfx(self):
-        """Reliability: CodingArchivist and vfx_service handle non-primitive types safely."""
-        test_report = {
-            "passed_checks": ["Syntax", "AST"],
-            "untested_limitations": [],
-            "is_verified": True,
-            "iteration_count": 1,
-            "recorded_timestamp": datetime.now(timezone.utc)
-        }
-        try:
-            CodingArchivist.record_verified_artifact("test prompt", "print('hello')", "python", test_report, "user@stroke.ai")
-            archivist_ok = True
-        except Exception:
-            archivist_ok = False
-        self.assertTrue(archivist_ok, "CodingArchivist crashed on non-primitive JSON serialization!")
+        """Reliability: CodingArchivist and vfx_service handle non-primitive types safely without polluting working tree."""
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_context = Path(tmpdir) / "context.json"
+            tmp_models = Path(tmpdir) / "models.json"
+            tmp_insights = Path(tmpdir) / "insights.json"
 
-        models_with_dt = {
-            "TestEffect": {
-                "model_name": "TestEffect",
-                "registered_at": datetime.now(timezone.utc)
-            }
-        }
-        self.assertTrue(save_learned_vfx_models(models_with_dt))
-        self.assertTrue(save_learned_insights())
+            with patch.object(CodingArchivist, "CONTEXT_FILE", tmp_context), \
+                 patch("vfx_service.LEARNED_MODELS_PATH", tmp_models), \
+                 patch("vfx_service.LEARNED_INSIGHTS_PATH", tmp_insights):
+                test_report = {
+                    "passed_checks": ["Syntax", "AST"],
+                    "untested_limitations": [],
+                    "is_verified": True,
+                    "iteration_count": 1,
+                    "recorded_timestamp": datetime.now(timezone.utc)
+                }
+                try:
+                    CodingArchivist.record_verified_artifact("test prompt", "print('hello')", "python", test_report, "user@stroke.ai")
+                    archivist_ok = True
+                except Exception:
+                    archivist_ok = False
+                self.assertTrue(archivist_ok, "CodingArchivist crashed on non-primitive JSON serialization!")
+
+                models_with_dt = {
+                    "TestEffect": {
+                        "model_name": "TestEffect",
+                        "registered_at": datetime.now(timezone.utc)
+                    }
+                }
+                self.assertTrue(save_learned_vfx_models(models_with_dt))
+                self.assertTrue(save_learned_insights())
 
     def test_07_user_status_fallback_on_firestore_exception(self):
         """Fault Tolerance: GET /user/status returns resilient local telemetry if Firestore throws."""
@@ -130,8 +145,10 @@ class SystematicBugFixesTestSuite(unittest.TestCase):
             "iss": "https://securetoken.google.com/stroke-cyber-matrix",
             "exp": time.time() + 3600
         }
+        mock_db = MagicMock()
+        mock_db.collection.side_effect = RuntimeError("Firestore connection refused")
         with patch("auth_service.verify_firebase_id_token", return_value=mock_claims):
-            with patch.object(main.db, "collection", side_effect=RuntimeError("Firestore connection refused")):
+            with patch("main.db", mock_db):
                 res = self.client.get("/user/status?email=test_status@stroke.ai", headers={"Authorization": "Bearer mock-token"})
                 self.assertEqual(res.status_code, 200)
                 data = res.json()

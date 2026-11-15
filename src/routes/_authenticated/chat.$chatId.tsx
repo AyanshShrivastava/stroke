@@ -63,11 +63,9 @@ function ChatWindow({ chatId }: { chatId: string }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [nextSync, setNextSync] = useState(30);
   const [showArchivist, setShowArchivist] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(
-    () => chat?.model || "llama3.2-local"
-  );
+  const [selectedModel, setSelectedModel] = useState<string>(() => chat?.model || "llama3.2-local");
   const [reasoningLevel, setReasoningLevel] = useState<string>(
-    () => chat?.reasoningLevel || "medium"
+    () => chat?.reasoningLevel || "medium",
   );
 
   const chatRef = useRef(chat);
@@ -144,7 +142,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
           ...c,
           lastArchivedId: lastProcessedId,
           archivedMessageIds: Array.from(
-            new Set([...(c.archivedMessageIds || []), ...result.archivedIds])
+            new Set([...(c.archivedMessageIds || []), ...result.archivedIds]),
           ),
           notes: [newNote, ...(c.notes || [])],
         };
@@ -422,7 +420,8 @@ function ChatWindow({ chatId }: { chatId: string }) {
                   Stroke Builder Core
                 </h2>
                 <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
-                  High-performance AI engineering agent for Roblox Studio Luau, full-stack architectures, and autonomous tool workflows.
+                  High-performance AI engineering agent for Roblox Studio Luau, full-stack
+                  architectures, and autonomous tool workflows.
                 </p>
 
                 {/* Quick starter prompts */}
@@ -432,7 +431,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
                     onClick={() =>
                       handleSend(
                         "Create a production-grade Luau TweenService camera shake and lighting VFX script with clean modular cleanup.",
-                        []
+                        [],
                       )
                     }
                     className="group rounded-xl border border-border/80 bg-card/60 p-3 hover:border-primary/50 hover:bg-card transition-all text-xs"
@@ -451,7 +450,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
                     onClick={() =>
                       handleSend(
                         "Inspect current workspace file hierarchy and report active Roblox project health.",
-                        []
+                        [],
                       )
                     }
                     className="group rounded-xl border border-border/80 bg-card/60 p-3 hover:border-primary/50 hover:bg-card transition-all text-xs"
@@ -490,11 +489,13 @@ function ChatWindow({ chatId }: { chatId: string }) {
                 </div>
               ) : (
                 <div key={m.id} className="flex items-start gap-3">
-                  <div className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border shadow-2xs ${
-                    m.status === "error"
-                      ? "border-destructive/40 bg-destructive/10 text-destructive"
-                      : "border-border/70 bg-card text-primary"
-                  }`}>
+                  <div
+                    className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border shadow-2xs ${
+                      m.status === "error"
+                        ? "border-destructive/40 bg-destructive/10 text-destructive"
+                        : "border-border/70 bg-card text-primary"
+                    }`}
+                  >
                     {m.status === "error" ? (
                       <AlertCircle className="h-3.5 w-3.5" />
                     ) : (
@@ -545,7 +546,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
                     </div>
                   )}
                 </div>
-              )
+              ),
             )}
 
             {/* Live Thinking Status Placeholder */}
@@ -588,9 +589,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
               <span>Archivist Notes</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] text-muted-foreground">
-                sync {nextSync}s
-              </span>
+              <span className="font-mono text-[10px] text-muted-foreground">sync {nextSync}s</span>
               <button
                 type="button"
                 onClick={() => setShowArchivist(false)}
@@ -607,7 +606,8 @@ function ChatWindow({ chatId }: { chatId: string }) {
               <div className="p-4 text-center text-xs text-muted-foreground">
                 <p>No extracted rules yet.</p>
                 <p className="mt-1 text-[11px] opacity-75">
-                  Rules and architecture decisions from this session are automatically compacted here.
+                  Rules and architecture decisions from this session are automatically compacted
+                  here.
                 </p>
               </div>
             ) : (
@@ -685,25 +685,24 @@ function Rich({ text }: { text: string }) {
           className="whitespace-pre-wrap leading-relaxed text-sm text-foreground/90 space-y-2"
           dangerouslySetInnerHTML={{
             __html: esc(parts[i] ?? "")
-              .replace(/\*\*(.+?)\*\*/g, "<strong class='text-foreground font-semibold'>$1</strong>")
-              .replace(/`([^`]+)`/g, "<code class='rounded bg-muted px-1.5 py-0.5 font-mono text-xs border border-border/40'>$1</code>")
+              .replace(
+                /\*\*(.+?)\*\*/g,
+                "<strong class='text-foreground font-semibold'>$1</strong>",
+              )
+              .replace(
+                /`([^`]+)`/g,
+                "<code class='rounded bg-muted px-1.5 py-0.5 font-mono text-xs border border-border/40'>$1</code>",
+              )
               .replace(/_(.+?)_/g, "<em>$1</em>"),
           }}
-        />
+        />,
       );
     }
     if (parts[i + 2] !== undefined) {
-      out.push(
-        <CodeBlock
-          key={i + 1}
-          lang={parts[i + 1] || "luau"}
-          code={parts[i + 2]}
-        />
-      );
+      out.push(<CodeBlock key={i + 1} lang={parts[i + 1] || "luau"} code={parts[i + 2]} />);
     }
   }
   return <div className="min-w-0 flex-1 space-y-2 text-sm leading-relaxed">{out}</div>;
 }
 
-const esc = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

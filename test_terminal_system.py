@@ -243,18 +243,32 @@ def test_tools_schema():
     print("Test 8 passed successfully.")
 
 
+import unittest
+
+class TestTerminalSystem(unittest.TestCase):
+    def test_01_secret_redaction(self):
+        test_secret_redaction()
+
+    def test_02_command_security_policy(self):
+        test_command_security_policy()
+
+    def test_03_session_lifecycle_and_tools(self):
+        test_session_lifecycle_and_tools()
+
+    def test_04_directory_traversal_prevention(self):
+        test_directory_traversal_prevention()
+
+    def test_05_timeouts_and_cancellation(self):
+        test_timeouts_and_cancellation()
+
+    def test_06_approval_workflow(self):
+        test_approval_workflow()
+
+    def test_07_coding_loop_background_terminal_checks(self):
+        test_coding_loop_background_terminal_checks()
+
+    def test_08_tools_schema(self):
+        test_tools_schema()
+
 if __name__ == "__main__":
-    print("=" * 65)
-    print(" STROKE // PRIVATE BACKGROUND TERMINAL SYSTEM TEST SUITE")
-    print("=" * 65)
-    test_secret_redaction()
-    test_command_security_policy()
-    test_session_lifecycle_and_tools()
-    test_directory_traversal_prevention()
-    test_timeouts_and_cancellation()
-    test_approval_workflow()
-    test_coding_loop_background_terminal_checks()
-    test_tools_schema()
-    print("\n" + "=" * 65)
-    print(" ALL 8 PRIVATE INTERNAL TERMINAL SUITES PASSED CLEANLY!")
-    print("=" * 65)
+    unittest.main()

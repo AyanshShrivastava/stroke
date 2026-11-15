@@ -1,4 +1,5 @@
 <!-- LOVABLE:BEGIN -->
+
 > [!IMPORTANT]
 > This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
 > published git history — force pushing, or rebasing/amending/squashing commits
@@ -27,8 +28,10 @@ use the editor.
   `LOVABLE_API_KEY`. When Lovable does not provide one, users can bring their
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
+
 <!-- LOVABLE:END -->
 
 ## Project rules
+
 - Desktop-only features (cache file, local chats, storage cap, GitHub PAT) are simulated in browser localStorage via `src/lib/keyboard-store.ts`; why: the web build can't touch the filesystem.
 - Archivist notes sync to the `archive_notes` table (per-user RLS); why: replaces Firestore with Lovable Cloud.

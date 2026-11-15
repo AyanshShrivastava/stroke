@@ -66,7 +66,7 @@ def run_build():
         if os.path.exists(item.split(sep)[0]):
             base_cmd.extend(["--add-data", item])
 
-    # Hidden imports required by FastAPI, Uvicorn, and Firebase Admin
+    # Hidden imports required by FastAPI, Uvicorn, BYOK AI Providers, and Stroke Services
     hidden_imports = [
         "uvicorn",
         "uvicorn.logging",
@@ -92,7 +92,23 @@ def run_build():
         "workspace_service",
         "file_service",
         "isolated_workspace",
-        "model_download_service"
+        "model_download_service",
+        "credentials_vault_service",
+        "ai_provider_service",
+        "project_context_service",
+        "multimodal_service",
+        "luau_analyzer",
+        "agent_orchestrator",
+        "auth_service",
+        "local_firestore",
+        "eval_harness",
+        "observability",
+        "migration_service",
+        "terminal_service",
+        "coding_loop",
+        "github_service",
+        "keyring",
+        "cryptography",
     ]
 
     for imp in hidden_imports:

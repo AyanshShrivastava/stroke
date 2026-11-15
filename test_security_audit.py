@@ -174,20 +174,11 @@ class TestTruthfulCompilerVerification(unittest.TestCase):
     def test_02_generic_languages_not_marked_verified(self):
         """Generic languages without an installed compiler must not receive false green verification."""
         code = "fn main() { println!(\"Hello\"); }"
-        blocks = [{"code": code, "language": "rust"}]
-        rep = coding_loop.RobloxDomainTestRunner.test_luau_code("", "") # init check
-        # Inspect coding loop dispatch
-        # Using coding loop block processor directly:
-        b_rep = {
-            "passed_checks": ["Block 1: Generic Syntax Inspected"],
-            "failed_checks": [],
-            "untested_limitations": ["No compiler installed for rust. Live execution and semantics unverified."],
-            "is_verified": False,
-            "has_compiler_verified": False,
-            "syntax_status": "NOT RUN (NO COMPILER)"
-        }
+        b_rep = RobloxDomainTestRunner.test_generic_code(code, "rust")
         self.assertFalse(b_rep["is_verified"])
-        self.assertEqual(b_rep["syntax_status"], "NOT RUN (NO COMPILER)")
+        self.assertFalse(b_rep["has_compiler_verified"])
+        self.assertEqual(b_rep["verification_status"], "UNVERIFIED")
+        self.assertIn("NO COMPILER FOR RUST", b_rep["syntax_status"])
 
 
 class TestHonestMcpTools(unittest.TestCase):

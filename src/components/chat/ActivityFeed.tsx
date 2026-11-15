@@ -37,7 +37,12 @@ function getStepIcon(name: string, detail: string) {
   if (combined.includes("test") || combined.includes("verify") || combined.includes("syntax")) {
     return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
   }
-  if (combined.includes("file") || combined.includes("read") || combined.includes("patch") || combined.includes("diff")) {
+  if (
+    combined.includes("file") ||
+    combined.includes("read") ||
+    combined.includes("patch") ||
+    combined.includes("diff")
+  ) {
     return <FileCode className="h-3.5 w-3.5 text-amber-500" />;
   }
   if (combined.includes("search") || combined.includes("retriev") || combined.includes("context")) {
@@ -85,12 +90,16 @@ export function ActivityFeed({
 
   // Derive summarized counts
   const fileSteps = steps.filter((s) => /file|read|index|context/i.test(`${s.name} ${s.detail}`));
-  const toolSteps = steps.filter((s) => /tool|terminal|command|studio|luau/i.test(`${s.name} ${s.detail}`));
+  const toolSteps = steps.filter((s) =>
+    /tool|terminal|command|studio|luau/i.test(`${s.name} ${s.detail}`),
+  );
   const testSteps = steps.filter((s) => /test|syntax|verify|domain/i.test(`${s.name} ${s.detail}`));
 
   const summaryPills: string[] = [];
-  if (fileSteps.length > 0) summaryPills.push(`${fileSteps.length} file${fileSteps.length > 1 ? "s" : ""} inspected`);
-  if (toolSteps.length > 0) summaryPills.push(`${toolSteps.length} action${toolSteps.length > 1 ? "s" : ""}`);
+  if (fileSteps.length > 0)
+    summaryPills.push(`${fileSteps.length} file${fileSteps.length > 1 ? "s" : ""} inspected`);
+  if (toolSteps.length > 0)
+    summaryPills.push(`${toolSteps.length} action${toolSteps.length > 1 ? "s" : ""}`);
   if (codingLoop?.iterations && codingLoop.iterations > 1) {
     summaryPills.push(`Self-healed (${codingLoop.iterations} iters)`);
   } else if (codingLoop?.domain_tests_passed || testSteps.length > 0) {
@@ -107,7 +116,11 @@ export function ActivityFeed({
         aria-expanded={expanded}
       >
         <span className="text-muted-foreground transition-transform duration-200">
-          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
         </span>
 
         <span className="font-medium text-foreground flex items-center gap-1.5">
@@ -138,8 +151,8 @@ export function ActivityFeed({
                 taskState === "completed"
                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                   : taskState === "failed"
-                  ? "bg-destructive/10 text-destructive border border-destructive/20"
-                  : "bg-muted text-muted-foreground"
+                    ? "bg-destructive/10 text-destructive border border-destructive/20"
+                    : "bg-muted text-muted-foreground"
               }`}
             >
               {taskState === "completed" ? (
@@ -171,13 +184,25 @@ export function ActivityFeed({
               <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-border/50 font-mono text-[11px]">
                 <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/40">
                   <span className="text-muted-foreground">Syntax Check:</span>
-                  <span className={codingLoop.syntax_valid !== false ? "text-emerald-500 font-semibold" : "text-amber-500"}>
+                  <span
+                    className={
+                      codingLoop.syntax_valid !== false
+                        ? "text-emerald-500 font-semibold"
+                        : "text-amber-500"
+                    }
+                  >
                     {codingLoop.syntax_valid !== false ? "Passed" : "Needs Review"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-2 py-1 rounded bg-muted/40">
                   <span className="text-muted-foreground">Domain Tests:</span>
-                  <span className={codingLoop.domain_tests_passed ? "text-emerald-500 font-semibold" : "text-emerald-500"}>
+                  <span
+                    className={
+                      codingLoop.domain_tests_passed
+                        ? "text-emerald-500 font-semibold"
+                        : "text-emerald-500"
+                    }
+                  >
                     {codingLoop.domain_tests_passed ? "Passed" : "Verified"}
                   </span>
                 </div>
@@ -204,8 +229,8 @@ export function ActivityFeed({
                           step.status === "error"
                             ? "bg-destructive/15 text-destructive"
                             : step.status === "warning"
-                            ? "bg-amber-500/15 text-amber-500"
-                            : "bg-muted text-muted-foreground"
+                              ? "bg-amber-500/15 text-amber-500"
+                              : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {step.status}

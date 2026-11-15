@@ -1,19 +1,6 @@
 import React, { useRef, useState } from "react";
-import {
-  ArrowUp,
-  Square,
-  Paperclip,
-  X,
-  Cpu,
-  Brain,
-  ChevronDown,
-  Sparkles,
-} from "lucide-react";
-import {
-  AVAILABLE_MODELS,
-  REASONING_LEVELS,
-  type Attachment,
-} from "@/lib/keyboard-store";
+import { ArrowUp, Square, Paperclip, X, Cpu, Brain, ChevronDown, Sparkles } from "lucide-react";
+import { AVAILABLE_MODELS, REASONING_LEVELS, type Attachment } from "@/lib/keyboard-store";
 
 interface ComposerProps {
   onSend: (text: string, attachments: Attachment[]) => void;
@@ -45,8 +32,7 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const activeModel =
-    AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
+  const activeModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
   const activeReasoning =
     REASONING_LEVELS.find((r) => r.id === reasoningLevel) || REASONING_LEVELS[1];
 
@@ -128,8 +114,8 @@ export function Composer({
                         model.id === selectedModel
                           ? "bg-primary-foreground/20 text-primary-foreground"
                           : model.isLocal
-                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                          : "bg-muted text-muted-foreground"
+                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                            : "bg-muted text-muted-foreground"
                       }`}
                     >
                       {model.badge}
@@ -137,7 +123,9 @@ export function Composer({
                   </div>
                   <div
                     className={`mt-0.5 text-[10px] leading-tight ${
-                      model.id === selectedModel ? "text-primary-foreground/80" : "text-muted-foreground"
+                      model.id === selectedModel
+                        ? "text-primary-foreground/80"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {model.description}
@@ -177,7 +165,9 @@ export function Composer({
                   <div className="font-medium">{level.label}</div>
                   <div
                     className={`text-[10px] ${
-                      level.id === reasoningLevel ? "text-primary-foreground/80" : "text-muted-foreground"
+                      level.id === reasoningLevel
+                        ? "text-primary-foreground/80"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {level.desc}

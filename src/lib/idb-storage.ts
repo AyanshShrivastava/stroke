@@ -1,9 +1,9 @@
 /**
  * STROKE // BROWSER STORAGE ENGINE (IndexedDB + Safe Fallback)
- * 
+ *
  * Provides resilient, quota-safe local storage for conversations, messages,
  * and archived context without misleading capacity claims.
- * 
+ *
  * Guarantees:
  * 1. Uses IndexedDB for multi-MB chat histories and structured records.
  * 2. Catches QuotaExceededError, SecurityError, and private-mode storage blocks.
@@ -23,7 +23,7 @@ const META_STORE = "metadata";
 const isBrowser = () => typeof window !== "undefined" && typeof window.indexedDB !== "undefined";
 
 // In-memory fallback if IndexedDB is blocked or disabled
-const memoryFallback = new Map<string, any>();
+const memoryFallback = new Map<string, unknown>();
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -68,7 +68,7 @@ export async function idbSaveChat(chat: Chat): Promise<boolean> {
 
       tx.oncomplete = () => resolve(true);
       tx.onerror = (e) => {
-        const error = tx.error || (e.target as any)?.error;
+        const error = tx.error || (e.target as IDBRequest | null)?.error;
         console.warn("[Stroke IDB Write Warning]", error);
         reject(error);
       };
@@ -272,17 +272,19 @@ export async function exportLocalDataJson(): Promise<string> {
 /**
  * Imports chats from an exported JSON string with validation and deduplication.
  */
-export async function importLocalDataJson(jsonStr: string): Promise<{ imported: number; errors: string[] }> {
+export async function importLocalDataJson(
+  jsonStr: string,
+): Promise<{ imported: number; errors: string[] }> {
   const errors: string[] = [];
   try {
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(jsonStr);
     } catch (parseErr) {
       return { imported: 0, errors: [`Malformed JSON: ${(parseErr as Error).message}`] };
     }
 
-    const chatsList = Array.isArray(parsed) ? parsed : parsed?.chats;
+    const chatsList = Array.isArray(parsed) ? parsed : (parsed as { chats?: unknown })?.chats;
     if (!Array.isArray(chatsList)) {
       throw new Error("Invalid format: expected a JSON array or object with a 'chats' array.");
     }

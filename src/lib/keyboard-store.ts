@@ -57,7 +57,7 @@ export type ChatMsg = {
   codingLoop?: CodingLoopReport;
   taskId?: string;
   taskState?: string;
-  taskBudget?: Record<string, any>;
+  taskBudget?: Record<string, unknown>;
   durationSeconds?: number;
   model?: string;
   provider?: string;
@@ -263,32 +263,41 @@ export function loadChats(): Chat[] {
   cacheLoaded = true;
 
   // Background hydration from IndexedDB for comprehensive history
-  idbLoadChats().then((idbChats) => {
-    if (idbChats && idbChats.length > 0) {
-      const mergedMap = new Map<string, Chat>();
-      idbChats.forEach((c) => mergedMap.set(c.id, normalizeChat(c)));
-      memoryChatsCache.forEach((c) => {
-        if (!mergedMap.has(c.id) || (c.version || 0) >= (mergedMap.get(c.id)?.version || 0)) {
-          mergedMap.set(c.id, c);
-        }
-      });
-      const merged = Array.from(mergedMap.values());
-      merged.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      memoryChatsCache = merged;
-      window.dispatchEvent(new Event("keyboard:chats"));
-    }
-  }).catch(() => {});
+  idbLoadChats()
+    .then((idbChats) => {
+      if (idbChats && idbChats.length > 0) {
+        const mergedMap = new Map<string, Chat>();
+        idbChats.forEach((c) => mergedMap.set(c.id, normalizeChat(c)));
+        memoryChatsCache.forEach((c) => {
+          if (!mergedMap.has(c.id) || (c.version || 0) >= (mergedMap.get(c.id)?.version || 0)) {
+            mergedMap.set(c.id, c);
+          }
+        });
+        const merged = Array.from(mergedMap.values());
+        merged.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        memoryChatsCache = merged;
+        window.dispatchEvent(new Event("keyboard:chats"));
+      }
+    })
+    .catch(() => {});
 
   return memoryChatsCache;
 }
 
-function normalizeChat(c: any): Chat {
+function normalizeChat(c: Partial<Chat> & Record<string, unknown>): Chat {
   const messages: ChatMsg[] = Array.isArray(c.messages) ? c.messages : [];
   let lastArchivedId = c.lastArchivedId;
-  const archivedMessageIds: string[] = Array.isArray(c.archivedMessageIds) ? c.archivedMessageIds : [];
+  const archivedMessageIds: string[] = Array.isArray(c.archivedMessageIds)
+    ? c.archivedMessageIds
+    : [];
 
   // Migration from legacy archivedUpTo index
-  if (!lastArchivedId && typeof c.archivedUpTo === "number" && c.archivedUpTo > 0 && messages.length > 0) {
+  if (
+    !lastArchivedId &&
+    typeof c.archivedUpTo === "number" &&
+    c.archivedUpTo > 0 &&
+    messages.length > 0
+  ) {
     const idx = Math.min(c.archivedUpTo - 1, messages.length - 1);
     if (idx >= 0 && messages[idx]) {
       lastArchivedId = messages[idx].id;
@@ -397,7 +406,7 @@ export function deleteChat(id: string) {
 export const newMsg = (
   role: ChatMsg["role"],
   text: string,
-  extra?: Partial<Omit<ChatMsg, "id" | "role" | "text" | "at">>
+  extra?: Partial<Omit<ChatMsg, "id" | "role" | "text" | "at">>,
 ): ChatMsg => ({
   id: uid(),
   role,
@@ -475,15 +484,20 @@ export function formatBytes(b: number) {
 // -----------------------------------------------------------------------------
 // ARCHIVIST: IDEMPOTENT MULTI-ROLE RULE & CONTEXT EXTRACTION
 // -----------------------------------------------------------------------------
-const RULE_RX = /\b(always|never|must|don't|do not|should|rule|prefer|use|require|enforce|standard)\b/i;
-const DECISION_RX = /\b(decided|architect|pattern|implemented|structured|refactored|verified|passed|created|configured)\b/i;
+const RULE_RX =
+  /\b(always|never|must|don't|do not|should|rule|prefer|use|require|enforce|standard)\b/i;
+const DECISION_RX =
+  /\b(decided|architect|pattern|implemented|structured|refactored|verified|passed|created|configured)\b/i;
 
 export type ArchivistResult = {
   content: string;
   archivedIds: string[];
 };
 
-export function compactMessages(msgs: ChatMsg[], existingNotes: Note[] = []): ArchivistResult | null {
+export function compactMessages(
+  msgs: ChatMsg[],
+  existingNotes: Note[] = [],
+): ArchivistResult | null {
   if (!msgs || msgs.length === 0) return null;
 
   const existingContents = new Set(existingNotes.map((n) => n.content.trim()));
@@ -495,7 +509,10 @@ export function compactMessages(msgs: ChatMsg[], existingNotes: Note[] = []): Ar
     if (!m.text) continue;
     processedIds.push(m.id);
 
-    const lines = m.text.split(/[\n.!?]+/).map((l) => l.trim()).filter(Boolean);
+    const lines = m.text
+      .split(/[\n.!?]+/)
+      .map((l) => l.trim())
+      .filter(Boolean);
 
     if (m.role === "user") {
       for (const line of lines) {
@@ -587,7 +604,7 @@ export type AiChatResponse = {
   coding_loop?: CodingLoopReport;
   task_id?: string;
   task_state?: string;
-  task_budget?: Record<string, any>;
+  task_budget?: Record<string, unknown>;
   sources?: Array<{ title?: string; url?: string; snippet?: string }>;
   god_tier_vfx_learned?: boolean;
   learned_vfx_name?: string;
@@ -660,7 +677,8 @@ export async function fetchAiFull(options: FetchAiOptions): Promise<AiChatRespon
 
     const data = await res.json();
     return {
-      message: data.message || data.reply || (typeof data === "string" ? data : JSON.stringify(data)),
+      message:
+        data.message || data.reply || (typeof data === "string" ? data : JSON.stringify(data)),
       provider: data.provider,
       model: data.model,
       duration_seconds: data.duration_seconds,
@@ -779,7 +797,9 @@ export async function testProviderConnection(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = await res.json().catch(() => ({ success: false, message: "Network error testing connection" }));
+  const data = await res
+    .json()
+    .catch(() => ({ success: false, message: "Network error testing connection" }));
   return data;
 }
 
@@ -793,7 +813,9 @@ export async function fetchActiveModelConfig(): Promise<ActiveModelConfig | null
   }
 }
 
-export async function saveActiveModelConfig(updates: Partial<ActiveModelConfig>): Promise<ActiveModelConfig> {
+export async function saveActiveModelConfig(
+  updates: Partial<ActiveModelConfig>,
+): Promise<ActiveModelConfig> {
   const res = await fetch("/api/models/active", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
