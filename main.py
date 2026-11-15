@@ -2771,7 +2771,12 @@ async def list_user_chats(
     Returns saved chat sessions for the user from Firestore users/{email}/chats.
     Falls back to resilient local store if Firestore ADC is in sandbox mode.
     """
-    clean_email = email.strip().lower() if email else (user.email or uid).strip().lower()
+    if email and user.email and email.strip().lower() != user.email.strip().lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Cannot access another user's chat sessions."
+        )
+    clean_email = (user.email or uid).strip().lower()
     sessions = []
     try:
         chats_ref = db.collection("users").document(uid).collection("chats")
@@ -2804,7 +2809,12 @@ async def get_single_user_chat(
     email: Optional[str] = Query(None, description="Optional email")
 ):
     uid = user.uid
-    clean_email = email.strip().lower() if email else (user.email or uid).strip().lower()
+    if email and user.email and email.strip().lower() != user.email.strip().lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Cannot access another user's chat sessions."
+        )
+    clean_email = (user.email or uid).strip().lower()
     try:
         doc = db.collection("users").document(uid).collection("chats").document(session_id).get()
         if doc.exists:
@@ -2831,7 +2841,12 @@ async def save_user_chat(
     user: AuthenticatedUser = Depends(get_current_user)
 ):
     uid = user.uid
-    clean_email = (payload.email or user.email or uid).strip().lower()
+    if payload.email and user.email and payload.email.strip().lower() != user.email.strip().lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Cannot save chat session into another user's account."
+        )
+    clean_email = (user.email or uid).strip().lower()
 
     if payload.is_temporary:
         return {
@@ -2910,7 +2925,12 @@ async def delete_user_chat(
     email: Optional[str] = Query(None, description="Optional email")
 ):
     uid = user.uid
-    clean_email = email.strip().lower() if email else (user.email or uid).strip().lower()
+    if email and user.email and email.strip().lower() != user.email.strip().lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Cannot delete another user's chat sessions."
+        )
+    clean_email = (user.email or uid).strip().lower()
     try:
         db.collection("users").document(uid).collection("chats").document(session_id).delete()
     except Exception:
@@ -3804,12 +3824,19 @@ async def get_agent_task(task_id: str, user: Optional[auth_service.Authenticated
     task = TaskManager.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail=f"Agent task '{task_id}' not found.")
+    if user and task.user_uid not in ("default_user", "anonymous") and task.user_uid != user.uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot access another user's agent task.")
     return task.to_dict()
 
 
 @app.post("/agent/tasks/{task_id}/cancel", tags=["Agent Orchestration"])
 async def cancel_agent_task(task_id: str, user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)):
     """Cancels an active or awaiting-approval agent task."""
+    task = TaskManager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Agent task '{task_id}' not found.")
+    if user and task.user_uid not in ("default_user", "anonymous") and task.user_uid != user.uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot cancel another user's agent task.")
     success = TaskManager.cancel_task(task_id, reason="User requested cancellation via API")
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot cancel task '{task_id}' (not found or already terminal).")
@@ -3819,6 +3846,11 @@ async def cancel_agent_task(task_id: str, user: Optional[auth_service.Authentica
 @app.post("/agent/tasks/{task_id}/approve", tags=["Agent Orchestration"])
 async def approve_agent_task(task_id: str, user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)):
     """Approves a task that is currently in AWAITING_APPROVAL state."""
+    task = TaskManager.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Agent task '{task_id}' not found.")
+    if user and task.user_uid not in ("default_user", "anonymous") and task.user_uid != user.uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot approve another user's agent task.")
     success = TaskManager.approve_task(task_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot approve task '{task_id}' (task not in awaiting_approval state).")
@@ -3886,6 +3918,8 @@ async def get_parallel_agent_job(
     job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
+    if user and job.user_uid not in ("default_user", "anonymous") and job.user_uid != user.uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot access another user's agent job.")
     return job.to_dict()
 
 
@@ -3895,6 +3929,11 @@ async def cancel_parallel_agent_job(
     user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
 ):
     """Cancels an active parallel agent job and immediately halts running sub-agents."""
+    job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
+    if user and job.user_uid not in ("default_user", "anonymous") and job.user_uid != user.uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot cancel another user's agent job.")
     success = parallel_agent_system.global_multi_agent_orchestrator.cancel_job(job_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot cancel job '{job_id}' (not found or already terminal).")
@@ -3910,6 +3949,8 @@ async def stream_parallel_agent_job(
     job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
+    if user and job.user_uid not in ("default_user", "anonymous") and job.user_uid != user.uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot stream another user's agent job.")
 
     async def event_generator():
         last_index = 0

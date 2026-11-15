@@ -131,7 +131,7 @@ REDACTION_PATTERNS = [
     (re.compile(r"ghp_[a-zA-Z0-9]{36}"), "[REDACTED_GITHUB_PAT]"),
     (re.compile(r"github_pat_[a-zA-Z0-9_]{82}"), "[REDACTED_GITHUB_PAT]"),
     # Google / Firebase API Keys
-    (re.compile(r"AIza[0-9A-Za-z-_]{35}"), "[REDACTED_GOOGLE_API_KEY]"),
+    (re.compile(r"AIza[0-9A-Za-z-_]{30,40}"), "[REDACTED_GOOGLE_API_KEY]"),
     # JWT Bearer Tokens
     (re.compile(r"Bearer\s+[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9_\-\.]+"), "Bearer [REDACTED_JWT]"),
     # Private Key Blocks
@@ -140,6 +140,10 @@ REDACTION_PATTERNS = [
     (re.compile(r"re_[a-zA-Z0-9_]{24,}"), "[REDACTED_RESEND_API_KEY]"),
     # Internal Stroke Secret / Tokens
     (re.compile(r"STRK_[a-zA-Z0-9_-]{20,}"), "[REDACTED_STROKE_SECRET]"),
+    # Groq API Keys
+    (re.compile(r"gsk_[a-zA-Z0-9_\-]{20,}"), "[REDACTED_GROQ_API_KEY]"),
+    # OpenRouter API Keys
+    (re.compile(r"sk-or-v1-[a-zA-Z0-9_\-]{20,}"), "[REDACTED_OPENROUTER_API_KEY]"),
     # OpenAI / Anthropic Keys
     (re.compile(r"sk-(?:ant-)?[a-zA-Z0-9_-]{20,}"), "[REDACTED_AI_API_KEY]"),
     # Generic Secret Patterns (e.g. password=..., secret=...)

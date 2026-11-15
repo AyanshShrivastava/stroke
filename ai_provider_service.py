@@ -1145,14 +1145,17 @@ class GeminiProvider(BaseAiProvider):
         if "tools" in validated_params and validated_params["tools"]:
             payload["tools"] = self._convert_tools_to_gemini(validated_params["tools"])
 
-        url = f"{self.BASE_URL}/models/{model_id}:generateContent?key={api_key}"
+        url = f"{self.BASE_URL}/models/{model_id}:generateContent"
         start_time = time.time()
 
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
                 res = await client.post(
                     url,
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": api_key,
+                    },
                     json=payload
                 )
                 duration_ms = round((time.time() - start_time) * 1000, 2)
@@ -1291,14 +1294,17 @@ class GeminiProvider(BaseAiProvider):
         if "tools" in validated_params and validated_params["tools"]:
             payload["tools"] = self._convert_tools_to_gemini(validated_params["tools"])
 
-        url = f"{self.BASE_URL}/models/{model_id}:streamGenerateContent?alt=sse&key={api_key}"
+        url = f"{self.BASE_URL}/models/{model_id}:streamGenerateContent?alt=sse"
 
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
                 async with client.stream(
                     "POST",
                     url,
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": api_key,
+                    },
                     json=payload
                 ) as res:
                     if res.status_code == 400 and "API_KEY_INVALID" in res.text:
@@ -1691,6 +1697,17 @@ class RemoteOpenAiCompatibleProvider(BaseAiProvider):
             payload["tools"] = validated_params["tools"]
             payload["tool_choice"] = "auto"
 
+        # SSRF Protection: Validate target base URL against cloud metadata and unauthorized networks
+        try:
+            from mcp_client import SsrfProtector, McpError
+            SsrfProtector.validate_url(self.base_url, allow_local=True)
+        except McpError as e:
+            raise ProviderServiceError(
+                f"Custom provider URL blocked by SSRF protection: {e}",
+                provider=self.provider_name,
+                model=model_id
+            )
+
         start_time = time.time()
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
@@ -1811,6 +1828,17 @@ class RemoteOpenAiCompatibleProvider(BaseAiProvider):
         if "tools" in validated_params and validated_params["tools"]:
             payload["tools"] = validated_params["tools"]
             payload["tool_choice"] = "auto"
+
+        # SSRF Protection: Validate target base URL against cloud metadata and unauthorized networks
+        try:
+            from mcp_client import SsrfProtector, McpError
+            SsrfProtector.validate_url(self.base_url, allow_local=True)
+        except McpError as e:
+            raise ProviderServiceError(
+                f"Custom provider URL blocked by SSRF protection: {e}",
+                provider=self.provider_name,
+                model=model_id
+            )
 
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
@@ -2173,6 +2201,9 @@ class CustomProvider(BaseAiProvider):
     """
     provider_type = ProviderType.CUSTOM
 
+    def __init__(self, base_url: Optional[str] = None):
+        self.explicit_base_url = base_url
+
     async def chat_complete(
         self,
         messages: List[Dict[str, Any]],
@@ -2182,7 +2213,7 @@ class CustomProvider(BaseAiProvider):
     ) -> ProviderResponse:
         params = parameters or InferenceParameters()
         meta = credentials_vault_service.vault.get_metadata("custom", user_id)
-        base_url = meta.get("base_url", "").strip()
+        base_url = (self.explicit_base_url or meta.get("base_url", "")).strip()
         custom_format = meta.get("format", "openai").strip().lower()
         effective_model = model_id or meta.get("model_id", "default")
 
@@ -2210,7 +2241,7 @@ class CustomProvider(BaseAiProvider):
     ) -> AsyncIterator[StreamChunk]:
         params = parameters or InferenceParameters()
         meta = credentials_vault_service.vault.get_metadata("custom", user_id)
-        base_url = meta.get("base_url", "").strip()
+        base_url = (self.explicit_base_url or meta.get("base_url", "")).strip()
         custom_format = meta.get("format", "openai").strip().lower()
         effective_model = model_id or meta.get("model_id", "default")
 
@@ -2339,6 +2370,12 @@ async def test_provider_connection(
                 if not url:
                     return False, "Custom Base URL must be provided.", None
 
+                try:
+                    from mcp_client import SsrfProtector, McpError
+                    SsrfProtector.validate_url(url, allow_local=True)
+                except McpError as e:
+                    return False, f"SSRF Protection blocked URL: {e}", 400
+
                 if format_type == "anthropic":
                     r = await client.post(
                         f"{url}/messages",
@@ -2428,7 +2465,8 @@ async def fetch_live_provider_models(
                 if not key:
                     return _catalog_models_for(ProviderType.GEMINI)
                 res = await client.get(
-                    f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+                    "https://generativelanguage.googleapis.com/v1beta/models",
+                    headers={"x-goog-api-key": key}
                 )
                 if res.status_code == 200:
                     for m in res.json().get("models", []):
@@ -2529,6 +2567,11 @@ async def fetch_live_provider_models(
                 url = (base_url or meta.get("base_url") or "").rstrip("/")
                 custom_model = meta.get("model_id") or "default"
                 if url:
+                    try:
+                        from mcp_client import SsrfProtector, McpError
+                        SsrfProtector.validate_url(url, allow_local=True)
+                    except McpError as e:
+                        raise ProviderServiceError(f"Custom provider URL blocked by SSRF protection: {e}", "custom", "")
                     try:
                         headers = {"Authorization": f"Bearer {key}"} if key else {}
                         res = await client.get(f"{url}/models", headers=headers)
