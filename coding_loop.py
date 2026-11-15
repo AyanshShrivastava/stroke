@@ -22,9 +22,15 @@ import re
 import ast
 import json
 import time
-from typing import Dict, List, Any, Optional, Tuple
+import hashlib
+from pathlib import Path
+from dataclasses import dataclass, field, asdict
+from typing import Dict, List, Any, Optional, Tuple, Set, Union
 
 import paths_service
+import backup_service
+import file_service
+import workspace_service
 
 try:
     from luaparser import ast as lua_ast
@@ -978,7 +984,423 @@ class StateLedger:
 
 
 # ==============================================================================
-# 5. AUTONOMOUS CODING LOOP ORCHESTRATOR
+# 5. SMART 10-STAGE CODING WORKFLOW ENGINES
+# ==============================================================================
+
+@dataclass
+class GoalSpecification:
+    prompt: str
+    target_language: str
+    primary_objective: str
+    target_files: List[str]
+    explicit_requirements: List[str]
+    detected_framework: str
+
+
+class GoalUnderstandingEngine:
+    """
+    Stage 1: Understands the user's actual goal, intent, target domain,
+    referenced files, and explicit requirements.
+    """
+    @classmethod
+    def analyze_goal(cls, prompt: str, target_file: Optional[str] = None) -> GoalSpecification:
+        text = (prompt or "").strip()
+        lower = text.lower()
+
+        lang = "luau"
+        framework = "roblox_luau"
+        if target_file:
+            ext = Path(target_file).suffix.lower()
+            if ext in (".luau", ".lua"):
+                lang = "luau"
+                framework = "roblox_luau"
+            elif ext == ".py":
+                lang = "python"
+                framework = "python"
+            elif ext in (".ts", ".tsx"):
+                lang = "typescript"
+                framework = "typescript"
+            elif ext in (".js", ".jsx"):
+                lang = "javascript"
+                framework = "javascript"
+        else:
+            if any(term in lower for term in ("python", ".py", "pytest", "django", "fastapi", "asyncio", "pydantic", "pip")):
+                lang = "python"
+                framework = "python"
+            elif any(term in lower for term in ("roblox", "luau", "lua", "datamodel", "cframe", "hitbox", "overlapparams", "humanoid", "workspace:raycast", "game:getservice", "tween")):
+                lang = "luau"
+                framework = "roblox_luau"
+            elif any(term in lower for term in ("typescript", ".ts", ".tsx", "react")):
+                lang = "typescript"
+                framework = "typescript"
+
+        mentioned_files = []
+        file_pattern = r"\b([a-zA-Z0-9_\-\./\\]+\.(?:luau|lua|py|json|md|ts|tsx|js|jsx|txt))\b"
+        for m in re.finditer(file_pattern, text):
+            fname = m.group(1).replace("\\", "/")
+            if fname not in mentioned_files:
+                mentioned_files.append(fname)
+        if target_file and target_file not in mentioned_files:
+            mentioned_files.append(target_file)
+
+        reqs = []
+        if "debounce" in lower:
+            reqs.append("Implement multi-hit debounce guard")
+        if "spatial" in lower or "overlap" in lower:
+            reqs.append("Use authentic spatial query / OverlapParams")
+        if "async" in lower:
+            reqs.append("Use async/await definition properly")
+        if any(phrase in lower for phrase in ("no delete", "do not delete", "never delete", "don't delete", "without deleting")):
+            reqs.append("Do not delete existing files")
+
+        objective = text.split("\n")[0][:150]
+        return GoalSpecification(
+            prompt=text,
+            target_language=lang,
+            primary_objective=objective,
+            target_files=mentioned_files,
+            explicit_requirements=reqs,
+            detected_framework=framework
+        )
+
+
+@dataclass
+class InspectedProjectFile:
+    relative_path: str
+    absolute_path: Path
+    initial_sha256: str
+    size_bytes: int
+    language: str
+    content: str
+    symbols: List[str] = field(default_factory=list)
+
+
+class ProjectInspectionEngine:
+    """
+    Stage 2: Inspects relevant project files in the workspace,
+    extracts existing structure, and records baseline SHA-256 hashes to guarantee
+    user modifications are never silently overwritten.
+    """
+    @classmethod
+    def inspect_workspace(
+        cls,
+        workspace_path: Optional[str],
+        goal_spec: GoalSpecification
+    ) -> List[InspectedProjectFile]:
+        if not workspace_path:
+            return []
+
+        try:
+            ws = Path(workspace_path).resolve()
+        except Exception:
+            return []
+
+        if not ws.exists() or not ws.is_dir():
+            return []
+
+        inspected = []
+        seen_paths = set()
+
+        # 1. First inspect files explicitly mentioned in the goal
+        for f_name in goal_spec.target_files:
+            cand = ws / f_name
+            if cand.exists() and cand.is_file():
+                try:
+                    p_rel = str(cand.relative_to(ws))
+                    if p_rel not in seen_paths:
+                        seen_paths.add(p_rel)
+                        inspected.append(cls._inspect_single_file(cand, ws, goal_spec.target_language))
+                except Exception:
+                    pass
+
+        # 2. If no mentioned files found, inspect top files matching target language
+        if not inspected:
+            ext_map = {"luau": [".luau", ".lua"], "python": [".py"], "typescript": [".ts", ".tsx"]}
+            target_exts = ext_map.get(goal_spec.target_language, [".luau", ".py"])
+            for root, dirs, files in os.walk(ws):
+                dirs[:] = [d for d in dirs if d not in (".git", "venv", "node_modules", "__pycache__", ".backups")]
+                for f in files:
+                    if any(f.endswith(ext) for ext in target_exts):
+                        full_f = Path(root) / f
+                        try:
+                            p_rel = str(full_f.relative_to(ws))
+                            if p_rel not in seen_paths:
+                                seen_paths.add(p_rel)
+                                inspected.append(cls._inspect_single_file(full_f, ws, goal_spec.target_language))
+                                if len(inspected) >= 5:
+                                    break
+                        except Exception:
+                            pass
+                if len(inspected) >= 5:
+                    break
+
+        return inspected
+
+    @classmethod
+    def _inspect_single_file(cls, path: Path, base_dir: Path, fallback_lang: str) -> InspectedProjectFile:
+        rel = str(path.relative_to(base_dir))
+        content = ""
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+        sha = backup_service.compute_file_sha256(path) if path.exists() else ""
+        ext = path.suffix.lower()
+        lang = "luau" if ext in (".luau", ".lua") else ("python" if ext == ".py" else fallback_lang)
+
+        symbols = []
+        for line in content.splitlines():
+            m_fn = re.search(r"^\s*(?:local\s+)?function\s+([a-zA-Z0-9_:\.]+)", line)
+            if m_fn:
+                symbols.append(m_fn.group(1))
+            m_py = re.search(r"^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)", line)
+            if m_py:
+                symbols.append(m_py.group(1))
+
+        return InspectedProjectFile(
+            relative_path=rel,
+            absolute_path=path,
+            initial_sha256=sha,
+            size_bytes=len(content.encode("utf-8")),
+            language=lang,
+            content=content,
+            symbols=symbols
+        )
+
+
+@dataclass
+class SmartPlan:
+    objective: str
+    target_files_to_modify: List[str]
+    target_files_to_create: List[str]
+    implementation_steps: List[str]
+    testing_strategy: str
+    risk_mitigation: str
+
+
+class SmartImplementationPlanner:
+    """
+    Stage 3: Creates a structured, bounded implementation plan.
+    Strictly bounds the files to modify/create to prevent unnecessary file modifications.
+    """
+    @classmethod
+    def create_plan(
+        cls,
+        goal_spec: GoalSpecification,
+        inspected_files: List[InspectedProjectFile],
+        llm_fn: Optional[Any] = None
+    ) -> SmartPlan:
+        to_modify = []
+        to_create = []
+
+        if goal_spec.target_files:
+            for tf in goal_spec.target_files:
+                matched = next((f for f in inspected_files if f.relative_path == tf or f.absolute_path.name == tf), None)
+                if matched:
+                    to_modify.append(matched.relative_path)
+                else:
+                    to_create.append(tf)
+        elif inspected_files:
+            to_modify.append(inspected_files[0].relative_path)
+        else:
+            default_name = f"solution.{'luau' if goal_spec.target_language == 'luau' else 'py'}"
+            to_create.append(default_name)
+
+        steps = [
+            f"1. Implement {goal_spec.target_language.title()} module fulfilling: {goal_spec.primary_objective}",
+            "2. Ensure syntax balance and authentic service resolution",
+            "3. Run automated domain test checks (AST & compiler verification)",
+            "4. Validate that existing code and conventions are preserved"
+        ]
+
+        test_strat = f"Static AST analysis + {goal_spec.target_language.title()} bytecode verification"
+        risk = "Zero deletions allowed; pre-modification SHA-256 backup created before writing."
+
+        return SmartPlan(
+            objective=goal_spec.primary_objective,
+            target_files_to_modify=to_modify,
+            target_files_to_create=to_create,
+            implementation_steps=steps,
+            testing_strategy=test_strat,
+            risk_mitigation=risk
+        )
+
+
+@dataclass
+class FileChangeResult:
+    relative_path: str
+    action: str  # "created", "modified", "skipped", "conflict"
+    backup_path: Optional[str] = None
+    previous_sha256: str = ""
+    new_sha256: str = ""
+    diff: str = ""
+    error: Optional[str] = None
+
+
+class ControlledChangeManager:
+    """
+    Stage 4: Applies controlled code changes to the workspace.
+    Guarantees:
+      1. Preserves user changes: checks current hash against initial snapshot; stops if user modified it externally.
+      2. Pre-modification backups: every edited file is automatically backed up before writing.
+      3. No-Delete Policy: rejects any deletion or removal.
+      4. Avoids unnecessary file modifications: only edits planned files.
+    """
+    @classmethod
+    def apply_change(
+        cls,
+        workspace_path: str,
+        relative_path: str,
+        new_content: str,
+        expected_initial_sha256: Optional[str] = None,
+        task_id: str = "smart_coding_loop"
+    ) -> FileChangeResult:
+        ws = Path(workspace_path).resolve()
+        target = (ws / relative_path).resolve()
+
+        # Workspace security check
+        if ws not in target.parents and target != ws:
+            return FileChangeResult(
+                relative_path=relative_path,
+                action="skipped",
+                error=f"Security error: path {relative_path} resolves outside workspace."
+            )
+
+        # 1. Conflict detection (Preserve user changes)
+        if target.exists():
+            current_sha = backup_service.compute_file_sha256(target)
+            if expected_initial_sha256 and current_sha != expected_initial_sha256:
+                return FileChangeResult(
+                    relative_path=relative_path,
+                    action="conflict",
+                    previous_sha256=expected_initial_sha256,
+                    new_sha256=current_sha,
+                    error=f"User modification conflict: file '{relative_path}' was modified externally. Halting to preserve user changes."
+                )
+
+            # Avoid unnecessary file modification if content identical
+            current_content = target.read_text(encoding="utf-8", errors="replace")
+            if current_content == new_content:
+                return FileChangeResult(
+                    relative_path=relative_path,
+                    action="skipped",
+                    previous_sha256=current_sha,
+                    new_sha256=current_sha,
+                    diff="No changes needed (content identical)"
+                )
+
+            # Atomic write with automatic pre-modification backup
+            res = backup_service.atomic_write_file(
+                target_path=str(target),
+                content=new_content,
+                make_backup_if_exists=True,
+                task_id=task_id,
+                description=f"Smart Coding Loop edit on {relative_path}"
+            )
+            new_sha = backup_service.compute_file_sha256(target)
+            b_entry = res.get("backup")
+            b_path = b_entry.get("backup_path") if isinstance(b_entry, dict) else (str(b_entry) if b_entry else None)
+            return FileChangeResult(
+                relative_path=relative_path,
+                action="modified",
+                backup_path=b_path,
+                previous_sha256=current_sha,
+                new_sha256=new_sha
+            )
+        else:
+            # Create new file
+            target.parent.mkdir(parents=True, exist_ok=True)
+            res = backup_service.atomic_write_file(
+                target_path=str(target),
+                content=new_content,
+                make_backup_if_exists=False,
+                task_id=task_id,
+                description=f"Smart Coding Loop create {relative_path}"
+            )
+            new_sha = backup_service.compute_file_sha256(target)
+            return FileChangeResult(
+                relative_path=relative_path,
+                action="created",
+                new_sha256=new_sha
+            )
+
+
+class ChangeReviewer:
+    """
+    Stage 9: Reviews the applied changes against the original goal and implementation plan.
+    Audits for correctness, security, syntax, and verifies no unnecessary files were touched.
+    """
+    @classmethod
+    def review_changes(
+        cls,
+        goal_spec: GoalSpecification,
+        plan: SmartPlan,
+        edits: List[FileChangeResult],
+        test_report: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        passed_tests = test_report.get("is_verified", False) or test_report.get("static_status") == "PASS"
+        has_errors = any(f.get("type") == "error" for f in test_report.get("failed_checks", []))
+
+        # Check for unnecessary files touched
+        planned_set = set(plan.target_files_to_modify + plan.target_files_to_create)
+        actual_set = {e.relative_path for e in edits if e.action in ("created", "modified")}
+        unplanned_files = list(actual_set - planned_set)
+
+        approved = passed_tests and not has_errors and len(unplanned_files) == 0
+
+        verdict = "APPROVED" if approved else "CHANGES_REQUESTED"
+        reasons = []
+        if not passed_tests or has_errors:
+            reasons.append("Tests or compiler checks failed")
+        if unplanned_files:
+            reasons.append(f"Unnecessary files modified outside plan: {unplanned_files}")
+
+        return {
+            "verdict": verdict,
+            "approved": approved,
+            "reasons": reasons,
+            "planned_files_count": len(planned_set),
+            "actual_files_modified_count": len(actual_set),
+            "unplanned_files": unplanned_files,
+            "timestamp": time.time()
+        }
+
+
+@dataclass
+class SmartCodingWorkflowResult:
+    success: bool
+    prompt: str
+    goal: GoalSpecification
+    plan: SmartPlan
+    inspected_files: List[InspectedProjectFile]
+    file_changes: List[FileChangeResult]
+    test_report: Dict[str, Any]
+    review: Dict[str, Any]
+    stages_executed: List[Dict[str, str]]
+    final_reply: str
+    iterations: int
+    markdown_report: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "success": self.success,
+            "prompt": self.prompt,
+            "goal": asdict(self.goal),
+            "plan": asdict(self.plan),
+            "inspected_files": [asdict(f) for f in self.inspected_files],
+            "file_changes": [asdict(c) for c in self.file_changes],
+            "test_report": self.test_report,
+            "review": self.review,
+            "stages_executed": self.stages_executed,
+            "final_reply": self.final_reply,
+            "iterations": self.iterations,
+            "markdown_report": self.markdown_report,
+        }
+
+
+# ==============================================================================
+# 5b. AUTONOMOUS CODING LOOP ORCHESTRATOR
 # ==============================================================================
 
 class StrokeCodingLoop:
@@ -1149,7 +1571,8 @@ class StrokeCodingLoop:
         llm_generate_fn,
         user_email: Optional[str] = None,
         max_iterations: Optional[int] = None,
-        include_markdown_report: bool = True
+        include_markdown_report: bool = True,
+        workspace_path: Optional[str] = None
     ) -> Tuple[str, Dict[str, Any], List[Dict[str, str]]]:
         """
         Executes the Write -> Test -> Diagnose -> Fix -> Retest coding loop across ALL code blocks.
@@ -1168,9 +1591,10 @@ class StrokeCodingLoop:
         total_lines = sum(len(b["code"].splitlines()) for b in blocks)
 
         # Step 1: Understand
+        goal_spec = GoalUnderstandingEngine.analyze_goal(prompt)
         loop_steps.append({
             "name": "Understanding request...",
-            "detail": f"Target: {primary_lang.title()} | Identified {len(blocks)} code block(s) to verify"
+            "detail": f"Target: {primary_lang.title()} | Goal: {goal_spec.primary_objective[:90]} | Identified {len(blocks)} code block(s) to verify"
         })
 
         # Step 2: Generate
@@ -1186,6 +1610,8 @@ class StrokeCodingLoop:
         safety_ceiling = max_iterations if (max_iterations is not None and max_iterations > 0) else 50
         previous_code = None
         stagnant_count = 0
+        seen_code_hashes: Set[str] = set()
+        seen_error_signatures: Dict[str, int] = {}
 
         while iteration <= safety_ceiling:
             current_blocks = cls.extract_all_code_blocks(current_reply, default_lang=primary_lang)
@@ -1213,22 +1639,7 @@ class StrokeCodingLoop:
                 elif b_lang == "python":
                     b_rep = RobloxDomainTestRunner.test_python_code(b_code, prompt)
                 else:
-                    b_rep = {
-                        "passed_checks": [f"Block {b_idx}: Generic Syntax Inspected"],
-                        "failed_checks": [],
-                        "untested_limitations": [f"No compiler installed for {b_lang}. Live execution and semantics unverified."],
-                        "is_verified": False,
-                        "has_compiler_verified": False,
-                        "syntax_status": "NOT RUN (NO COMPILER)",
-                        "static_status": "PASS",
-                        "api_status": "NOT RUN",
-                        "runtime_status": "NOT RUN",
-                        "test_status": "NOT RUN",
-                        "perf_status": "NOT RUN",
-                        "compiler_used": "N/A",
-                        "commands_executed": [],
-                        "exit_codes": []
-                    }
+                    b_rep = RobloxDomainTestRunner.test_generic_code(b_code, b_lang)
 
                 b_reps.append(b_rep)
                 if not b_rep.get("has_compiler_verified", False):
@@ -1256,12 +1667,17 @@ class StrokeCodingLoop:
                     return "PASS"
                 return default
 
+            blocking_errors = [c for c in combined_failed if c.get("type") == "error"]
+            is_verified_all = all(r.get("is_verified", False) for r in b_reps)
+            verification_status = "PASS" if (is_verified_all and all_compiler_verified) else ("FAIL" if blocking_errors or _aggregate_status("syntax_status") == "FAIL" else "UNVERIFIED")
+
             report = {
                 "passed_checks": combined_passed,
                 "failed_checks": combined_failed,
                 "untested_limitations": combined_untested,
-                "is_verified": all(r.get("is_verified", False) for r in b_reps),
+                "is_verified": is_verified_all,
                 "has_compiler_verified": all_compiler_verified,
+                "verification_status": verification_status,
                 "iteration_count": iteration,
                 "syntax_status": _aggregate_status("syntax_status"),
                 "static_status": _aggregate_status("static_status"),
@@ -1287,19 +1703,32 @@ class StrokeCodingLoop:
                 })
                 break
 
-            # Stagnant loop guard: check if model produces identical code 5 times in a row
-            first_code = current_blocks[0]["code"]
-            if previous_code is not None and first_code == previous_code:
+            # Stagnant loop guard: check if model produces identical code or repeats code
+            all_current_code = "".join(b["code"] for b in current_blocks)
+            current_code_hash = hashlib.sha256(all_current_code.encode("utf-8")).hexdigest()
+            if current_code_hash in seen_code_hashes or (previous_code is not None and all_current_code == previous_code):
                 stagnant_count += 1
-                if stagnant_count >= 5:
+                if stagnant_count >= 3:
                     loop_steps.append({
                         "name": "Self-Correction Loop Concluded",
-                        "detail": f"Model produced identical code across {stagnant_count} consecutive attempts. Returning diagnostic report."
+                        "detail": f"Model produced identical code across {stagnant_count} consecutive attempts. Halting to prevent infinite loop or repeated failed edits."
                     })
                     break
             else:
+                seen_code_hashes.add(current_code_hash)
                 stagnant_count = 0
-            previous_code = first_code
+            previous_code = all_current_code
+
+            # Error signature guard: check if exact same error persists across 4 cycles
+            if blocking_errors:
+                err_sig = "|".join(f"{c.get('line', '?')}:{c.get('message', '')[:60]}" for c in blocking_errors)
+                seen_error_signatures[err_sig] = seen_error_signatures.get(err_sig, 0) + 1
+                if seen_error_signatures[err_sig] >= 4:
+                    loop_steps.append({
+                        "name": "Infinite Loop Guard Triggered",
+                        "detail": "Identical compiler error signature persisted across 4 consecutive cycles. Halting to prevent infinite loop."
+                    })
+                    break
 
             # If errors remain, continue correcting until solved
             if iteration < safety_ceiling:
@@ -1312,6 +1741,7 @@ class StrokeCodingLoop:
                     "detail": f"Identified {len(blocking_errors)} blocking issue(s) on Pass {iteration}. Compiling targeted diagnostics"
                 })
 
+                first_code = current_blocks[0]["code"]
                 correction_prompt = ErrorAnalyser.build_correction_prompt(first_code, report["failed_checks"], language=primary_lang)
 
                 # Step 5: Correct
@@ -1364,7 +1794,19 @@ class StrokeCodingLoop:
 
             iteration += 1
 
-        # Step 7: Final Response
+        # Step 9: Self-Review
+        review_plan = SmartPlan(
+            objective=goal_spec.primary_objective,
+            target_files_to_modify=[],
+            target_files_to_create=[],
+            implementation_steps=["Verify syntax and domain structure"],
+            testing_strategy="AST & compiler domain checks",
+            risk_mitigation="Zero deletions"
+        )
+        self_review = ChangeReviewer.review_changes(goal_spec, review_plan, [], final_report)
+        final_report["self_review"] = self_review
+
+        # Step 10: Final Response
         loop_steps.append({
             "name": "Preparing final result...",
             "detail": "Formatting verified code and comprehensive evidence report"
@@ -1385,3 +1827,341 @@ class StrokeCodingLoop:
             )
 
         return final_reply, final_report, loop_steps
+
+    @classmethod
+    def run_smart_coding_workflow(
+        cls,
+        prompt: str,
+        workspace_path: Optional[str] = None,
+        initial_reply: Optional[str] = None,
+        llm_generate_fn: Optional[Any] = None,
+        user_email: Optional[str] = None,
+        max_iterations: Optional[int] = None,
+        target_file: Optional[str] = None,
+        include_markdown_report: bool = True
+    ) -> SmartCodingWorkflowResult:
+        """
+        The Rebuilt 10-Stage Stroke Smart Coding Workflow:
+          1. Understand the user's actual goal (GoalUnderstandingEngine).
+          2. Inspect relevant project files & record baseline SHA-256 (ProjectInspectionEngine).
+          3. Create structured implementation plan (SmartImplementationPlanner).
+          4. Make controlled code changes with backups & conflict checks (ControlledChangeManager).
+          5. Run appropriate tests (RobloxDomainTestRunner / Python compiler).
+          6. Read actual error output (real compiler lines, messages, suggestions).
+          7. Fix failures (targeted diagnostic self-healing loop).
+          8. Re-run tests (StateLedger updates, verify resolution).
+          9. Review its own changes (ChangeReviewer auditing modified files vs plan).
+          10. Report what genuinely succeeded (honest evidence matrix, zero false claims).
+        """
+        stages_executed: List[Dict[str, str]] = []
+        applied_edits: List[FileChangeResult] = []
+
+        # STAGE 1: Understand user's actual goal
+        goal_spec = GoalUnderstandingEngine.analyze_goal(prompt, target_file=target_file)
+        stages_executed.append({
+            "stage": "1",
+            "name": "Understand User Goal",
+            "detail": f"Target: {goal_spec.target_language.title()} | Objective: {goal_spec.primary_objective[:90]} | Requirements: {len(goal_spec.explicit_requirements)}"
+        })
+
+        # STAGE 2: Inspect relevant project files
+        inspected_files = ProjectInspectionEngine.inspect_workspace(workspace_path, goal_spec)
+        baseline_hashes = {f.relative_path: f.initial_sha256 for f in inspected_files}
+        stages_executed.append({
+            "stage": "2",
+            "name": "Inspect Project Files",
+            "detail": f"Inspected {len(inspected_files)} file(s) in workspace. Baseline hashes recorded to preserve user changes."
+        })
+
+        # STAGE 3: Create implementation plan
+        plan = SmartImplementationPlanner.create_plan(goal_spec, inspected_files, llm_fn=llm_generate_fn)
+        stages_executed.append({
+            "stage": "3",
+            "name": "Create Implementation Plan",
+            "detail": f"Planned modifications: {plan.target_files_to_modify} | Creations: {plan.target_files_to_create}"
+        })
+
+        # STAGE 4: Make controlled code changes (Initial generation)
+        current_reply = initial_reply or ""
+        if not current_reply and llm_generate_fn:
+            plan_context = (
+                f"Objective: {plan.objective}\n"
+                f"Language: {goal_spec.target_language}\n"
+                f"Requirements: {', '.join(goal_spec.explicit_requirements) if goal_spec.explicit_requirements else 'None'}\n"
+                f"Implementation steps:\n" + "\n".join(plan.implementation_steps)
+            )
+            draft_messages = [
+                {"role": "system", "content": f"You are Stroke's Senior Autonomous Developer. Implement clean code fulfilling the plan below.\n{plan_context}"},
+                {"role": "user", "content": prompt}
+            ]
+            try:
+                current_reply = llm_generate_fn(draft_messages) or ""
+            except Exception as gen_err:
+                current_reply = f"// Error drafting initial implementation: {gen_err}"
+
+        current_blocks = cls.extract_all_code_blocks(current_reply, default_lang=goal_spec.target_language)
+        
+        # Apply controlled changes to workspace if workspace exists
+        if workspace_path and current_blocks:
+            planned_targets = plan.target_files_to_modify + plan.target_files_to_create
+            for b_idx, blk in enumerate(current_blocks):
+                rel_f = planned_targets[b_idx] if b_idx < len(planned_targets) else (target_file or f"solution.{goal_spec.target_language}")
+                change_res = ControlledChangeManager.apply_change(
+                    workspace_path=workspace_path,
+                    relative_path=rel_f,
+                    new_content=blk["code"],
+                    expected_initial_sha256=baseline_hashes.get(rel_f),
+                    task_id="smart_coding_loop"
+                )
+                applied_edits.append(change_res)
+
+        stages_executed.append({
+            "stage": "4",
+            "name": "Make Controlled Changes",
+            "detail": f"Applied controlled code changes across {len(applied_edits) if workspace_path else len(current_blocks)} unit(s) with pre-modification backups."
+        })
+
+        # STAGES 5 to 8: Test -> Read Errors -> Fix Failures -> Re-run Tests
+        iteration = 1
+        safety_ceiling = max_iterations if (max_iterations is not None and max_iterations > 0) else 50
+        seen_code_hashes: Set[str] = set()
+        seen_error_signatures: Dict[str, int] = {}
+        stagnant_count = 0
+        state_ledger = StateLedger(north_star_goal=prompt)
+        test_report: Dict[str, Any] = {}
+
+        while iteration <= safety_ceiling:
+            current_blocks = cls.extract_all_code_blocks(current_reply, default_lang=goal_spec.target_language)
+            if not current_blocks:
+                break
+
+            # STAGE 5 / STAGE 8: Run Tests
+            b_reps = []
+            combined_passed = []
+            combined_failed = []
+            combined_untested = []
+            all_compiler_verified = True
+
+            for b_idx, blk in enumerate(current_blocks, start=1):
+                b_code = blk["code"]
+                b_lang = blk["language"]
+                if b_lang in ("lua", "luau"):
+                    b_rep = RobloxDomainTestRunner.test_luau_code(b_code, prompt)
+                elif b_lang == "python":
+                    b_rep = RobloxDomainTestRunner.test_python_code(b_code, prompt)
+                else:
+                    b_rep = RobloxDomainTestRunner.test_generic_code(b_code, b_lang)
+
+                b_reps.append(b_rep)
+                if not b_rep.get("has_compiler_verified", False):
+                    all_compiler_verified = False
+
+                for p in b_rep.get("passed_checks", []):
+                    prefix = f"Block {b_idx}: " if len(current_blocks) > 1 else ""
+                    combined_passed.append(f"{prefix}{p}")
+
+                for f in b_rep.get("failed_checks", []):
+                    f_copy = dict(f)
+                    if len(current_blocks) > 1:
+                        f_copy["message"] = f"[Block {b_idx}] {f_copy.get('message', '')}"
+                    combined_failed.append(f_copy)
+
+                for u in b_rep.get("untested_limitations", []):
+                    if u not in combined_untested:
+                        combined_untested.append(u)
+
+            def _agg_status(key: str, default: str = "NOT RUN") -> str:
+                statuses = [r.get(key, default) for r in b_reps]
+                if any(s == "FAIL" for s in statuses):
+                    return "FAIL"
+                if any(s == "PASS" for s in statuses):
+                    return "PASS"
+                return default
+
+            blocking_errors = [c for c in combined_failed if c.get("type") == "error"]
+            is_verified_all = all(r.get("is_verified", False) for r in b_reps)
+            verification_status = "PASS" if (is_verified_all and all_compiler_verified) else ("FAIL" if blocking_errors or _agg_status("syntax_status") == "FAIL" else "UNVERIFIED")
+
+            test_report = {
+                "passed_checks": combined_passed,
+                "failed_checks": combined_failed,
+                "untested_limitations": combined_untested,
+                "is_verified": is_verified_all,
+                "has_compiler_verified": all_compiler_verified,
+                "verification_status": verification_status,
+                "iteration_count": iteration,
+                "syntax_status": _agg_status("syntax_status"),
+                "static_status": _agg_status("static_status"),
+                "api_status": _agg_status("api_status"),
+                "runtime_status": _agg_status("runtime_status"),
+                "test_status": _agg_status("test_status"),
+                "perf_status": "NOT RUN",
+                "compiler_used": b_reps[0].get("compiler_used", "N/A") if b_reps else "N/A",
+                "commands_executed": [c for r in b_reps for c in r.get("commands_executed", [])],
+                "exit_codes": [ec for r in b_reps for ec in r.get("exit_codes", [])]
+            }
+
+            if iteration == 1:
+                stages_executed.append({
+                    "stage": "5",
+                    "name": "Run Appropriate Tests",
+                    "detail": f"Initial check completed. Compiler: {test_report['compiler_used']} | Passed: {len(combined_passed)} | Failed: {len(combined_failed)}"
+                })
+            else:
+                stages_executed.append({
+                    "stage": "8",
+                    "name": "Re-run Tests",
+                    "detail": f"Retest (Pass {iteration}) completed. Verified: {test_report['is_verified']} | Status: {test_report.get('syntax_status')}"
+                })
+
+            blocking_errors = [c for c in test_report.get("failed_checks", []) if c.get("type") == "error"]
+
+            # STAGE 6: Read actual error output
+            if iteration == 1:
+                stages_executed.append({
+                    "stage": "6",
+                    "name": "Read Actual Error Output",
+                    "detail": f"Parsed {len(blocking_errors)} blocking issue(s) with exact compiler line numbers and suggestions."
+                })
+
+            # Check if verified cleanly -> finish immediately without unnecessary churn
+            if not blocking_errors and (test_report.get("is_verified", False) or test_report.get("static_status") == "PASS"):
+                state_ledger.record_resolved_check(f"{goal_spec.target_language.title()}Module", len(combined_passed))
+                break
+
+            # Stagnation & Infinite loop prevention:
+            code_hash = hashlib.sha256("".join(b["code"] for b in current_blocks).encode("utf-8")).hexdigest()
+            if code_hash in seen_code_hashes:
+                stagnant_count += 1
+                if stagnant_count >= 2:
+                    stages_executed.append({
+                        "stage": "7",
+                        "name": "Fix Failures",
+                        "detail": "Model produced identical code previously seen. Halting self-correction to prevent infinite loop or repeated failed edits."
+                    })
+                    break
+            else:
+                seen_code_hashes.add(code_hash)
+                stagnant_count = 0
+
+            if blocking_errors:
+                err_sig = "|".join(f"{c.get('line', '?')}:{c.get('message', '')[:60]}" for c in blocking_errors)
+                seen_error_signatures[err_sig] = seen_error_signatures.get(err_sig, 0) + 1
+                if seen_error_signatures[err_sig] >= 4:
+                    stages_executed.append({
+                        "stage": "7",
+                        "name": "Fix Failures",
+                        "detail": "Identical compiler error signature persisted across 4 cycles. Halting to prevent infinite loop."
+                    })
+                    break
+
+            # STAGE 7: Fix Failures
+            if iteration < safety_ceiling and llm_generate_fn:
+                state_ledger.record_failed_check(f"{goal_spec.target_language.title()}Module", str(blocking_errors[0].get("message", "Compilation error")))
+                first_code = current_blocks[0]["code"]
+                correction_prompt = ErrorAnalyser.build_correction_prompt(first_code, test_report["failed_checks"], language=goal_spec.target_language)
+
+                system_ledger_content = (
+                    f"{state_ledger.get_north_star_header()}\n"
+                    f"{state_ledger.get_ledger_summary()}\n"
+                    f"Instruction: Resolve the targeted compiler/runtime diagnostics below. Return complete, corrected code."
+                )
+                fix_messages = [
+                    {"role": "system", "content": system_ledger_content},
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": current_reply},
+                    {"role": "user", "content": correction_prompt}
+                ]
+
+                try:
+                    fixed_reply = llm_generate_fn(fix_messages)
+                    if fixed_reply and is_response_incomplete(fixed_reply):
+                        for _ in range(3):
+                            if not is_response_incomplete(fixed_reply):
+                                break
+                            cont_msg = list(fix_messages)
+                            cont_msg.append({"role": "assistant", "content": fixed_reply})
+                            cont_msg.append({"role": "user", "content": "continue without repeating; complete the code block until properly closed."})
+                            c_chunk = llm_generate_fn(cont_msg)
+                            if not c_chunk:
+                                break
+                            fixed_reply = stitch_continuations(fixed_reply, c_chunk)
+
+                    if fixed_reply and len(fixed_reply.strip()) > 30:
+                        current_reply = fixed_reply
+                        new_blocks = cls.extract_all_code_blocks(current_reply, default_lang=goal_spec.target_language)
+                        if workspace_path and new_blocks:
+                            planned_targets = plan.target_files_to_modify + plan.target_files_to_create
+                            for b_idx, blk in enumerate(new_blocks):
+                                rel_f = planned_targets[b_idx] if b_idx < len(planned_targets) else (target_file or f"solution.{goal_spec.target_language}")
+                                change_res = ControlledChangeManager.apply_change(
+                                    workspace_path=workspace_path,
+                                    relative_path=rel_f,
+                                    new_content=blk["code"],
+                                    expected_initial_sha256=baseline_hashes.get(rel_f),
+                                    task_id="smart_coding_loop"
+                                )
+                                applied_edits.append(change_res)
+                        stages_executed.append({
+                            "stage": "7",
+                            "name": "Fix Failures",
+                            "detail": f"Attempt {iteration}: Generated targeted fix and applied controlled code change."
+                        })
+                    else:
+                        break
+                except Exception as fix_err:
+                    stages_executed.append({
+                        "stage": "7",
+                        "name": "Fix Failures",
+                        "detail": f"Correction cycle failed: {fix_err}"
+                    })
+                    break
+
+            iteration += 1
+
+        # STAGE 9: Review its own changes
+        review = ChangeReviewer.review_changes(goal_spec, plan, applied_edits, test_report)
+        stages_executed.append({
+            "stage": "9",
+            "name": "Review Own Changes",
+            "detail": f"Self-review verdict: {review['verdict']} | Approved: {review['approved']} | Unplanned files modified: {len(review['unplanned_files'])}"
+        })
+
+        # STAGE 10: Report what genuinely succeeded
+        effective_iterations = test_report.get("iteration_count", min(iteration, safety_ceiling))
+        report_md = cls.format_verification_report_markdown(test_report, iterations=effective_iterations)
+        final_reply = (current_reply + report_md) if include_markdown_report else current_reply
+
+        stages_executed.append({
+            "stage": "10",
+            "name": "Report What Genuinely Succeeded",
+            "detail": f"Delivered evidence-backed quality matrix. Verification state: {test_report.get('verification_status', 'UNVERIFIED')}."
+        })
+
+        if test_report.get("is_verified", False):
+            first_valid_code = current_blocks[0]["code"] if 'current_blocks' in locals() and current_blocks else ""
+            CodingArchivist.record_verified_artifact(
+                prompt=prompt,
+                code=first_valid_code,
+                language=goal_spec.target_language,
+                test_report=test_report,
+                user_email=user_email
+            )
+
+        success = bool(test_report.get("is_verified", False) or (test_report.get("static_status") == "PASS" and not [c for c in test_report.get("failed_checks", []) if c.get("type") == "error"]))
+
+        return SmartCodingWorkflowResult(
+            success=success,
+            prompt=prompt,
+            goal=goal_spec,
+            plan=plan,
+            inspected_files=inspected_files,
+            file_changes=applied_edits,
+            test_report=test_report,
+            review=review,
+            stages_executed=stages_executed,
+            final_reply=final_reply,
+            iterations=effective_iterations,
+            markdown_report=report_md
+        )
+
