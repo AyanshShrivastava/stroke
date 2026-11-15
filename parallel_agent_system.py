@@ -107,6 +107,10 @@ class AgentPermissions:
             return False, f"Tool '{tool}' is not permitted for this agent role."
         return True, ""
 
+    @classmethod
+    def for_role(cls, role: AgentRole) -> "AgentPermissions":
+        return get_default_permissions_for_role(role)
+
 
 def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
     """Configures strict least-privilege permissions per agent role."""
@@ -368,6 +372,7 @@ class BaseAgentRunner:
         self.ownership_mgr = ownership_mgr
         self.workspace_path = workspace_path
         self.ai_manager = ai_provider_manager or global_ai_provider_manager
+        self.terminal_session_id: Optional[str] = None
 
     def _get_system_prompt(self, user_goal: str) -> str:
         raise NotImplementedError
@@ -395,10 +400,21 @@ class BaseAgentRunner:
                 self.ctx.owned_files.add(str(target_path))
 
         # 3. Authentic dispatch via terminal_service.ToolDispatcher
-        from terminal_service import ToolDispatcher
+        from terminal_service import ToolDispatcher, TerminalManager
         self.ctx.log("TOOL", f"Dispatching '{tool_name}'", {"args": list(arguments.keys())})
         
         try:
+            # Dedicated per-agent terminal session isolation
+            if tool_name in ToolDispatcher.TERMINAL_TOOLS:
+                if not arguments.get("session_id") and not arguments.get("id"):
+                    if not self.terminal_session_id:
+                        sess_res = TerminalManager.create_terminal(
+                            workspace_path=self.workspace_path,
+                            caller_uid=f"agent-{self.ctx.agent_id}"
+                        )
+                        self.terminal_session_id = sess_res["session_id"]
+                    arguments["session_id"] = self.terminal_session_id
+
             # Inject workspace directory if not explicitly provided
             if "workspace" not in arguments and "dir_path" not in arguments and tool_name in ("list_directory", "search_files"):
                 arguments["dir_path"] = self.workspace_path
@@ -430,85 +446,93 @@ class BaseAgentRunner:
             {"role": "user", "content": f"Task Objective:\n{user_goal}\n\nContext and Inputs:\n{json.dumps(self.ctx.input_artifacts, indent=2)}"}
         ]
 
-        turns = 0
-        while turns < max_turns:
-            if cancel_event and cancel_event.is_set():
-                self.ctx.status = AgentStatus.CANCELLED
-                self.ctx.status_message = "Operation cancelled by user"
-                self.ctx.log("WARN", "Agent execution cancelled")
-                return {"status": "cancelled"}
+        try:
+            turns = 0
+            while turns < max_turns:
+                if cancel_event and cancel_event.is_set():
+                    self.ctx.status = AgentStatus.CANCELLED
+                    self.ctx.status_message = "Operation cancelled by user"
+                    self.ctx.log("WARN", "Agent execution cancelled")
+                    return {"status": "cancelled"}
 
-            turns += 1
-            self.ctx.log("PROGRESS", f"Turn {turns}/{max_turns}: Requesting AI response")
+                turns += 1
+                self.ctx.log("PROGRESS", f"Turn {turns}/{max_turns}: Requesting AI response")
 
-            try:
-                ai_resp = await self.ai_manager.execute_chat(
-                    messages=self.ctx.messages,
-                    model_id=model_id,
-                    provider_id=provider_id,
-                    user_id=user_id,
-                    temperature=0.2
-                )
-            except ProviderRateLimitError as rl:
-                self.ctx.log("WARN", f"Rate limit encountered: {rl}. Retrying after backoff...")
-                await asyncio.sleep(min(rl.retry_after_sec or 3.0, 10.0))
-                continue
-            except Exception as exc:
-                self.ctx.log("ERROR", f"AI execution error: {exc}")
-                self.ctx.status = AgentStatus.FAILED
-                self.ctx.error = str(exc)
-                return {"status": "failed", "error": str(exc)}
+                try:
+                    ai_resp = await self.ai_manager.execute_chat(
+                        messages=self.ctx.messages,
+                        model_id=model_id,
+                        provider_id=provider_id,
+                        user_id=user_id,
+                        temperature=0.2
+                    )
+                except ProviderRateLimitError as rl:
+                    self.ctx.log("WARN", f"Rate limit encountered: {rl}. Retrying after backoff...")
+                    await asyncio.sleep(min(rl.retry_after_sec or 3.0, 10.0))
+                    continue
+                except Exception as exc:
+                    self.ctx.log("ERROR", f"AI execution error: {exc}")
+                    self.ctx.status = AgentStatus.FAILED
+                    self.ctx.error = str(exc)
+                    return {"status": "failed", "error": str(exc)}
 
-            content = ai_resp.content or ""
-            self.ctx.messages.append({"role": "assistant", "content": content})
-            if content.strip():
-                self.ctx.log("THOUGHT", content[:400] + ("..." if len(content) > 400 else ""))
+                content = ai_resp.content or ""
+                self.ctx.messages.append({"role": "assistant", "content": content})
+                if content.strip():
+                    self.ctx.log("THOUGHT", content[:400] + ("..." if len(content) > 400 else ""))
 
-            # Inspect tool calls
-            tool_calls = ai_resp.tool_calls or []
-            if not tool_calls:
-                # Check for XML style <tool_call> in content
-                tool_calls = self._extract_xml_tool_calls(content)
+                # Inspect tool calls
+                tool_calls = ai_resp.tool_calls or []
+                if not tool_calls:
+                    # Check for XML style <tool_call> in content
+                    tool_calls = self._extract_xml_tool_calls(content)
 
-            if not tool_calls:
-                # Agent completed its thinking and produced final answer
-                break
+                if not tool_calls:
+                    # Agent completed its thinking and produced final answer
+                    break
 
-            # Execute tool calls
-            for tc in tool_calls:
-                if isinstance(tc, dict):
-                    t_name = tc.get("function", {}).get("name") or tc.get("name")
-                    t_raw_args = tc.get("function", {}).get("arguments") or tc.get("arguments") or {}
-                else:
-                    t_name = getattr(tc, "name", "")
-                    t_raw_args = getattr(tc, "arguments", {})
+                # Execute tool calls
+                for tc in tool_calls:
+                    if isinstance(tc, dict):
+                        t_name = tc.get("function", {}).get("name") or tc.get("name")
+                        t_raw_args = tc.get("function", {}).get("arguments") or tc.get("arguments") or {}
+                    else:
+                        t_name = getattr(tc, "name", "")
+                        t_raw_args = getattr(tc, "arguments", {})
 
-                if isinstance(t_raw_args, str):
-                    try:
-                        t_args = json.loads(t_raw_args)
-                    except Exception:
-                        t_args = {}
-                else:
-                    t_args = t_raw_args
+                    if isinstance(t_raw_args, str):
+                        try:
+                            t_args = json.loads(t_raw_args)
+                        except Exception:
+                            t_args = {}
+                    else:
+                        t_args = t_raw_args
 
-                tool_result = await self.execute_tool(t_name, t_args)
-                sanitized_str = ToolOutputObserver.sanitize(tool_name=t_name, result_data=tool_result)
-                self.ctx.messages.append({
-                    "role": "user",
-                    "content": f"[TOOL_RESULT for {t_name}]\n{sanitized_str}"
-                })
+                    tool_result = await self.execute_tool(t_name, t_args)
+                    sanitized_str = ToolOutputObserver.sanitize(tool_name=t_name, result_data=tool_result)
+                    self.ctx.messages.append({
+                        "role": "user",
+                        "content": f"[TOOL_RESULT for {t_name}]\n{sanitized_str}"
+                    })
 
-        # Process role-specific output artifacts
-        self._extract_output_artifacts()
-        self.ctx.finished_at = time.time()
-        self.ctx.status = AgentStatus.COMPLETED
-        self.ctx.status_message = "Completed assigned role tasks"
-        self.ctx.log("PROGRESS", f"Completed {self.ctx.role.value} role successfully")
-        return {
-            "status": "completed",
-            "role": self.ctx.role.value,
-            "artifacts": self.ctx.output_artifacts
-        }
+            # Process role-specific output artifacts
+            self._extract_output_artifacts()
+            self.ctx.finished_at = time.time()
+            self.ctx.status = AgentStatus.COMPLETED
+            self.ctx.status_message = "Completed assigned role tasks"
+            self.ctx.log("PROGRESS", f"Completed {self.ctx.role.value} role successfully")
+            return {
+                "status": "completed",
+                "role": self.ctx.role.value,
+                "artifacts": self.ctx.output_artifacts
+            }
+        finally:
+            if self.terminal_session_id:
+                try:
+                    from terminal_service import TerminalManager
+                    TerminalManager.stop_terminal(self.terminal_session_id)
+                except Exception:
+                    pass
 
     def _extract_xml_tool_calls(self, text: str) -> List[Dict[str, Any]]:
         import re

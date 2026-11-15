@@ -43,7 +43,7 @@ MAX_SESSIONS = 10
 MAX_OUTPUT_LINES = 2000
 MAX_OUTPUT_BYTES = 256 * 1024  # 256 KB
 DEFAULT_TIMEOUT_SEC = 20
-MAX_TIMEOUT_SEC = 60
+MAX_TIMEOUT_SEC = 300
 APPROVAL_TTL_SEC = 300.0  # 5 minutes expiry for server-side approval records
 
 # ==============================================================================
@@ -398,6 +398,11 @@ class TerminalSession:
         self.last_duration_ms: Optional[float] = None
         self.pending_approvals: Dict[str, ApprovalRecord] = {}
 
+        # Production enhancements: persistent session environment, directory history & execution logs
+        self.session_env: Dict[str, str] = {}
+        self.prev_cwd: str = self.cwd
+        self.execution_history: deque = deque(maxlen=100)
+
     @staticmethod
     def _terminate_process_tree(proc: subprocess.Popen):
         """Terminates an entire process tree (process group) to prevent orphaned child processes."""
@@ -466,7 +471,16 @@ class TerminalSession:
 
     def change_directory(self, new_dir: str):
         """Changes the session's active working directory within the workspace."""
-        validated = self.validate_working_directory(new_dir)
+        if not new_dir or not str(new_dir).strip():
+            target = self.workspace_path
+        elif new_dir == "-":
+            target = getattr(self, "prev_cwd", self.workspace_path)
+        elif new_dir.startswith("~"):
+            target = os.path.expanduser(new_dir)
+        else:
+            target = new_dir
+        validated = self.validate_working_directory(target)
+        self.prev_cwd = self.cwd
         self.cwd = validated
         self._append_output("system", f"Working directory updated to: {self.cwd}")
 
@@ -520,6 +534,18 @@ class TerminalSession:
             try:
                 self.change_directory(target)
                 self.last_exit_code = 0
+                record = {
+                    "command": "cd",
+                    "args": clean_args,
+                    "cwd": self.cwd,
+                    "exit_code": 0,
+                    "duration_ms": 1.0,
+                    "state": "completed",
+                    "timestamp": time.time(),
+                    "timed_out": False,
+                    "is_background": False
+                }
+                self.execution_history.append(record)
                 return {
                     "session_id": self.session_id,
                     "command": "cd",
@@ -537,6 +563,18 @@ class TerminalSession:
                 }
             except Exception as e:
                 self.last_exit_code = 1
+                record = {
+                    "command": "cd",
+                    "args": clean_args,
+                    "cwd": self.cwd,
+                    "exit_code": 1,
+                    "duration_ms": 1.0,
+                    "state": "failed",
+                    "timestamp": time.time(),
+                    "timed_out": False,
+                    "is_background": False
+                }
+                self.execution_history.append(record)
                 return {
                     "session_id": self.session_id,
                     "command": "cd",
@@ -552,6 +590,108 @@ class TerminalSession:
                     "timed_out": False,
                     "is_background": False
                 }
+
+        # Handle built-in 'export' for persistent session environment variables
+        if command == "export":
+            if not clean_args:
+                out = "\n".join(f"declare -x {k}=\"{v}\"" for k, v in sorted(self.session_env.items()))
+                self.last_exit_code = 0
+                record = {
+                    "command": "export",
+                    "args": [],
+                    "cwd": self.cwd,
+                    "exit_code": 0,
+                    "duration_ms": 1.0,
+                    "state": "completed",
+                    "timestamp": time.time(),
+                    "timed_out": False,
+                    "is_background": False
+                }
+                self.execution_history.append(record)
+                return {
+                    "session_id": self.session_id,
+                    "command": "export",
+                    "executable": "export",
+                    "arguments": [],
+                    "args": [],
+                    "cwd": self.cwd,
+                    "exit_code": 0,
+                    "stdout": out,
+                    "stderr": "",
+                    "duration_ms": 1.0,
+                    "state": "completed",
+                    "timed_out": False,
+                    "is_background": False
+                }
+            for arg in clean_args:
+                if "=" in arg:
+                    k, v = arg.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    if k:
+                        self.session_env[k] = v
+                        self._append_output("system", f"Environment variable exported: {k}")
+            self.last_exit_code = 0
+            record = {
+                "command": "export",
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": 0,
+                "duration_ms": 1.0,
+                "state": "completed",
+                "timestamp": time.time(),
+                "timed_out": False,
+                "is_background": False
+            }
+            self.execution_history.append(record)
+            return {
+                "session_id": self.session_id,
+                "command": "export",
+                "executable": "export",
+                "arguments": clean_args,
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": 0,
+                "stdout": f"Exported: {', '.join(clean_args)}",
+                "stderr": "",
+                "duration_ms": 1.0,
+                "state": "completed",
+                "timed_out": False,
+                "is_background": False
+            }
+
+        # Handle built-in 'unset'
+        if command == "unset":
+            for arg in clean_args:
+                self.session_env.pop(arg.strip(), None)
+            self.last_exit_code = 0
+            record = {
+                "command": "unset",
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": 0,
+                "duration_ms": 1.0,
+                "state": "completed",
+                "timestamp": time.time(),
+                "timed_out": False,
+                "is_background": False
+            }
+            self.execution_history.append(record)
+            return {
+                "session_id": self.session_id,
+                "command": "unset",
+                "executable": "unset",
+                "arguments": clean_args,
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": 0,
+                "stdout": f"Unset: {', '.join(clean_args)}",
+                "stderr": "",
+                "duration_ms": 1.0,
+                "state": "completed",
+                "timed_out": False,
+                "is_background": False
+            }
 
         # Resolve command binary (prefer sys.executable for python, venv binaries, local node bin, and system paths)
         extra_search_dirs = [
@@ -637,6 +777,18 @@ class TerminalSession:
         if decision == SecurityDecision.DENIED:
             self._append_output("security", f"BLOCKED: {rationale}")
             self.last_exit_code = 126
+            record = {
+                "command": command,
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": 126,
+                "duration_ms": 0.0,
+                "state": "failed",
+                "timestamp": time.time(),
+                "timed_out": False,
+                "is_background": False
+            }
+            self.execution_history.append(record)
             return {
                 "session_id": self.session_id,
                 "command": command,
@@ -673,6 +825,18 @@ class TerminalSession:
             self.pending_approvals[approval_id] = record
             self.state = "waiting_approval"
             self._append_output("security", f"APPROVAL REQUIRED: {rationale} (Token: {approval_id})")
+            hist_rec = {
+                "command": command,
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": None,
+                "duration_ms": 0.0,
+                "state": "waiting_approval",
+                "timestamp": time.time(),
+                "timed_out": False,
+                "is_background": is_background
+            }
+            self.execution_history.append(hist_rec)
             return {
                 "session_id": self.session_id,
                 "status": "requires_approval",
@@ -700,6 +864,8 @@ class TerminalSession:
             self.state = "running"
             try:
                 env = get_sanitized_child_env(self.workspace_path, extra_search_dirs)
+                if self.session_env:
+                    env.update(self.session_env)
 
                 # start_new_session=True creates a new process group on POSIX,
                 # allowing clean teardown of child processes and preventing communication pipe hangs.
@@ -721,6 +887,18 @@ class TerminalSession:
                 self.last_exit_code = 127
                 msg = f"Binary not found: '{command}' in environment or workspace."
                 self._append_output("stderr", msg)
+                record = {
+                    "command": command,
+                    "args": clean_args,
+                    "cwd": self.cwd,
+                    "exit_code": 127,
+                    "duration_ms": round((time.time() - start_time) * 1000, 2),
+                    "state": "failed",
+                    "timestamp": time.time(),
+                    "timed_out": False,
+                    "is_background": False
+                }
+                self.execution_history.append(record)
                 return {
                     "session_id": self.session_id,
                     "command": command,
@@ -741,6 +919,18 @@ class TerminalSession:
                 self.last_exit_code = 1
                 msg = f"ProcessExecutionError: {str(exc)}"
                 self._append_output("stderr", msg)
+                record = {
+                    "command": command,
+                    "args": clean_args,
+                    "cwd": self.cwd,
+                    "exit_code": 1,
+                    "duration_ms": round((time.time() - start_time) * 1000, 2),
+                    "state": "failed",
+                    "timestamp": time.time(),
+                    "timed_out": False,
+                    "is_background": False
+                }
+                self.execution_history.append(record)
                 return {
                     "session_id": self.session_id,
                     "command": command,
@@ -784,6 +974,19 @@ class TerminalSession:
             self.reader_threads = [stdout_thread, stderr_thread]
 
             self.state = "running"
+            record = {
+                "command": command,
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": None,
+                "pid": proc.pid,
+                "duration_ms": round((time.time() - start_time) * 1000, 2),
+                "state": "running",
+                "timestamp": time.time(),
+                "timed_out": False,
+                "is_background": True
+            }
+            self.execution_history.append(record)
             return {
                 "session_id": self.session_id,
                 "command": command,
@@ -802,7 +1005,7 @@ class TerminalSession:
                 "timeout_sec": timeout
             }
 
-        # Synchronous execution with bounded output capture
+        # Synchronous execution with bounded output capture and real-time streaming
         timed_out = False
         stdout_buf = bytearray()
         stderr_buf = bytearray()
@@ -812,15 +1015,15 @@ class TerminalSession:
 
         def _read_bounded(pipe, buf, is_stdout):
             nonlocal stdout_truncated, stderr_truncated
+            stream_name = "stdout" if is_stdout else "stderr"
             try:
-                while True:
-                    chunk = pipe.read(8192)
-                    if not chunk:
+                for line in iter(pipe.readline, b''):
+                    if not line:
                         break
                     if len(buf) < stream_cap:
                         rem = stream_cap - len(buf)
-                        buf.extend(chunk[:rem])
-                        if len(chunk) > rem:
+                        buf.extend(line[:rem])
+                        if len(line) > rem:
                             if is_stdout:
                                 stdout_truncated = True
                             else:
@@ -830,6 +1033,12 @@ class TerminalSession:
                             stdout_truncated = True
                         else:
                             stderr_truncated = True
+
+                    raw_line = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if not is_stdout and not strip_system_stderr_noise(raw_line).strip():
+                        continue
+                    decoded = redact_sensitive_data(raw_line)
+                    self._append_output(stream_name, decoded)
             except Exception:
                 pass
             finally:
@@ -847,7 +1056,11 @@ class TerminalSession:
             exit_code = proc.wait(timeout=timeout)
             stdout_t.join(timeout=1.0)
             stderr_t.join(timeout=1.0)
-            self.state = "completed" if exit_code == 0 else "failed"
+            if self.state != "terminated":
+                if exit_code is not None and exit_code < 0:
+                    self.state = "terminated"
+                else:
+                    self.state = "completed" if exit_code == 0 else "failed"
         except subprocess.TimeoutExpired:
             self._terminate_process_tree(proc)
             stdout_t.join(timeout=0.5)
@@ -865,8 +1078,10 @@ class TerminalSession:
         stderr_bytes = bytes(stderr_buf)
         if stdout_truncated:
             stdout_bytes += b"\n[... Output capped at 256KB buffer limit ...]"
+            self._append_output("system", "[... Output capped at 256KB buffer limit ...]")
         if stderr_truncated:
             stderr_bytes += b"\n[... Stderr capped at 256KB buffer limit ...]"
+            self._append_output("system", "[... Stderr capped at 256KB buffer limit ...]")
 
         stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
         stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
@@ -874,10 +1089,6 @@ class TerminalSession:
         # Redact secrets and filter platform-level runtime fork noise
         clean_stdout = redact_sensitive_data(stdout_text)
         clean_stderr = redact_sensitive_data(strip_system_stderr_noise(stderr_text))
-
-        self._append_output("stdout", clean_stdout)
-        if clean_stderr.strip():
-            self._append_output("stderr", clean_stderr)
 
         # Context Protection: cap returned streams to prevent overwhelming LLM context
         max_context_chars = 4000
@@ -898,6 +1109,19 @@ class TerminalSession:
             "timeout_sec": timeout,
             "is_background": is_background
         }
+
+        record = {
+            "command": command,
+            "args": clean_args,
+            "cwd": self.cwd,
+            "exit_code": exit_code,
+            "duration_ms": duration_ms,
+            "state": self.state,
+            "timestamp": time.time(),
+            "timed_out": timed_out,
+            "is_background": False
+        }
+        self.execution_history.append(record)
 
         return {
             "session_id": self.session_id,
@@ -1030,8 +1254,15 @@ class TerminalSession:
                 "last_duration_ms": self.last_duration_ms,
                 "output_lines_count": len(self.output_lines),
                 "pending_approval": bool(self.pending_approvals),
-                "idle_seconds": round(time.time() - self.last_activity_at, 1)
+                "idle_seconds": round(time.time() - self.last_activity_at, 1),
+                "session_env_keys": list(self.session_env.keys()),
+                "history_count": len(self.execution_history)
             }
+
+    def get_execution_history(self) -> List[Dict[str, Any]]:
+        """Returns the chronological command execution records for this session."""
+        with self.lock:
+            return list(self.execution_history)
 
 
 # ==============================================================================
@@ -1207,6 +1438,27 @@ class TerminalManager:
         return session.get_status()
 
     @classmethod
+    def get_terminal_history(cls, session_id: str) -> Dict[str, Any]:
+        """
+        Returns chronological execution history of commands in the session.
+        Works for active and recently reaped sessions.
+        """
+        with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                for sid, sess in cls._reaped_history:
+                    if sid == session_id:
+                        session = sess
+                        break
+        if not session:
+            return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "history": session.get_execution_history()
+        }
+
+    @classmethod
     def list_terminals(cls) -> List[Dict[str, Any]]:
         """Lists all active background terminal sessions."""
         with cls._lock:
@@ -1300,6 +1552,10 @@ class TerminalManager:
     @classmethod
     def terminal_get_status(cls, session_id: str) -> Dict[str, Any]:
         return cls.get_terminal_status(session_id=session_id)
+
+    @classmethod
+    def terminal_get_history(cls, session_id: str) -> Dict[str, Any]:
+        return cls.get_terminal_history(session_id=session_id)
 
     @classmethod
     def terminal_stop(cls, session_id: str) -> Dict[str, Any]:
@@ -1534,6 +1790,7 @@ class ToolDispatcher:
         "terminal_run", "run_command",
         "terminal_read_output", "read_terminal_output",
         "terminal_get_status", "get_terminal_status",
+        "terminal_get_history", "get_terminal_history",
         "terminal_stop", "stop_terminal",
         "terminal_restart", "restart_terminal",
         "terminal_list_sessions", "list_terminals",
@@ -1702,6 +1959,10 @@ class ToolDispatcher:
             elif name in ("terminal_get_status", "get_terminal_status"):
                 session_id = args.get("session_id") or args.get("id") or ""
                 return TerminalManager.terminal_get_status(session_id=session_id)
+
+            elif name in ("terminal_get_history", "get_terminal_history"):
+                session_id = args.get("session_id") or args.get("id") or ""
+                return TerminalManager.get_terminal_history(session_id=session_id)
 
             elif name in ("terminal_stop", "stop_terminal"):
                 session_id = args.get("session_id") or args.get("id") or ""

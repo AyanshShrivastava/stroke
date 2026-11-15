@@ -4276,6 +4276,73 @@ async def get_terminal_output_delta(
     return TerminalManager.terminal_read_output_delta(session_id=session_id, since_seq=since_seq)
 
 
+@app.get("/terminal/{session_id}/history", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
+async def get_terminal_history_endpoint(session_id: str):
+    """
+    GET /terminal/{session_id}/history
+    Retrieves chronological command execution history records for this session.
+    """
+    res = TerminalManager.get_terminal_history(session_id)
+    if res.get("status") == "error" and res.get("error") == "session_not_found":
+        raise HTTPException(status_code=404, detail=res.get("message"))
+    return res
+
+
+@app.get("/terminal/{session_id}/stream", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
+async def stream_terminal_output_endpoint(
+    session_id: str,
+    from_seq: int = Query(0, description="Start streaming from this sequence number")
+):
+    """
+    GET /terminal/{session_id}/stream
+    Server-Sent Events (SSE) streaming endpoint for live terminal output and execution state events.
+    """
+    session = TerminalManager.get_session(session_id)
+    if not session:
+        status_info = TerminalManager.get_terminal_status(session_id)
+        if status_info.get("status") == "error" and status_info.get("error") == "session_not_found":
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+
+    async def event_generator():
+        current_seq = from_seq
+        stat = TerminalManager.get_terminal_status(session_id)
+        yield f"data: {json.dumps({'type': 'init', 'session_id': session_id, 'status': stat})}\n\n"
+
+        idle_cycles = 0
+        max_idle_when_stopped = 3
+
+        while True:
+            delta = TerminalManager.terminal_read_output_delta(session_id=session_id, since_seq=current_seq)
+            lines = delta.get("lines", [])
+            latest_seq = delta.get("sequence_number", current_seq)
+            is_running = delta.get("is_running", False)
+            state = delta.get("state", "unknown")
+
+            if lines:
+                for line in lines:
+                    yield f"data: {json.dumps({'type': 'output', 'session_id': session_id, 'line': line, 'seq': latest_seq})}\n\n"
+                current_seq = latest_seq
+                idle_cycles = 0
+
+            if not is_running and state in ("completed", "failed", "terminated", "timed_out", "idle"):
+                idle_cycles += 1
+                if idle_cycles >= max_idle_when_stopped:
+                    yield f"data: {json.dumps({'type': 'exit', 'session_id': session_id, 'state': state})}\n\n"
+                    break
+
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
 # ==============================================================================
 # NON-DESTRUCTIVE USER FILE SYSTEM & WORKSPACE REST API
 # ==============================================================================

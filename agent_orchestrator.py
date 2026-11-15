@@ -545,6 +545,7 @@ class AgentTask:
     error: Optional[str] = None
     verified_evidence: List[Dict[str, Any]] = field(default_factory=list)
     progress_steps: List[Dict[str, str]] = field(default_factory=list)
+    terminal_session_id: Optional[str] = None
 
     def transition_to(self, target_state: TaskState, reason: str = "") -> bool:
         """Enforces legal state transitions."""
@@ -581,6 +582,7 @@ class AgentTask:
             "cancellation_requested": self.cancellation_requested,
             "error": self.error,
             "pending_approval": self.pending_approval,
+            "terminal_session_id": self.terminal_session_id,
             "executed_tools_count": len(self.executed_tools_log),
             "progress_steps_count": len(self.progress_steps),
             "verified_evidence_count": len(self.verified_evidence)
@@ -750,6 +752,17 @@ class AgentExecutionGate:
         task.record_progress(f"Executing tool: {tool_name}", f"Args: {list(arguments.keys())}")
         task.idempotency_keys.add(idem_key)
         task.budget.record_tool_call()
+
+        # Dedicated per-task terminal session isolation
+        if hasattr(tool_dispatcher, "TERMINAL_TOOLS") and tool_name in tool_dispatcher.TERMINAL_TOOLS:
+            if not arguments.get("session_id") and not arguments.get("id"):
+                if not task.terminal_session_id:
+                    from terminal_service import TerminalManager
+                    sess_res = TerminalManager.create_terminal(
+                        caller_uid=f"task-{task.task_id}"
+                    )
+                    task.terminal_session_id = sess_res["session_id"]
+                arguments["session_id"] = task.terminal_session_id
 
         try:
             if hasattr(tool_dispatcher, "dispatch_async"):
@@ -1006,6 +1019,12 @@ class TaskManager:
         if not task:
             return False
         task.cancellation_requested = True
+        if task.terminal_session_id:
+            try:
+                from terminal_service import TerminalManager
+                TerminalManager.stop_terminal(task.terminal_session_id)
+            except Exception:
+                pass
         success = task.transition_to(TaskState.CANCELLED, reason)
         cls._persist_tasks()
         return success
