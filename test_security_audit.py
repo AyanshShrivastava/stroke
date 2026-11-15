@@ -31,8 +31,8 @@ from terminal_service import (
 )
 import main
 from main import (
-    hash_password, verify_password, encrypt_token, decrypt_token,
-    _OAUTH_STATE_REGISTRY, _FAILED_OTP_ATTEMPTS, _LOCAL_OTP_STORE
+    encrypt_token, decrypt_token,
+    _OAUTH_STATE_REGISTRY
 )
 from fastapi.testclient import TestClient
 import coding_loop
@@ -112,56 +112,37 @@ class TestTerminalSecurityHardening(unittest.TestCase):
 
 
 class TestAuthenticationHardening(unittest.TestCase):
-    """Audits authentication security, password hashing, lockout, and encryption."""
+    """Audits authentication security, token boundaries, and encryption."""
 
     def setUp(self):
         self.client = TestClient(main.app)
 
-    def test_01_password_length_enforced(self):
-        """Short passwords (< 8 chars) are strictly rejected by /auth/send-otp."""
-        res = self.client.post("/auth/send-otp", json={
-            "email": "shortpass@example.com",
+    def test_01_legacy_endpoints_migrated_and_rejected(self):
+        """Legacy custom OTP endpoints return 410 Gone; authentication requires Firebase."""
+        res_send = self.client.post("/auth/send-otp", json={
+            "email": "dev@example.com",
             "password": "short"
         })
-        self.assertEqual(res.status_code, 422)  # Pydantic validation error for min_length=8
+        self.assertEqual(res_send.status_code, 410)
 
-    def test_02_pbkdf2_password_hashing(self):
-        """Passwords are hashed with 100,000-iteration salted PBKDF2-HMAC."""
-        pwd = "ComplexDeveloperPassword2026!"
-        hashed = hash_password(pwd)
-        self.assertTrue(hashed.startswith("pbkdf2_sha256$100000$"))
-        self.assertTrue(verify_password(pwd, hashed))
-        self.assertFalse(verify_password("WrongPassword!", hashed))
-
-    def test_03_otp_lockout_after_failed_attempts(self):
-        """5 failed OTP attempts lock out the target account for 15 minutes."""
-        test_email = "lockout_audit_test@example.com"
-        _FAILED_OTP_ATTEMPTS.pop(test_email, None)
-        _LOCAL_OTP_STORE[test_email] = {
-            "otp_code": "999888",
-            "otp_expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
-        }
-
-        # Attempt 4 failed codes
-        for attempt in range(1, 5):
-            res = self.client.post("/auth/verify-otp", json={
-                "email": test_email,
-                "otp_code": "000000"
-            })
-            self.assertEqual(res.status_code, 401)
-            self.assertIn("attempt(s) remaining", res.json()["detail"])
-
-        # 5th failed attempt triggers 429 Too Many Requests lockout
-        res5 = self.client.post("/auth/verify-otp", json={
-            "email": test_email,
+        res_verify = self.client.post("/auth/verify-otp", json={
+            "email": "dev@example.com",
             "otp_code": "000000"
         })
-        self.assertEqual(res5.status_code, 429)
-        self.assertIn("Account locked", res5.json()["detail"])
+        self.assertEqual(res_verify.status_code, 410)
 
-        # Clean up
-        _FAILED_OTP_ATTEMPTS.pop(test_email, None)
-        _LOCAL_OTP_STORE.pop(test_email, None)
+    def test_02_no_plaintext_passwords_or_custom_hashes_in_backend(self):
+        """Backend never stores passwords or custom hashes; Firebase Auth owns credential management."""
+        self.assertFalse(hasattr(main, "hash_password"))
+        self.assertFalse(hasattr(main, "verify_password"))
+        self.assertFalse(hasattr(main, "_LOCAL_OTP_STORE"))
+        self.assertFalse(hasattr(main, "_AUTHENTICATED_IDENTITIES"))
+
+    def test_03_unauthenticated_requests_blocked_with_401(self):
+        """Protected endpoints strictly block unauthenticated callers."""
+        res = self.client.get("/auth/me")
+        self.assertEqual(res.status_code, 401)
+        self.assertIn("Authentication required", res.json()["detail"])
 
     def test_04_github_oauth_state_validation(self):
         """GitHub callback rejects fake states not registered in server-side session cache."""

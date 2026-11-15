@@ -34,7 +34,6 @@ import asyncio
 import unittest
 from typing import Dict, Any, List
 
-os.environ["STROKE_TEST_AUTO_APPROVE"] = "1"
 
 # Ensure repository root is on sys.path
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +51,13 @@ from main import get_active_ai_tools_schema
 
 
 class TestStrokeAgentLoop(unittest.TestCase):
+
+    @classmethod
+    def _dispatch_with_approval(cls, tool_name, args):
+        res = ToolDispatcher.dispatch(tool_name, args)
+        if isinstance(res, dict) and res.get("status") == "requires_approval":
+            return ToolDispatcher.dispatch("respond_to_approval", {"approval_id": res["approval_id"], "approved": True})
+        return res
 
     def setUp(self):
         # Reset terminal sessions before each test to maintain clean test state
@@ -150,7 +156,7 @@ class TestStrokeAgentLoop(unittest.TestCase):
         session_id = res_create["session_id"]
 
         # Run command passed as single string without separate arguments array
-        res_run = ToolDispatcher.dispatch("terminal_run", {
+        res_run = self._dispatch_with_approval("terminal_run", {
             "session_id": session_id,
             "command": 'python -c "print(1000 + 42)"'
         })
@@ -159,7 +165,7 @@ class TestStrokeAgentLoop(unittest.TestCase):
         self.assertIn("1042", res_run["stdout"])
 
         # 2. Test aliases: cmd vs executable, args vs arguments, id vs session_id
-        res_run2 = ToolDispatcher.dispatch("run_command", {
+        res_run2 = self._dispatch_with_approval("run_command", {
             "id": session_id,
             "cmd": "python",
             "args": ["-c", "import sys; sys.stdout.write('ALIAS_OK')"]
@@ -193,14 +199,14 @@ class TestStrokeAgentLoop(unittest.TestCase):
         self.assertEqual(res_studio.get("status"), "error")
         self.assertIn("Missing required argument 'code'", res_studio.get("message", ""))
 
-        # Invalid or non-existent session_id auto-creates a session gracefully
+        # Invalid or non-existent session_id returns error, never auto-creates
         res_term = ToolDispatcher.dispatch("terminal_run", {
             "session_id": "non-existent-session-id",
             "command": "python",
-            "args": ["-c", "print('AUTO_RECOVERY')"]
+            "args": ["test.py"]
         })
-        self.assertEqual(res_term["exit_code"], 0)
-        self.assertIn("AUTO_RECOVERY", res_term["stdout"])
+        self.assertEqual(res_term.get("status"), "error")
+        self.assertIn("not found", res_term.get("message", "").lower())
         print("  [PASS] Missing required arguments produce structured error reports without crashing.")
 
     def test_05_double_stringified_json_arguments(self):
@@ -222,7 +228,7 @@ class TestStrokeAgentLoop(unittest.TestCase):
         created = ToolDispatcher.dispatch("terminal_create_session")
         sid = created["session_id"]
 
-        run_res = ToolDispatcher.dispatch("terminal_run", {
+        run_res = self._dispatch_with_approval("terminal_run", {
             "session_id": sid,
             "executable": "python",
             "arguments": ["-c", "import sys; print('LINE_A'); sys.stderr.write('ERR_B\\n')"]
@@ -251,7 +257,7 @@ class TestStrokeAgentLoop(unittest.TestCase):
         sid = created["session_id"]
 
         # 1. Non-zero exit code
-        fail_res = ToolDispatcher.dispatch("terminal_run", {
+        fail_res = self._dispatch_with_approval("terminal_run", {
             "session_id": sid,
             "executable": "python",
             "arguments": ["-c", "import sys; sys.exit(7)"]
@@ -260,7 +266,7 @@ class TestStrokeAgentLoop(unittest.TestCase):
         self.assertEqual(fail_res["state"], "failed")
 
         # 2. Syntax Error
-        syntax_res = ToolDispatcher.dispatch("terminal_run", {
+        syntax_res = self._dispatch_with_approval("terminal_run", {
             "session_id": sid,
             "executable": "python",
             "arguments": ["-c", "def broken(:"]
@@ -280,16 +286,11 @@ class TestStrokeAgentLoop(unittest.TestCase):
         self.assertIn("Binary not found", bin_res["stderr"])
 
         # 4. Unlisted command requires user security authorization
-        auto_app = os.environ.pop("STROKE_TEST_AUTO_APPROVE", None)
-        try:
-            unlisted_res = ToolDispatcher.dispatch("terminal_run", {
-                "session_id": sid,
-                "executable": "arbitrary_custom_binary_12345"
-            })
-            self.assertEqual(unlisted_res.get("status"), "requires_approval")
-        finally:
-            if auto_app:
-                os.environ["STROKE_TEST_AUTO_APPROVE"] = auto_app
+        unlisted_res = ToolDispatcher.dispatch("terminal_run", {
+            "session_id": sid,
+            "executable": "arbitrary_custom_binary_12345"
+        })
+        self.assertEqual(unlisted_res.get("status"), "requires_approval")
         print("  [PASS] Terminal failures reliably return real exit codes (7, 127, SyntaxError) and enforce security approval.")
 
     def test_08_no_false_claims_on_github_commit_without_token(self):
@@ -298,6 +299,10 @@ class TestStrokeAgentLoop(unittest.TestCase):
         original_token = os.environ.get("GITHUB_TOKEN")
         if "GITHUB_TOKEN" in os.environ:
             del os.environ["GITHUB_TOKEN"]
+
+        import github_service
+        orig_get_token = github_service.get_stored_github_token
+        github_service.get_stored_github_token = lambda: None
 
         try:
             res = asyncio.run(mcp_bridge.execute_mcp_tool("github_commit_file", {
@@ -312,6 +317,7 @@ class TestStrokeAgentLoop(unittest.TestCase):
             self.assertNotIn("Successfully committed", res.get("message", ""))
             self.assertNotIn("commit_sha", res)
         finally:
+            github_service.get_stored_github_token = orig_get_token
             if original_token:
                 os.environ["GITHUB_TOKEN"] = original_token
         print("  [PASS] GitHub commit without token strictly returns status 'error' (no false claims).")
@@ -353,7 +359,7 @@ class TestStrokeAgentLoop(unittest.TestCase):
         self.assertTrue(session_id.startswith("term-"))
 
         # Turn 2: Run a file creation command in that session
-        t2 = ToolDispatcher.dispatch("terminal_run", {
+        t2 = self._dispatch_with_approval("terminal_run", {
             "session_id": session_id,
             "executable": "python",
             "arguments": ["-c", "with open('agent_turn_test.tmp', 'w') as f: f.write('TASK_CONTINUED')"]

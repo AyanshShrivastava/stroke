@@ -11,10 +11,27 @@ import sys
 import shutil
 import json
 import asyncio
+import logging
 import httpx
 from typing import Dict, List, Any, Optional
+import paths_service
 
-MCP_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "mcp_config.json")
+logger = logging.getLogger("stroke.mcp_bridge")
+
+from mcp_client import (
+    McpServerRegistry,
+    ServerConfig,
+    StdioTransport,
+    StreamableHttpTransport,
+    McpClient,
+    SsrfProtector,
+    McpError,
+    McpServerState,
+    McpSecretVault,
+    global_mcp_registry
+)
+
+MCP_CONFIG_PATH = str(paths_service.get_legacy_mcp_config_path())
 GITHUB_API_BASE = "https://api.github.com"
 
 # Registry of connected MCP servers (loaded dynamically from mcp_config.json)
@@ -878,6 +895,119 @@ def load_persisted_mcp_config():
 load_persisted_mcp_config()
 
 
+# ------------------------------------------------------------------------------
+# PERSISTENT ROBLOX STUDIO MCP SESSION
+# ------------------------------------------------------------------------------
+class StudioMcpSession:
+    """
+    Persistent JSON-RPC connection to Roblox Studio MCP binary.
+    Maintains a long-lived process instead of spawning disposable one-off subprocesses,
+    tracks connected studio place ID, and multiplexes all 37 Studio tools.
+    """
+    _instance: Optional['StudioMcpSession'] = None
+    _lock: Optional[asyncio.Lock] = None
+
+    def __init__(self, binary_path: Optional[str] = None):
+        self.binary_path = binary_path or find_roblox_studio_mcp_path()
+        self.transport: Optional[StdioTransport] = None
+        self.client: Optional[McpClient] = None
+        self.active_studio_id: Optional[str] = None
+        self.active_place_name: Optional[str] = None
+        self.is_connected: bool = False
+
+    @classmethod
+    def get_instance(cls, binary_path: Optional[str] = None) -> 'StudioMcpSession':
+        if cls._instance is None:
+            cls._instance = StudioMcpSession(binary_path=binary_path)
+        elif binary_path and binary_path != cls._instance.binary_path:
+            cls._instance.binary_path = binary_path
+        return cls._instance
+
+    def _ensure_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    async def ensure_session(self) -> bool:
+        """Connects or verifies connection to StudioMCP, checking for active places."""
+        async with self._ensure_lock():
+            if not self.binary_path:
+                self.binary_path = find_roblox_studio_mcp_path()
+            if not self.binary_path or not (os.path.exists(os.path.expanduser(self.binary_path)) or shutil.which(self.binary_path)):
+                self.is_connected = False
+                return False
+
+            if self.client and self.client.is_active() and self.active_studio_id:
+                return True
+
+            if self.client:
+                try:
+                    await self.client.close()
+                except Exception:
+                    pass
+
+            try:
+                self.transport = StdioTransport(command=self.binary_path)
+                self.client = McpClient(server_id="Roblox_Studio", transport=self.transport, server_name="Roblox Studio")
+                await self.client.start()
+
+                # Query open Studio sessions
+                studios_res = await self.client.call_tool("list_roblox_studios", {})
+                self.active_studio_id = None
+                self.active_place_name = None
+
+                if studios_res.get("status") == "success":
+                    result = studios_res.get("result", {})
+                    content = result.get("content", [])
+                    if content and isinstance(content, list):
+                        try:
+                            raw = json.loads(content[0].get("text", "{}"))
+                            studios = raw.get("studios", [])
+                            # An active session requires an open place (not "Place is not open" or mode "Unavailable")
+                            open_studios = [
+                                st for st in studios
+                                if st.get("state") != "Place is not open" and st.get("mode") not in ("Unavailable", None)
+                            ]
+                            if open_studios:
+                                self.active_studio_id = open_studios[0].get("id")
+                                self.active_place_name = open_studios[0].get("name", "Studio")
+                        except Exception:
+                            pass
+
+                self.is_connected = bool(self.active_studio_id)
+                if not self.is_connected and self.client:
+                    try:
+                        await self.client.close()
+                    except Exception:
+                        pass
+                    self.client = None
+                    self.transport = None
+                return self.is_connected
+            except Exception as e:
+                logger.debug(f"[StudioMcpSession] Connection attempt non-fatal: {e}")
+                self.is_connected = False
+                if self.client:
+                    try:
+                        await self.client.close()
+                    except Exception:
+                        pass
+                    self.client = None
+                    self.transport = None
+                return False
+
+    async def close(self):
+        async with self._ensure_lock():
+            self.is_connected = False
+            self.active_studio_id = None
+            if self.client:
+                try:
+                    await self.client.close()
+                except Exception:
+                    pass
+                self.client = None
+                self.transport = None
+
+
 async def check_server_health(url: str, timeout: float = 0.5) -> bool:
     """Probes if an HTTP MCP server endpoint is actively listening."""
     if not url or not url.startswith("http"):
@@ -909,30 +1039,51 @@ def get_all_mcp_servers() -> Dict[str, Any]:
 
 
 async def get_all_mcp_servers_with_health() -> Dict[str, Any]:
-    """Returns real-time connection status of all configured MCP servers."""
+    """Returns real-time connection status of all configured MCP servers with 5-tier lifecycle states."""
     servers_summary = {}
     for key, s in _MCP_REGISTRY.items():
         url = s.get("url")
         command = s.get("command")
-        is_live = s.get("connected", False)
-        status_label = s.get("status", "standby")
-        status_text = s.get("status_text", "")
+        is_live = False
+        status_label = "standby"
+        status_text = "Standby"
+        lifecycle_state = "configured"
 
         if command:
             cmd_path = os.path.expanduser(str(command))
             if os.path.exists(cmd_path) or shutil.which(cmd_path):
-                is_live = True
-                status_label = "ready"
-                status_text = f"Command Ready: {os.path.basename(cmd_path)}"
+                lifecycle_state = "executable_found"
+                if "studio" in key.lower() or "roblox" in key.lower():
+                    session = StudioMcpSession.get_instance(binary_path=cmd_path)
+                    if session.is_connected:
+                        is_live = True
+                        status_label = "online"
+                        lifecycle_state = "protocol_connected"
+                        status_text = f"Live Studio: {session.active_place_name or 'Connected'}"
+                    else:
+                        is_live = True
+                        status_label = "ready"
+                        status_text = f"Command Ready: {os.path.basename(cmd_path)}"
+                else:
+                    is_live = True
+                    status_label = "ready"
+                    status_text = f"Command Ready: {os.path.basename(cmd_path)}"
             else:
                 is_live = False
                 status_label = "standby"
+                lifecycle_state = "configured"
                 status_text = f"File not found: {os.path.basename(cmd_path)}"
         elif url:
+            lifecycle_state = "executable_found"
             if url.startswith("http://127.0.0.1") or url.startswith("http://localhost"):
                 is_live = await check_server_health(url)
-                status_label = "online" if is_live else "standby"
-                status_text = "Online" if is_live else f"Standby on {url}"
+                if is_live:
+                    status_label = "online"
+                    lifecycle_state = "process_running"
+                    status_text = "Online"
+                else:
+                    status_label = "standby"
+                    status_text = f"Standby on {url}"
 
         servers_summary[key] = {
             "name": s["name"],
@@ -941,6 +1092,7 @@ async def get_all_mcp_servers_with_health() -> Dict[str, Any]:
             "url": url,
             "connected": is_live,
             "status": status_label,
+            "lifecycle_state": lifecycle_state,
             "status_text": status_text,
             "tool_count": len(s.get("tools", [])),
             "tools": s.get("tools", [])
@@ -948,21 +1100,26 @@ async def get_all_mcp_servers_with_health() -> Dict[str, Any]:
     return servers_summary
 
 
-
 def register_custom_mcp_server(
     server_id: str,
     name: str,
     description: str,
     url: str,
-    tools: Optional[List[Dict[str, Any]]] = None
+    tools: Optional[List[Dict[str, Any]]] = None,
+    allow_local: Optional[bool] = None
 ) -> Dict[str, Any]:
     """
-    Registers or updates an external/custom MCP server connection.
-    Enables Stroke to connect to any local or remote MCP server.
+    Registers or updates an external/custom MCP server connection with SSRF protection.
+    Enables Stroke to connect to any local or remote MCP server safely.
     """
     clean_id = server_id.strip().lower().replace(" ", "_")
+    is_local = "127.0.0.1" in url or "localhost" in url or "::1" in url
+    effective_allow_local = allow_local if allow_local is not None else is_local
+
+    # Validate URL against SSRF
+    validated_url = SsrfProtector.validate_url(url, allow_local=effective_allow_local)
+
     if not tools:
-        # Default standard execution tool for this server
         tools = [
             {
                 "name": f"mcp_{clean_id}_execute",
@@ -978,36 +1135,66 @@ def register_custom_mcp_server(
             }
         ]
 
-    _MCP_REGISTRY[clean_id] = {
+    server_entry = {
         "name": name,
         "description": description,
-        "url": url,
+        "url": validated_url,
         "connected": True,
         "is_custom": True,
+        "allow_local": effective_allow_local,
         "tools": tools
     }
-    print(f"[STROKE MCP] Custom MCP server '{name}' registered at {url} with {len(tools)} tools.", flush=True)
-    return _MCP_REGISTRY[clean_id]
+    _MCP_REGISTRY[clean_id] = server_entry
+
+    try:
+        cfg = ServerConfig(
+            id=clean_id,
+            name=name,
+            transport_type="http",
+            url=validated_url,
+            allow_local=effective_allow_local,
+            description=description
+        )
+        global_mcp_registry.configs[clean_id] = cfg
+        global_mcp_registry.save_configurations()
+    except Exception as e:
+        logger.debug(f"[McpBridge] Note registering in global_mcp_registry: {e}")
+
+    print(f"[STROKE MCP] Custom MCP server '{name}' registered at {validated_url} with {len(tools)} tools.", flush=True)
+    return server_entry
 
 
 def remove_custom_mcp_server(server_id: str) -> bool:
     """Disconnects and removes a custom MCP server."""
     clean_id = server_id.strip().lower()
+    removed = False
     if clean_id in _MCP_REGISTRY:
         del _MCP_REGISTRY[clean_id]
+        removed = True
+    if clean_id in global_mcp_registry.configs:
+        del global_mcp_registry.configs[clean_id]
+        global_mcp_registry.save_configurations()
+        removed = True
+    if removed:
         print(f"[STROKE MCP] Custom MCP server '{clean_id}' disconnected.", flush=True)
         return True
     return False
 
 
-MCP_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "mcp_config.json")
+MCP_CONFIG_PATH = str(paths_service.get_legacy_mcp_config_path())
 
 
 def get_mcp_config_json() -> Dict[str, Any]:
     """Returns current MCP servers as a standard mcpServers JSON configuration dict."""
-    if os.path.exists(MCP_CONFIG_PATH):
+    config_file = MCP_CONFIG_PATH
+    if not os.path.exists(config_file):
+        seed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "mcp_config.json")
+        if os.path.exists(seed_path):
+            config_file = seed_path
+
+    if os.path.exists(config_file):
         try:
-            with open(MCP_CONFIG_PATH, "r", encoding="utf-8") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if "mcpServers" in data and isinstance(data["mcpServers"], dict):
                 return data
@@ -1051,21 +1238,32 @@ def apply_mcp_config_json(config: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(servers_section, dict):
         raise ValueError("Invalid configuration: 'mcpServers' must be a JSON object mapping server names to server configs.")
 
-    # Clear previous registry and register newly configured servers
     _MCP_REGISTRY.clear()
     connected = []
     for s_name, s_cfg in servers_section.items():
         if isinstance(s_cfg, dict):
+            url = s_cfg.get("url") or s_cfg.get("endpoint")
+            if url:
+                is_local = "127.0.0.1" in url or "localhost" in url or "::1" in url
+                allow_local = s_cfg.get("allow_local", is_local)
+                SsrfProtector.validate_url(url, allow_local=allow_local)
+
             register_configured_server(s_name, s_cfg)
             connected.append(s_name)
 
-    # Persist directly to data/mcp_config.json
     try:
         os.makedirs(os.path.dirname(MCP_CONFIG_PATH), exist_ok=True)
-        with open(MCP_CONFIG_PATH, "w", encoding="utf-8") as f:
+        tmp_file = f"{MCP_CONFIG_PATH}.tmp.{os.getpid()}"
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump({"mcpServers": servers_section}, f, indent=2)
+        os.replace(tmp_file, MCP_CONFIG_PATH)
     except Exception as exc:
         print(f"[STROKE MCP] Error persisting config: {exc}", flush=True)
+
+    try:
+        global_mcp_registry.load_configurations()
+    except Exception:
+        pass
 
     return {
         "status": "success",
@@ -1087,9 +1285,9 @@ def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
             ai_tools.append({
                 "type": "function",
                 "function": {
-                    "name": t["name"],
-                    "description": t["description"],
-                    "parameters": t["parameters"]
+                    "name": t.get("name", ""),
+                    "description": t.get("description", ""),
+                    "parameters": t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
                 }
             })
 
@@ -1099,9 +1297,9 @@ def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
             ai_tools.append({
                 "type": "function",
                 "function": {
-                    "name": t["name"],
-                    "description": t["description"],
-                    "parameters": t["parameters"]
+                    "name": t.get("name", ""),
+                    "description": t.get("description", ""),
+                    "parameters": t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
                 }
             })
 
@@ -1110,9 +1308,9 @@ def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
             ai_tools.append({
                 "type": "function",
                 "function": {
-                    "name": t["name"],
-                    "description": t["description"],
-                    "parameters": t["parameters"]
+                    "name": t.get("name", ""),
+                    "description": t.get("description", ""),
+                    "parameters": t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
                 }
             })
     return ai_tools
@@ -1199,123 +1397,41 @@ async def execute_studio_mcp_command(
                 "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
             }
 
-    proc = None
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            cmd_expanded,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+    session = StudioMcpSession.get_instance(binary_path=cmd_expanded)
+    has_session = await session.ensure_session()
+    if not has_session or not session.active_studio_id or not session.client:
+        return {
+            "status": "offline",
+            "connected": False,
+            "source": "roblox_studio_mcp_bridge",
+            "message": "Roblox Studio session is offline: MCP binary is present, but no active Roblox Studio place is open. Open a place in Roblox Studio to execute code live.",
+            "target": target_parent,
+            "lines_executed": 0,
+            "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
+        }
 
-        init_msg = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "stroke", "version": "1.0"}}})
-        notif_msg = json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
-        list_studios_msg = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_roblox_studios", "arguments": {}}})
-
-        handshake_payload = init_msg + "\n" + notif_msg + "\n" + list_studios_msg + "\n"
-        proc.stdin.write(handshake_payload.encode("utf-8"))
-        await proc.stdin.drain()
-
-        studio_id = ""
-        place_name = "Studio"
-        for _ in range(5):
-            line = await asyncio.wait_for(proc.stdout.readline(), timeout=3.0)
-            if not line:
-                break
-            line_str = line.decode("utf-8").strip()
-            if not line_str:
-                continue
-            try:
-                data = json.loads(line_str)
-                if data.get("id") == 2:
-                    content_list = data.get("result", {}).get("content", [])
-                    if content_list:
-                        raw_studios = json.loads(content_list[0].get("text", "{}"))
-                        studios = raw_studios.get("studios", [])
-                        if studios:
-                            studio_id = studios[0].get("id", "")
-                            place_name = studios[0].get("name", "Studio")
-                    break
-            except Exception:
-                pass
-
-        if not studio_id:
-            return {
-                "status": "offline",
-                "connected": False,
-                "source": "roblox_studio_mcp_bridge",
-                "message": "Roblox Studio session is offline: MCP binary is present, but no active Roblox Studio place is open. Open a place in Roblox Studio to execute code live.",
-                "target": target_parent,
-                "lines_executed": 0,
-                "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
-            }
-
-        if tool_name in ("studio_execute_luau", "execute_luau"):
-            exec_call = json.dumps({
-                "jsonrpc": "2.0",
-                "id": 10,
-                "method": "tools/call",
-                "params": {
-                    "name": "execute_luau",
-                    "arguments": {
-                        "code": code,
-                        "datamodel_type": "Edit",
-                        "studio_id": studio_id
-                    }
-                }
-            })
-            proc.stdin.write((exec_call + "\n").encode("utf-8"))
-            await proc.stdin.drain()
-
-            exec_result = None
-            for _ in range(10):
-                line = await asyncio.wait_for(proc.stdout.readline(), timeout=5.0)
-                if not line:
-                    break
-                line_str = line.decode("utf-8").strip()
-                if not line_str:
-                    continue
-                try:
-                    data = json.loads(line_str)
-                    if data.get("id") == 10:
-                        exec_result = data
-                        break
-                except Exception:
-                    pass
-
-            if exec_result:
-                is_err = exec_result.get("result", {}).get("isError", False)
-                content = exec_result.get("result", {}).get("content", [])
-                out_text = content[0].get("text", "") if content else "Execution completed in Roblox Studio."
-                return {
-                    "status": "error" if is_err else "success",
-                    "connected": True,
-                    "source": "roblox_studio_mcp_live",
-                    "message": out_text,
-                    "output": out_text,
-                    "place_name": place_name,
-                    "studio_id": studio_id,
-                    "target": target_parent,
-                    "lines_executed": len(code.splitlines()) if not is_err else 0,
-                    "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
-                }
-    except Exception as exc:
-        print(f"[STROKE STUDIO MCP EXECUTION ERROR] {exc}", flush=True)
-    finally:
-        if proc and proc.returncode is None:
-            try:
-                proc.kill()
-                await proc.wait()
-            except Exception:
-                pass
+    res = await session.client.call_tool(
+        "execute_luau",
+        {
+            "code": code,
+            "datamodel_type": "Edit",
+            "studio_id": session.active_studio_id
+        }
+    )
+    is_err = res.get("status") == "error" or res.get("is_error", False)
+    content_list = res.get("result", {}).get("content", [])
+    out_text = content_list[0].get("text", "") if content_list and isinstance(content_list, list) and isinstance(content_list[0], dict) else res.get("message", "")
 
     return {
-        "status": "offline",
-        "connected": False,
-        "source": "roblox_studio_mcp_bridge",
-        "message": f"Roblox Studio session not connected. Luau code synthesized for {target_parent} but not executed in Studio.",
+        "status": "error" if is_err else "success",
+        "connected": True,
+        "source": "roblox_studio_mcp_live",
+        "message": out_text or ("Execution completed in Roblox Studio." if not is_err else "Execution error"),
+        "output": out_text or "Execution completed in Roblox Studio.",
+        "place_name": session.active_place_name or "Studio",
+        "studio_id": session.active_studio_id,
         "target": target_parent,
-        "lines_executed": 0,
+        "lines_executed": len(code.splitlines()) if not is_err else 0,
         "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
     }
 
@@ -1333,16 +1449,34 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
         code = args.get("code", "")
         target = args.get("target_parent", "workspace")
 
-        # Dynamically locate Roblox Studio MCP server from registry
+        session = StudioMcpSession.get_instance()
+        if await session.ensure_session() and session.client:
+            res = await session.client.call_tool("execute_luau", {
+                "code": code,
+                "datamodel_type": "Edit",
+                "studio_id": session.active_studio_id
+            })
+            is_err = res.get("status") == "error" or res.get("is_error", False)
+            content_list = res.get("result", {}).get("content", [])
+            out_text = content_list[0].get("text", "") if content_list and isinstance(content_list, list) and isinstance(content_list[0], dict) else res.get("message", "")
+            return {
+                "status": "error" if is_err else "success",
+                "connected": True,
+                "source": "roblox_studio_mcp_live",
+                "message": out_text or "Execution completed in Roblox Studio.",
+                "output": out_text,
+                "place_name": session.active_place_name or "Studio",
+                "studio_id": session.active_studio_id,
+                "target": target,
+                "lines_executed": len(code.splitlines()) if not is_err else 0,
+                "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
+            }
+
         studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
-        cmd = studio_srv.get("command") if studio_srv else None
         url = studio_srv.get("url") if studio_srv else None
-
-        if cmd:
-            return await execute_studio_mcp_command(str(cmd), "execute_luau", code, target)
-
         if url:
             try:
+                SsrfProtector.validate_url(url, allow_local=True)
                 async with httpx.AsyncClient(timeout=2.0) as client:
                     res = await client.post(f"{url}/execute", json={"code": code, "target": target})
                     if res.status_code == 200:
@@ -1361,18 +1495,32 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
             "status": "offline",
             "connected": False,
             "source": "roblox_studio_mcp_bridge",
-            "message": f"Roblox Studio session is offline: not connected. Luau code synthesized for {target} but not executed in Studio.",
+            "message": "Roblox Studio session is offline: MCP binary is present, but no active Roblox Studio place is open. Open a place in Roblox Studio to execute code live." if session.binary_path else f"Roblox Studio session is offline: not connected. Luau code synthesized for {target} but not executed in Studio.",
             "target": target,
             "lines_executed": 0,
             "code_snippet": code[:400] + ("..." if len(code) > 400 else "")
         }
 
-    elif tool_name == "studio_search_scripts":
+    elif tool_name in ("studio_search_scripts", "script_search"):
         q = args.get("query", "")
+        session = StudioMcpSession.get_instance()
+        if await session.ensure_session() and session.client:
+            res = await session.client.call_tool("script_search", {"query": q, "studio_id": session.active_studio_id})
+            if res.get("status") == "success":
+                matches = res.get("result", {}).get("matches", [])
+                return {
+                    "status": "success",
+                    "connected": True,
+                    "source": "roblox_studio_mcp_live",
+                    "query": q,
+                    "matches": matches
+                }
+
         studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
         url = studio_srv.get("url") if studio_srv else None
         if url:
             try:
+                SsrfProtector.validate_url(url, allow_local=True)
                 async with httpx.AsyncClient(timeout=3.0) as client:
                     res = await client.post(f"{url}/search_scripts", json={"query": q})
                     if res.status_code == 200:
@@ -1395,13 +1543,27 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
             "message": "Roblox Studio MCP bridge is offline. Connect Studio plugin or MCP companion to search live scripts."
         }
 
-    elif tool_name == "studio_insert_vfx_asset":
+    elif tool_name in ("studio_insert_vfx_asset", "insert_asset"):
         asset_id = args.get("asset_id", "")
-        folder = args.get("target_folder", "ReplicatedStorage.VFX")
+        folder = args.get("target_folder") or args.get("folder") or "ReplicatedStorage.VFX"
+        session = StudioMcpSession.get_instance()
+        if await session.ensure_session() and session.client:
+            res = await session.client.call_tool("insert_asset", {"asset_id": asset_id, "target_folder": folder, "studio_id": session.active_studio_id})
+            if res.get("status") == "success":
+                return {
+                    "status": "success",
+                    "connected": True,
+                    "source": "roblox_studio_mcp_live",
+                    "asset_id": asset_id,
+                    "target_folder": folder,
+                    "message": f"Asset {asset_id} instantiated into {folder}."
+                }
+
         studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
         url = studio_srv.get("url") if studio_srv else None
         if url:
             try:
+                SsrfProtector.validate_url(url, allow_local=True)
                 async with httpx.AsyncClient(timeout=3.0) as client:
                     res = await client.post(f"{url}/insert_asset", json={"asset_id": asset_id, "target_folder": folder})
                     if res.status_code == 200:
@@ -1425,12 +1587,25 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
             "message": f"Roblox Studio session is offline: unable to instantiate asset {asset_id} into {folder}."
         }
 
-    elif tool_name == "studio_get_console":
+    elif tool_name in ("studio_get_console", "get_console_output"):
         max_lines = args.get("max_lines", 30)
+        session = StudioMcpSession.get_instance()
+        if await session.ensure_session() and session.client:
+            res = await session.client.call_tool("get_console_output", {"max_lines": max_lines, "studio_id": session.active_studio_id})
+            if res.get("status") == "success":
+                lines = res.get("result", {}).get("lines", [])
+                return {
+                    "status": "success",
+                    "connected": True,
+                    "source": "roblox_studio_mcp_live",
+                    "lines": lines
+                }
+
         studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
         url = studio_srv.get("url") if studio_srv else None
         if url:
             try:
+                SsrfProtector.validate_url(url, allow_local=True)
                 async with httpx.AsyncClient(timeout=3.0) as client:
                     res = await client.post(f"{url}/get_console", json={"max_lines": max_lines})
                     if res.status_code == 200:
@@ -1458,10 +1633,17 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
         return list_roblox_studios_sync()
 
     elif tool_name in [t["name"] for t in get_roblox_studio_tools()]:
+        session = StudioMcpSession.get_instance()
+        if await session.ensure_session() and session.client:
+            res = await session.client.call_tool(tool_name, args)
+            if res.get("status") == "success":
+                return {"status": "success", "connected": True, "source": "roblox_studio_mcp_live", "result": res.get("result")}
+
         studio_srv = next((s for k, s in _MCP_REGISTRY.items() if "roblox" in k.lower() or "studio" in k.lower() or "studiomcp" in str(s.get("command", "")).lower()), None)
         url = studio_srv.get("url") if studio_srv else None
         if url:
             try:
+                SsrfProtector.validate_url(url, allow_local=True)
                 async with httpx.AsyncClient(timeout=4.0) as client:
                     res = await client.post(f"{url}/{tool_name}", json=args)
                     if res.status_code == 200:
@@ -1489,28 +1671,12 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
             content = args.get("content") or args.get("code") or ""
             msg = args.get("commit_message") or args.get("message") or args.get("msg") or "update via Stroke AI"
             branch = args.get("branch")
+            confirmed = args.get("confirmed", False)
+            approval_id = args.get("approval_id")
 
-            if not args.get("confirmed", False):
-                return {
-                    "status": "requires_confirmation",
-                    "tool": "github_commit_file",
-                    "repo": repo,
-                    "path": path,
-                    "commit_message": msg,
-                    "message": f"Confirmation Required: External GitHub write requested to repository '{repo}' for path '{path}'. Please confirm execution before proceeding.",
-                    "requires_confirmation": True
-                }
-
-            if not token:
-                return {
-                    "status": "error",
-                    "source": "github_mcp",
-                    "repo": repo,
-                    "path": path,
-                    "message": "GITHUB_TOKEN is not configured. Please supply a valid GitHub Personal Access Token in environment or profile."
-                }
-
-            return await github_service.commit_file(repo, path, content, msg, branch=branch, confirmed=True)
+            return await github_service.commit_file(
+                repo, path, content, msg, branch=branch, confirmed=confirmed, approval_id=approval_id
+            )
 
         elif tool_name == "github_create_pull_request":
             repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
@@ -1518,33 +1684,19 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
             head = args.get("head", "")
             base = args.get("base", "main")
             body = args.get("body", "")
+            confirmed = args.get("confirmed", False)
+            approval_id = args.get("approval_id")
 
-            if not args.get("confirmed", False):
-                return {
-                    "status": "requires_confirmation",
-                    "tool": "github_create_pull_request",
-                    "repo": repo,
-                    "title": title,
-                    "head": head,
-                    "base": base,
-                    "message": f"Confirmation Required: Open Pull Request '{title}' ({head} -> {base}) in repository '{repo}'?",
-                    "requires_confirmation": True
-                }
-
-            if not token:
-                return {
-                    "status": "error",
-                    "source": "github_mcp",
-                    "repo": repo,
-                    "message": "GITHUB_TOKEN is not configured. Provide token to create PR via API."
-                }
-
-            return await github_service.create_pull_request(repo, title, head, base=base, body=body, confirmed=True)
+            return await github_service.create_pull_request(
+                repo, title, head, base=base, body=body, confirmed=confirmed, approval_id=approval_id
+            )
 
         elif tool_name == "github_list_repos":
             return await github_service.list_repositories(
                 visibility=args.get("visibility", "all"),
-                per_page=int(args.get("per_page", 30))
+                per_page=int(args.get("per_page", 30)),
+                page=int(args.get("page", 1)),
+                auto_paginate=bool(args.get("auto_paginate", False))
             )
 
         elif tool_name == "github_get_file_contents":
@@ -1554,27 +1706,49 @@ async def execute_mcp_tool(tool_name: str, args: Dict[str, Any], user_github_tok
 
         elif tool_name == "github_list_branches":
             repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
-            return await github_service.list_branches(repo)
+            return await github_service.list_branches(
+                repo,
+                per_page=int(args.get("per_page", 30)),
+                page=int(args.get("page", 1)),
+                auto_paginate=bool(args.get("auto_paginate", False))
+            )
 
         elif tool_name == "github_create_branch":
             repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
             new_b = args.get("new_branch", "")
             from_b = args.get("from_branch", "main")
-            return await github_service.create_branch(repo, new_b, from_branch=from_b, confirmed=args.get("confirmed", False))
+            return await github_service.create_branch(
+                repo, new_b, from_branch=from_b, confirmed=args.get("confirmed", False), approval_id=args.get("approval_id")
+            )
 
         elif tool_name == "github_list_issues":
             repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
-            return await github_service.list_issues(repo, state=args.get("state", "open"))
+            return await github_service.list_issues(
+                repo,
+                state=args.get("state", "open"),
+                per_page=int(args.get("per_page", 30)),
+                page=int(args.get("page", 1)),
+                auto_paginate=bool(args.get("auto_paginate", False))
+            )
 
         elif tool_name == "github_create_issue":
             repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
             title = args.get("title", "")
             body = args.get("body", "")
-            return await github_service.create_issue(repo, title, body=body, confirmed=args.get("confirmed", False))
+            labels = args.get("labels")
+            return await github_service.create_issue(
+                repo, title, body=body, labels=labels, confirmed=args.get("confirmed", False), approval_id=args.get("approval_id")
+            )
 
         elif tool_name == "github_list_pull_requests":
             repo = args.get("repo") or args.get("repository") or "AyanshShrivastava/stroke"
-            return await github_service.list_pull_requests(repo, state=args.get("state", "open"))
+            return await github_service.list_pull_requests(
+                repo,
+                state=args.get("state", "open"),
+                per_page=int(args.get("per_page", 30)),
+                page=int(args.get("page", 1)),
+                auto_paginate=bool(args.get("auto_paginate", False))
+            )
 
     # --------------------------------------------------------------------------
     # DYNAMIC TOOL DISCOVERY TOOL

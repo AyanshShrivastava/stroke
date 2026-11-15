@@ -1,108 +1,807 @@
-// Browser-side simulation of Keyboard's desktop features (cache gate, local chats, storage cap).
-export type ChatMsg = { id: string; role: "user" | "builder"; text: string; at: number };
-export type Chat = { id: string; title: string; updatedAt: number; messages: ChatMsg[]; archivedUpTo: number };
-export type Ingested = { name: string; files: number; bytes: number; map: string; at: number } | null;
+/**
+ * STROKE // KEYBOARD CHAT & LOCAL DATA STORE
+ * Robust, quota-safe local data management, optimistic concurrency,
+ * durable message ID cursors, and bidirectional Archivist rule extraction.
+ */
+
+import {
+  idbSaveChat,
+  idbLoadChats,
+  idbDeleteChat,
+  idbClearAllChats,
+  estimateStorage,
+  formatStorageBytes,
+  type StorageDiagnostics,
+} from "./idb-storage";
+
+export type ExecutionStep = {
+  name: string;
+  detail: string;
+  status?: "pending" | "running" | "success" | "error" | "warning";
+  timestamp?: string;
+  type?: "tool" | "file" | "test" | "agent" | "reasoning" | "studio" | "general";
+};
+
+export type CodingLoopReport = {
+  iterations: number;
+  initial_passed: boolean;
+  final_passed: boolean;
+  healed: boolean;
+  syntax_valid: boolean;
+  domain_tests_passed: boolean;
+  history?: Array<{
+    iteration: number;
+    passed: boolean;
+    fixes?: string[];
+  }>;
+};
+
+export type Attachment = {
+  name: string;
+  size?: number;
+  type?: string;
+  preview?: string;
+};
+
+export type MessageStatus = "sent" | "streaming" | "pending" | "error" | "failed";
+
+export type ChatMsg = {
+  id: string;
+  role: "user" | "builder";
+  text: string;
+  at: number;
+  seq?: number;
+  status?: MessageStatus;
+  errorMessage?: string;
+  executionSteps?: ExecutionStep[];
+  codingLoop?: CodingLoopReport;
+  taskId?: string;
+  taskState?: string;
+  taskBudget?: Record<string, any>;
+  durationSeconds?: number;
+  model?: string;
+  provider?: string;
+  reasoningLevel?: string;
+  sources?: Array<{ title?: string; url?: string; snippet?: string }>;
+  attachments?: Attachment[];
+  godTierVfxLearned?: boolean;
+  learnedVfxName?: string;
+};
+
+export type Note = {
+  id: string;
+  content: string;
+  created_at: string;
+  messageId?: string;
+};
+
+export type Chat = {
+  id: string;
+  title: string;
+  updatedAt: number;
+  version: number;
+  messages: ChatMsg[];
+  lastArchivedId?: string;
+  archivedMessageIds?: string[];
+  notes?: Note[];
+  isSyncing?: boolean;
+  syncStatus?: "synced" | "syncing" | "failed";
+  archivedUpTo?: number; // Deprecated legacy index
+  model?: string;
+  reasoningLevel?: string;
+};
+
+export type Ingested = {
+  name: string;
+  files: number;
+  bytes: number;
+  map: string;
+  at: number;
+} | null;
 
 export const CACHE_KEY = ".stroke_cache";
 const CHATS_KEY = "keyboard.chats";
 const INGEST_KEY = "keyboard.ingest";
 const GH_KEY = "keyboard.github";
-export const STORAGE_CAP_BYTES = 1024 * 1024 * 1024; // 1 GB hard ceiling
-export const STORAGE_WARN_RATIO = 0.85;
+const PREFS_KEY = "stroke.user_preferences";
+
+export const AVAILABLE_MODELS = [
+  {
+    id: "llama-3.3-70b-versatile",
+    name: "Llama 3.3 70B",
+    badge: "Groq LPU",
+    provider: "groq",
+    isLocal: false,
+    description: "Ultra-fast 70B open model running on Groq LPUs with full tool support",
+  },
+  {
+    id: "llama-3.1-8b-instant",
+    name: "Llama 3.1 8B Instant",
+    badge: "Groq LPU",
+    provider: "groq",
+    isLocal: false,
+    description: "Instantaneous feedback on Groq LPUs for rapid edits and queries",
+  },
+  {
+    id: "gemini-2.0-flash",
+    name: "Gemini 2.0 Flash",
+    badge: "Google Flash",
+    provider: "gemini",
+    isLocal: false,
+    description: "Frontier multimodal model with 1M context, high speed, and robust tool calling",
+  },
+  {
+    id: "gemini-1.5-pro",
+    name: "Gemini 1.5 Pro",
+    badge: "Google Pro",
+    provider: "gemini",
+    isLocal: false,
+    description: "2M token context window for massive project analysis and deep reasoning",
+  },
+  {
+    id: "claude-3-5-sonnet-20241022",
+    name: "Claude 3.5 Sonnet",
+    badge: "Anthropic",
+    provider: "anthropic",
+    isLocal: false,
+    description: "Industry-leading coding, architectural reasoning, and Luau generation",
+  },
+  {
+    id: "deepseek/deepseek-r1",
+    name: "DeepSeek R1",
+    badge: "OpenRouter",
+    provider: "openrouter",
+    isLocal: false,
+    description: "Deep open reasoning engine with explicit thought traces via OpenRouter",
+  },
+  {
+    id: "gpt-4o",
+    name: "GPT-4o",
+    badge: "OpenAI",
+    provider: "openai",
+    isLocal: false,
+    description: "High-intelligence multimodal flagship from OpenAI",
+  },
+  {
+    id: "custom",
+    name: "Custom Provider",
+    badge: "BYOK",
+    provider: "custom",
+    isLocal: false,
+    description: "Custom OpenAI-compatible or Anthropic-compatible API endpoint",
+  },
+  {
+    id: "llama3.2-local",
+    name: "Llama 3.2 1B",
+    badge: "Legacy",
+    provider: "local",
+    isLocal: true,
+    description: "Offline local model option",
+  },
+] as const;
+
+export const REASONING_LEVELS = [
+  { id: "low", label: "Low", desc: "Fast synthesis, minimal verification" },
+  { id: "medium", label: "Medium", desc: "Standard analysis and syntax checks" },
+  { id: "high", label: "High", desc: "Deep reasoning with multi-file verification" },
+  { id: "maximum", label: "Max", desc: "Exhaustive self-healing & domain tests" },
+  { id: "absolute_peak", label: "Peak", desc: "Ultimate agentic VFX & procedural orchestration" },
+] as const;
 
 const isBrowser = () => typeof window !== "undefined";
-const uid = () => Math.random().toString(36).slice(2, 10);
+const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-export function hasCache() { return isBrowser() && !!localStorage.getItem(CACHE_KEY); }
-export function writeCache() {
-  localStorage.setItem(CACHE_KEY, JSON.stringify({ v: 1, at: Date.now() }));
+// In-memory cache for fast synchronous reads
+let memoryChatsCache: Chat[] = [];
+let cacheLoaded = false;
+const activeSyncs = new Set<string>();
+
+export function hasCache() {
+  return isBrowser() && !!localStorage.getItem(CACHE_KEY);
 }
-export function wipeCache() { if (isBrowser()) localStorage.removeItem(CACHE_KEY); }
+export function writeCache() {
+  if (isBrowser()) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ v: 1, at: Date.now() }));
+    } catch {
+      // ignore
+    }
+  }
+}
+export function wipeCache() {
+  if (isBrowser()) {
+    try {
+      localStorage.removeItem(CACHE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}
 
+export function loadUserPreferences(): { model: string; reasoningLevel: string } {
+  if (!isBrowser()) return { model: "llama-3.3-70b-versatile", reasoningLevel: "medium" };
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // fallback
+  }
+  return { model: "llama-3.3-70b-versatile", reasoningLevel: "medium" };
+}
+
+export function saveUserPreferences(prefs: { model: string; reasoningLevel: string }) {
+  if (!isBrowser()) return;
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // quota or security error
+  }
+}
+
+/**
+ * Loads chats synchronously from memory / localStorage, with background async IDB hydration.
+ */
 export function loadChats(): Chat[] {
   if (!isBrowser()) return [];
-  try { return JSON.parse(localStorage.getItem(CHATS_KEY) || "[]"); } catch { return []; }
+  if (cacheLoaded && memoryChatsCache.length > 0) {
+    return memoryChatsCache;
+  }
+
+  let chats: Chat[] = [];
+  try {
+    const raw = localStorage.getItem(CHATS_KEY);
+    if (raw) {
+      chats = JSON.parse(raw);
+    }
+  } catch {
+    chats = [];
+  }
+
+  // Normalize legacy chats
+  chats = chats.map((c) => normalizeChat(c));
+  memoryChatsCache = chats;
+  cacheLoaded = true;
+
+  // Background hydration from IndexedDB for comprehensive history
+  idbLoadChats().then((idbChats) => {
+    if (idbChats && idbChats.length > 0) {
+      const mergedMap = new Map<string, Chat>();
+      idbChats.forEach((c) => mergedMap.set(c.id, normalizeChat(c)));
+      memoryChatsCache.forEach((c) => {
+        if (!mergedMap.has(c.id) || (c.version || 0) >= (mergedMap.get(c.id)?.version || 0)) {
+          mergedMap.set(c.id, c);
+        }
+      });
+      const merged = Array.from(mergedMap.values());
+      merged.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      memoryChatsCache = merged;
+      window.dispatchEvent(new Event("keyboard:chats"));
+    }
+  }).catch(() => {});
+
+  return memoryChatsCache;
 }
+
+function normalizeChat(c: any): Chat {
+  const messages: ChatMsg[] = Array.isArray(c.messages) ? c.messages : [];
+  let lastArchivedId = c.lastArchivedId;
+  const archivedMessageIds: string[] = Array.isArray(c.archivedMessageIds) ? c.archivedMessageIds : [];
+
+  // Migration from legacy archivedUpTo index
+  if (!lastArchivedId && typeof c.archivedUpTo === "number" && c.archivedUpTo > 0 && messages.length > 0) {
+    const idx = Math.min(c.archivedUpTo - 1, messages.length - 1);
+    if (idx >= 0 && messages[idx]) {
+      lastArchivedId = messages[idx].id;
+    }
+  }
+
+  return {
+    id: c.id || uid(),
+    title: c.title || "Untitled Chat",
+    updatedAt: c.updatedAt || Date.now(),
+    version: c.version || 1,
+    messages,
+    lastArchivedId,
+    archivedMessageIds,
+    notes: Array.isArray(c.notes) ? c.notes : [],
+    syncStatus: c.syncStatus || "synced",
+    model: c.model || "llama-3.3-70b-versatile",
+    reasoningLevel: c.reasoningLevel || "medium",
+  };
+}
+
 export function saveChats(chats: Chat[]) {
-  localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+  const normalized = chats.map((c) => normalizeChat(c));
+  memoryChatsCache = normalized;
+
+  if (isBrowser()) {
+    // 1. Write to IndexedDB (asynchronously, handles large payloads)
+    normalized.forEach((chat) => {
+      idbSaveChat(chat).catch((err) => {
+        console.warn("[Stroke Store] Failed to save chat to IDB:", err);
+      });
+    });
+
+    // 2. Write lightweight index to localStorage with Quota protection
+    try {
+      // Strip large execution step payloads in localStorage copy to prevent QuotaExceededError
+      const lightChats = normalized.map((c) => ({
+        ...c,
+        messages: c.messages.slice(-50).map((m) => ({
+          id: m.id,
+          role: m.role,
+          text: m.text,
+          at: m.at,
+          status: m.status,
+          errorMessage: m.errorMessage,
+        })),
+      }));
+      localStorage.setItem(CHATS_KEY, JSON.stringify(lightChats));
+    } catch (err) {
+      console.warn("[Stroke Store] localStorage quota reached; relying on IndexedDB:", err);
+    }
+  }
+
   window.dispatchEvent(new Event("keyboard:chats"));
 }
-export function getChat(id: string) { return loadChats().find((c) => c.id === id); }
+
+export function getChat(id: string): Chat | undefined {
+  return loadChats().find((c) => c.id === id);
+}
+
 export function createChat(): Chat {
-  const chat: Chat = { id: uid(), title: "New chat", updatedAt: Date.now(), messages: [], archivedUpTo: 0 };
+  const prefs = loadUserPreferences();
+  const chat: Chat = {
+    id: uid(),
+    title: "New chat",
+    updatedAt: Date.now(),
+    version: 1,
+    messages: [],
+    archivedMessageIds: [],
+    notes: [],
+    syncStatus: "synced",
+    model: prefs.model,
+    reasoningLevel: prefs.reasoningLevel,
+  };
   saveChats([chat, ...loadChats()]);
   return chat;
 }
+
 export function upsertChat(chat: Chat) {
-  const rest = loadChats().filter((c) => c.id !== chat.id);
-  saveChats([chat, ...rest]);
+  const existing = getChat(chat.id);
+  const nextVersion = (chat.version || existing?.version || 0) + 1;
+  const updatedChat: Chat = {
+    ...chat,
+    version: nextVersion,
+    updatedAt: Date.now(),
+  };
+
+  const currentChats = loadChats();
+  const rest = currentChats.filter((c) => c.id !== chat.id);
+  saveChats([updatedChat, ...rest]);
+
+  // Trigger background cloud sync if available
+  triggerCloudSync(updatedChat).catch(() => {});
 }
-export function deleteChat(id: string) { saveChats(loadChats().filter((c) => c.id !== id)); }
-export const newMsg = (role: ChatMsg["role"], text: string): ChatMsg => ({ id: uid(), role, text, at: Date.now() });
+
+export function deleteChat(id: string) {
+  if (isBrowser()) {
+    idbDeleteChat(id).catch(() => {});
+  }
+  saveChats(loadChats().filter((c) => c.id !== id));
+
+  // Propagate deletion to backend
+  fetch(`/api/chats/${id}`, { method: "DELETE" }).catch(() => {});
+}
+
+export const newMsg = (
+  role: ChatMsg["role"],
+  text: string,
+  extra?: Partial<Omit<ChatMsg, "id" | "role" | "text" | "at">>
+): ChatMsg => ({
+  id: uid(),
+  role,
+  text,
+  at: Date.now(),
+  status: "sent",
+  ...extra,
+});
 
 export function loadIngest(): Ingested {
   if (!isBrowser()) return null;
-  try { return JSON.parse(localStorage.getItem(INGEST_KEY) || "null"); } catch { return null; }
+  try {
+    return JSON.parse(localStorage.getItem(INGEST_KEY) || "null");
+  } catch {
+    return null;
+  }
 }
-export function saveIngest(i: Ingested) { localStorage.setItem(INGEST_KEY, JSON.stringify(i)); }
+export function saveIngest(i: Ingested) {
+  if (!isBrowser()) return;
+  try {
+    localStorage.setItem(INGEST_KEY, JSON.stringify(i));
+  } catch {
+    // quota guard
+  }
+}
 
 export function loadGithub(): { pat: string; repo: string } {
   if (!isBrowser()) return { pat: "", repo: "" };
-  try { return JSON.parse(localStorage.getItem(GH_KEY) || '{"pat":"","repo":""}'); } catch { return { pat: "", repo: "" }; }
+  try {
+    const raw = localStorage.getItem(GH_KEY);
+    if (!raw) return { pat: "", repo: "" };
+    const parsed = JSON.parse(raw);
+    // Security: purge any PAT from browser storage
+    if (parsed.pat) {
+      localStorage.setItem(GH_KEY, JSON.stringify({ repo: parsed.repo || "" }));
+    }
+    return { pat: "", repo: parsed.repo || "" };
+  } catch {
+    return { pat: "", repo: "" };
+  }
 }
-export function saveGithub(v: { pat: string; repo: string }) { localStorage.setItem(GH_KEY, JSON.stringify(v)); }
+export function saveGithub(v: { pat?: string; repo: string }) {
+  if (isBrowser()) {
+    try {
+      // Security: never save PAT in localStorage
+      localStorage.setItem(GH_KEY, JSON.stringify({ repo: v.repo || "" }));
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export async function getStorageDiagnostics(): Promise<StorageDiagnostics> {
+  return estimateStorage();
+}
 
 export function localBytes(): number {
   if (!isBrowser()) return 0;
   let n = 0;
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i)!;
-    n += (k.length + (localStorage.getItem(k)?.length ?? 0)) * 2;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)!;
+      n += (k.length + (localStorage.getItem(k)?.length ?? 0)) * 2;
+    }
+  } catch {
+    // ignore
   }
   return n;
 }
-export function storageStatus(bytes: number) {
-  const ratio = bytes / STORAGE_CAP_BYTES;
-  return { ratio, warn: ratio >= STORAGE_WARN_RATIO, full: ratio >= 1 };
-}
+
 export function formatBytes(b: number) {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 ** 2) return `${(b / 1024).toFixed(1)} KB`;
-  if (b < 1024 ** 3) return `${(b / 1024 ** 2).toFixed(1)} MB`;
-  return `${(b / 1024 ** 3).toFixed(2)} GB`;
+  return formatStorageBytes(b);
 }
 
-// Archivist: extract rules / decisions / changes from new messages.
-const RULE_RX = /\b(always|never|must|don't|do not|should|rule|prefer|use)\b/i;
-export function compactMessages(msgs: ChatMsg[]): string | null {
-  const userLines = msgs.filter((m) => m.role === "user").flatMap((m) => m.text.split(/[\n.!?]+/)).map((l) => l.trim()).filter(Boolean);
-  if (!userLines.length) return null;
-  const rules = userLines.filter((l) => RULE_RX.test(l));
-  const rest = userLines.filter((l) => !RULE_RX.test(l));
+// -----------------------------------------------------------------------------
+// ARCHIVIST: IDEMPOTENT MULTI-ROLE RULE & CONTEXT EXTRACTION
+// -----------------------------------------------------------------------------
+const RULE_RX = /\b(always|never|must|don't|do not|should|rule|prefer|use|require|enforce|standard)\b/i;
+const DECISION_RX = /\b(decided|architect|pattern|implemented|structured|refactored|verified|passed|created|configured)\b/i;
+
+export type ArchivistResult = {
+  content: string;
+  archivedIds: string[];
+};
+
+export function compactMessages(msgs: ChatMsg[], existingNotes: Note[] = []): ArchivistResult | null {
+  if (!msgs || msgs.length === 0) return null;
+
+  const existingContents = new Set(existingNotes.map((n) => n.content.trim()));
+  const userRules: string[] = [];
+  const systemDecisions: string[] = [];
+  const processedIds: string[] = [];
+
+  for (const m of msgs) {
+    if (!m.text) continue;
+    processedIds.push(m.id);
+
+    const lines = m.text.split(/[\n.!?]+/).map((l) => l.trim()).filter(Boolean);
+
+    if (m.role === "user") {
+      for (const line of lines) {
+        if (RULE_RX.test(line) && line.length > 5) {
+          const rule = `- ${line.slice(0, 160)}`;
+          if (!userRules.includes(rule)) {
+            userRules.push(rule);
+          }
+        }
+      }
+    } else if (m.role === "builder") {
+      for (const line of lines) {
+        if ((DECISION_RX.test(line) || RULE_RX.test(line)) && line.length > 8) {
+          const dec = `- ${line.slice(0, 160)}`;
+          if (!systemDecisions.includes(dec)) {
+            systemDecisions.push(dec);
+          }
+        }
+      }
+    }
+  }
+
   const parts: string[] = [];
-  if (rules.length) parts.push("RULES:\n" + rules.map((r) => `- ${r.slice(0, 160)}`).join("\n"));
-  if (rest.length) parts.push("CHANGES:\n" + rest.slice(0, 6).map((r) => `- ${r.slice(0, 120)}`).join("\n"));
-  return parts.join("\n\n");
+  if (userRules.length > 0) {
+    parts.push("RULES & REQUIREMENTS:\n" + userRules.slice(0, 8).join("\n"));
+  }
+  if (systemDecisions.length > 0) {
+    parts.push("ARCHITECTURE & DECISIONS:\n" + systemDecisions.slice(0, 8).join("\n"));
+  }
+
+  if (parts.length === 0) return null;
+
+  const summary = parts.join("\n\n");
+  if (existingContents.has(summary.trim())) {
+    return null; // Idempotent: already archived
+  }
+
+  return {
+    content: summary,
+    archivedIds: processedIds,
+  };
 }
 
-// Authentic Stroke AI communication to Python FastAPI backend
-export async function fetchAiReply(prompt: string, history: ChatMsg[] = []): Promise<string> {
+// -----------------------------------------------------------------------------
+// CLOUD / BACKEND PERSISTENCE WITH CONCURRENCY MUTEX
+// -----------------------------------------------------------------------------
+async function triggerCloudSync(chat: Chat): Promise<boolean> {
+  if (!chat || !chat.id || activeSyncs.has(chat.id)) {
+    return false;
+  }
+
+  activeSyncs.add(chat.id);
+  try {
+    const res = await fetch("/api/chats/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: chat.id,
+        title: chat.title,
+        version: chat.version,
+        last_archived_id: chat.lastArchivedId,
+        messages: chat.messages.map((m) => ({
+          id: m.id,
+          role: m.role === "builder" ? "assistant" : "user",
+          content: m.text,
+          status: m.status || "sent",
+          error_message: m.errorMessage,
+        })),
+      }),
+    });
+
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    activeSyncs.delete(chat.id);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// AUTHENTIC INFERENCE ENGINE INTERACTION
+// -----------------------------------------------------------------------------
+export type AiChatResponse = {
+  message: string;
+  provider?: string;
+  model?: string;
+  duration_seconds?: number;
+  execution_steps?: ExecutionStep[];
+  coding_loop?: CodingLoopReport;
+  task_id?: string;
+  task_state?: string;
+  task_budget?: Record<string, any>;
+  sources?: Array<{ title?: string; url?: string; snippet?: string }>;
+  god_tier_vfx_learned?: boolean;
+  learned_vfx_name?: string;
+  status: "success" | "error";
+  errorMessage?: string;
+};
+
+export type FetchAiOptions = {
+  prompt: string;
+  history?: ChatMsg[];
+  model?: string;
+  reasoningLevel?: string;
+  attachments?: Attachment[];
+  sessionId?: string;
+  isTemporary?: boolean;
+};
+
+export async function fetchAiFull(options: FetchAiOptions): Promise<AiChatResponse> {
+  const {
+    prompt,
+    history = [],
+    model = "llama3.2-local",
+    reasoningLevel = "medium",
+    attachments = [],
+    sessionId,
+    isTemporary = false,
+  } = options;
+
   try {
     const res = await fetch("/api/ai/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt,
-        messages: history.map((m) => ({ role: m.role === "builder" ? "assistant" : "user", content: m.text }))
-      })
+        model,
+        reasoning_level: reasoningLevel,
+        session_id: sessionId,
+        is_temporary: isTemporary,
+        attachments: attachments.map((a) => ({
+          name: a.name,
+          type: a.type || "file",
+        })),
+        messages: history
+          .filter((m) => m.status !== "error") // Do not pass previous error messages into inference history
+          .map((m) => ({
+            role: m.role === "builder" ? "assistant" : "user",
+            content: m.text,
+          })),
+      }),
     });
+
     if (!res.ok) {
-      return `[Stroke AI Error: HTTP ${res.status}] Failed to obtain inference from local neural model.`;
+      const errText = await res.text().catch(() => "");
+      const errorMsg = `Server error HTTP ${res.status}: ${errText || res.statusText}`;
+      return {
+        message: "",
+        status: "error",
+        errorMessage: errorMsg,
+        execution_steps: [
+          {
+            name: "Backend Communication",
+            detail: errorMsg,
+            status: "error",
+            type: "general",
+          },
+        ],
+        task_state: "failed",
+      };
     }
+
     const data = await res.json();
-    return data.message || data.reply || (typeof data === "string" ? data : JSON.stringify(data));
+    return {
+      message: data.message || data.reply || (typeof data === "string" ? data : JSON.stringify(data)),
+      provider: data.provider,
+      model: data.model,
+      duration_seconds: data.duration_seconds,
+      execution_steps: data.execution_steps || [],
+      coding_loop: data.coding_loop,
+      task_id: data.task_id,
+      task_state: data.task_state || "completed",
+      task_budget: data.task_budget,
+      sources: data.sources || [],
+      god_tier_vfx_learned: data.god_tier_vfx_learned,
+      learned_vfx_name: data.learned_vfx_name,
+      status: "success",
+    };
   } catch (err) {
-    return `[Stroke AI Offline] Could not reach backend engine (${(err as Error).message}). Ensure the Python FastAPI server is running.`;
+    const errorMsg = `Connection failure: ${(err as Error).message}. Ensure Stroke FastAPI is running.`;
+    return {
+      message: "",
+      status: "error",
+      errorMessage: errorMsg,
+      execution_steps: [
+        {
+          name: "Connection Failure",
+          detail: errorMsg,
+          status: "error",
+          type: "general",
+        },
+      ],
+      task_state: "failed",
+    };
   }
 }
 
+export async function fetchAiReply(prompt: string, history: ChatMsg[] = []): Promise<string> {
+  const res = await fetchAiFull({ prompt, history });
+  if (res.status === "error") {
+    throw new Error(res.errorMessage || "Inference failed");
+  }
+  return res.message;
+}
+
+// =============================================================================
+// BYOK AI PROVIDER CLIENT APIS
+// =============================================================================
+
+export interface ProviderStatusInfo {
+  provider: string;
+  name: string;
+  configured: boolean;
+  masked_key: string | null;
+  base_url: string | null;
+  custom_model: string | null;
+  format_type: string | null;
+  is_local: boolean;
+  status_message: string;
+  supported_models: string[];
+}
+
+export interface ActiveModelConfig {
+  active_provider: string;
+  active_model: string;
+  reasoning_level: string;
+  fallback_provider: string | null;
+  fallback_model: string | null;
+  allow_fallback: boolean;
+}
+
+export async function fetchModelProviders(): Promise<ProviderStatusInfo[]> {
+  try {
+    const res = await fetch("/api/models/providers", { credentials: "omit" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.providers || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveProviderCredential(payload: {
+  provider: string;
+  api_key: string;
+  base_url?: string;
+  model_id?: string;
+  format_type?: string;
+}): Promise<{ status: string; message: string }> {
+  const res = await fetch("/api/models/credentials", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to save API key" }));
+    throw new Error(err.detail || "Failed to save API key");
+  }
+  return await res.json();
+}
+
+export async function deleteProviderCredential(provider: string): Promise<void> {
+  const res = await fetch(`/api/models/credentials/${encodeURIComponent(provider)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to delete API key" }));
+    throw new Error(err.detail || "Failed to delete API key");
+  }
+}
+
+export async function testProviderConnection(payload: {
+  provider: string;
+  api_key?: string;
+  base_url?: string;
+  model_id?: string;
+  format_type?: string;
+}): Promise<{ success: boolean; message: string; status_code?: number }> {
+  const res = await fetch("/api/models/test-connection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({ success: false, message: "Network error testing connection" }));
+  return data;
+}
+
+export async function fetchActiveModelConfig(): Promise<ActiveModelConfig | null> {
+  try {
+    const res = await fetch("/api/models/active", { credentials: "omit" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function saveActiveModelConfig(updates: Partial<ActiveModelConfig>): Promise<ActiveModelConfig> {
+  const res = await fetch("/api/models/active", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to update active model" }));
+    throw new Error(err.detail || "Failed to update active model");
+  }
+  return await res.json();
+}

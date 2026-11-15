@@ -28,8 +28,12 @@ import json
 import time
 import uuid
 import signal
+import shlex
+import atexit
+import secrets
 import threading
 import subprocess
+from dataclasses import dataclass
 from collections import deque
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -40,6 +44,83 @@ MAX_OUTPUT_LINES = 2000
 MAX_OUTPUT_BYTES = 256 * 1024  # 256 KB
 DEFAULT_TIMEOUT_SEC = 20
 MAX_TIMEOUT_SEC = 60
+APPROVAL_TTL_SEC = 300.0  # 5 minutes expiry for server-side approval records
+
+# ==============================================================================
+# SERVER-SIDE ATOMIC APPROVAL REGISTRY
+# ==============================================================================
+
+@dataclass
+class ApprovalRecord:
+    approval_id: str
+    command: str
+    args: List[str]
+    session_id: str
+    cwd: str
+    uid: str
+    rationale: str
+    created_at: float
+    expires_at: float
+    is_background: bool = False
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC
+    consumed: bool = False
+
+_APPROVAL_REGISTRY: Dict[str, ApprovalRecord] = {}
+_APPROVAL_LOCK = threading.Lock()
+
+# Whitelist for clean, minimized child process execution environments
+ALLOWED_ENV_VARS = {
+    # System identification & platform paths
+    "PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT",
+    "HOME", "USERPROFILE", "HOMEPATH", "HOMEDRIVE",
+    "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE",
+    "TERM", "TMPDIR", "TEMP", "TMP", "TZ",
+    # Python runtime variables
+    "VIRTUAL_ENV", "PYTHONPATH", "PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE",
+    # Node runtime variables
+    "NODE_ENV", "NPM_CONFIG_COLOR", "TERM_PROGRAM",
+}
+
+SENSITIVE_KEY_SUBSTRINGS = (
+    "KEY", "SECRET", "TOKEN", "PASS", "CREDENTIAL", "AUTH",
+    "CIPHER", "DATABASE_URL", "ADMIN", "FIREBASE", "GITHUB", "RESEND"
+)
+
+def get_sanitized_child_env(workspace_path: str, extra_search_dirs: Optional[List[str]] = None) -> Dict[str, str]:
+    """
+    Constructs a clean, minimized child process environment.
+    Guarantees no parent/backend secrets (Firebase, GitHub, Resend, internal secrets) are leaked.
+    Constructs PATH using os.pathsep (handling Windows ';' and POSIX ':').
+    """
+    clean_env: Dict[str, str] = {}
+    for k, v in os.environ.items():
+        k_upper = k.upper()
+        if k in ALLOWED_ENV_VARS:
+            if any(sub in k_upper for sub in SENSITIVE_KEY_SUBSTRINGS) and k not in ("PATHEXT", "PYTHONPATH"):
+                continue
+            clean_env[k] = v
+
+    if extra_search_dirs is None:
+        extra_search_dirs = [
+            os.path.join(workspace_path, "venv", "bin"),
+            os.path.join(workspace_path, "venv", "Scripts"),  # Windows venv binary dir
+            os.path.expanduser("~/.local/node/bin"),
+            os.path.expanduser("~/.aftman/bin"),
+            os.path.expanduser("~/.rokit/bin"),
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+        ]
+
+    existing_path = clean_env.get("PATH", "")
+    valid_dirs = [d for d in extra_search_dirs if os.path.isdir(d)]
+    if valid_dirs:
+        clean_env["PATH"] = os.pathsep.join(valid_dirs + ([existing_path] if existing_path else []))
+
+    clean_env["GRPC_ENABLE_FORK_SUPPORT"] = "0"
+    clean_env["GRPC_POLL_STRATEGY"] = "poll"
+    clean_env["PYTHONUNBUFFERED"] = "1"
+    clean_env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return clean_env
 
 # ==============================================================================
 # 1. SECRET REDACTION ENGINE
@@ -55,6 +136,12 @@ REDACTION_PATTERNS = [
     (re.compile(r"Bearer\s+[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9_\-\.]+"), "Bearer [REDACTED_JWT]"),
     # Private Key Blocks
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"), "[REDACTED_PRIVATE_KEY]"),
+    # Resend API Keys
+    (re.compile(r"re_[a-zA-Z0-9_]{24,}"), "[REDACTED_RESEND_API_KEY]"),
+    # Internal Stroke Secret / Tokens
+    (re.compile(r"STRK_[a-zA-Z0-9_-]{20,}"), "[REDACTED_STROKE_SECRET]"),
+    # OpenAI / Anthropic Keys
+    (re.compile(r"sk-(?:ant-)?[a-zA-Z0-9_-]{20,}"), "[REDACTED_AI_API_KEY]"),
     # Generic Secret Patterns (e.g. password=..., secret=...)
     (re.compile(r"(?i)(password|secret|apikey|api_key|token|auth_token)\s*[:=]\s*['\"]?([^\s'\"]{8,})['\"]?"), r"\1=[REDACTED_SECRET]"),
 ]
@@ -103,7 +190,7 @@ SAFE_ROUTINE_COMMANDS = {
 }
 
 # Subcommands for git and package managers that are auto-allowed vs requiring approval
-GIT_ALLOWED_SUBCOMMANDS = {"status", "diff", "log", "branch", "show", "rev-parse", "describe", "tag", "check-ignore"}
+GIT_ALLOWED_SUBCOMMANDS = {"status", "diff", "log", "branch", "show", "rev-parse", "describe", "tag", "check-ignore", "--version", "-v", "version"}
 GIT_APPROVAL_SUBCOMMANDS = {"push", "commit", "reset", "clean", "checkout", "revert", "rebase", "merge"}
 
 DESTRUCTIVE_COMMANDS = {
@@ -126,7 +213,12 @@ class SecurityDecision:
 
 def is_allowed_workspace_root(target_path: str) -> bool:
     """Validates that a workspace path is strictly within approved project root boundaries."""
+    import workspace_service
     canonical = os.path.realpath(target_path)
+
+    if workspace_service.is_path_approved(canonical, allow_app_data=True):
+        return True
+
     allowed_roots = [
         DEFAULT_WORKSPACE,
         os.path.realpath(os.path.expanduser("~/.gemini/antigravity/scratch")),
@@ -144,7 +236,7 @@ def is_allowed_workspace_root(target_path: str) -> bool:
     return False
 
 
-def evaluate_command_security(command: str, args: List[str], is_ai_initiated: bool = False) -> Tuple[str, str]:
+def evaluate_command_security(command: str, args: List[str], is_ai_initiated: bool = False, workspace_path: Optional[str] = None) -> Tuple[str, str]:
     """
     Evaluates whether a command is safe for routine background execution,
     requires explicit user confirmation, or is strictly denied.
@@ -158,7 +250,7 @@ def evaluate_command_security(command: str, args: List[str], is_ai_initiated: bo
         clean_cmd = clean_cmd[:-4]
 
     # 1. Deny dangerous root/privilege commands (Zero Administrator Policy)
-    if clean_cmd in ("sudo", "su", "dd", "mkfs"):
+    if clean_cmd in ("sudo", "su", "dd", "mkfs", "format", "chown", "chmod"):
         return SecurityDecision.DENIED, f"Privileged command '{clean_cmd}' is prohibited by Stroke security policy (Zero Administrator Policy)."
 
     # 2. Check destructive deletion utilities (Absolute No-Delete Policy)
@@ -181,21 +273,7 @@ def evaluate_command_security(command: str, args: List[str], is_ai_initiated: bo
             return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
         return SecurityDecision.REQUIRES_APPROVAL, f"Do you want to run git {subcmd}? [Allow] [Decline]"
 
-    # 4. Check arbitrary code execution in interpreters (-c, -e, --eval) and embedded deletion patterns
-    if clean_cmd in INTERPRETERS:
-        for a in args:
-            a_lower = str(a).lower()
-            if any(del_kw in a_lower for del_kw in ("os.remove", "os.unlink", "shutil.rmtree", "path.unlink", "os.rmdir", "rm -rf", "remove-item")):
-                if is_ai_initiated:
-                    return SecurityDecision.DENIED, "Embedded file deletion detected in script arguments. Prohibited by Stroke's Absolute No-Delete Policy."
-                return SecurityDecision.REQUIRES_APPROVAL, "Script contains file deletion calls requiring user authorization."
-        for idx, a in enumerate(args):
-            a_lower = str(a).lower()
-            if a_lower in INTERPRETER_EVAL_FLAGS or a_lower.startswith(("-c", "-e")):
-                snippet = " ".join(args[idx:])[:60]
-                return SecurityDecision.REQUIRES_APPROVAL, f"Executing arbitrary inline code via '{clean_cmd} {snippet}' requires user confirmation."
-
-    # 5. Check raw shell invocations
+    # 4. Check raw shell invocations
     if clean_cmd in SHELLS:
         for a in args:
             a_lower = str(a).lower()
@@ -204,11 +282,54 @@ def evaluate_command_security(command: str, args: List[str], is_ai_initiated: bo
                     return SecurityDecision.DENIED, "Shell execution contains deletion commands. Prohibited by Stroke's Absolute No-Delete Policy."
         return SecurityDecision.REQUIRES_APPROVAL, f"Shell interpreter '{clean_cmd}' can execute arbitrary commands and requires explicit user confirmation."
 
+    # 5. Check arbitrary code execution in interpreters (-c, -e, --eval) and embedded deletion patterns
+    if clean_cmd in INTERPRETERS:
+        for a in args:
+            a_lower = str(a).lower()
+            if any(del_kw in a_lower for del_kw in ("os.remove", "os.unlink", "shutil.rmtree", "path.unlink", "os.rmdir", "rm -rf", "remove-item")):
+                if is_ai_initiated:
+                    return SecurityDecision.DENIED, "Embedded file deletion detected in script arguments. Prohibited by Stroke's Absolute No-Delete Policy."
+                return SecurityDecision.REQUIRES_APPROVAL, "Script contains file deletion calls requiring user authorization."
+
+        # Interactive interpreter with no arguments
+        if not args:
+            return SecurityDecision.REQUIRES_APPROVAL, f"Interactive interpreter '{clean_cmd}' requires user confirmation."
+
+        # Inline execution flags (-c, -e, --eval, etc.)
+        for idx, a in enumerate(args):
+            a_lower = str(a).lower()
+            if a_lower in INTERPRETER_EVAL_FLAGS or a_lower.startswith(("-c", "-e")):
+                snippet = " ".join(args[idx:])[:60]
+                return SecurityDecision.REQUIRES_APPROVAL, f"Executing arbitrary inline code via '{clean_cmd} {snippet}' requires user confirmation."
+
+        # Check shell control characters in script arguments (piping, chaining, redirection)
+        for a in args:
+            a_str = str(a)
+            if any(op in a_str for op in (";", "&&", "||", "|", "`", "$(", "\n", "\r")):
+                return SecurityDecision.REQUIRES_APPROVAL, "Command contains shell control sequence requiring explicit user confirmation."
+
+        # Python module execution (-m)
+        if clean_cmd in ("python", "python3") and args and args[0] == "-m":
+            if len(args) > 1 and args[1].lower() in {"py_compile", "unittest", "pytest", "mypy", "ruff", "flake8"}:
+                return SecurityDecision.ALLOWED, f"Approved routine Python module: {args[1]}."
+            module_name = args[1] if len(args) > 1 else ""
+            return SecurityDecision.REQUIRES_APPROVAL, f"Python module execution '{module_name}' requires user confirmation."
+
+        # Running a script file directly: verify script is within workspace
+        if args and not args[0].startswith("-"):
+            if workspace_path:
+                script_target = os.path.realpath(os.path.join(workspace_path, args[0])) if not os.path.isabs(args[0]) else os.path.realpath(args[0])
+                if not (script_target == workspace_path or script_target.startswith(workspace_path + os.sep)):
+                    return SecurityDecision.DENIED, f"Script '{args[0]}' traverses outside designated workspace."
+            return SecurityDecision.ALLOWED, f"Approved interpreter execution: {os.path.basename(args[0])}."
+
+        return SecurityDecision.REQUIRES_APPROVAL, f"Interpreter '{clean_cmd}' execution with flags requires user authorization."
+
     # 6. Check shell control characters in arguments (piping, chaining, redirection)
     for a in args:
         a_str = str(a)
         if any(op in a_str for op in (";", "&&", "||", "|", "`", "$(", "\n", "\r")):
-            return SecurityDecision.REQUIRES_APPROVAL, f"Command contains shell control sequence requiring explicit user confirmation."
+            return SecurityDecision.REQUIRES_APPROVAL, "Command contains shell control sequence requiring explicit user confirmation."
 
     # 7. Check Package Managers (install/update require approval; test/list allowed)
     if clean_cmd in PACKAGE_MANAGERS:
@@ -244,10 +365,11 @@ class TerminalSession:
     Manages process execution, ring-buffer output logging, and working directory state.
     """
 
-    def __init__(self, session_id: str, workspace_path: str):
+    def __init__(self, session_id: str, workspace_path: str, owner_uid: str = "internal_daemon"):
         self.session_id = session_id
         self.workspace_path = os.path.realpath(workspace_path)
         self.cwd = self.workspace_path
+        self.owner_uid = owner_uid
         self.state = "idle"  # idle, running, completed, failed, terminated, timed_out, waiting_approval
         self.created_at = time.time()
         self.last_activity_at = time.time()
@@ -256,7 +378,7 @@ class TerminalSession:
         self.output_lines: deque = deque(maxlen=MAX_OUTPUT_LINES)
         self.total_output_bytes = 0
         self.sequence_number = 0
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.exec_lock = threading.RLock()
         
         # Process handles
@@ -266,12 +388,12 @@ class TerminalSession:
         self.last_command: Optional[str] = None
         self.last_command_info: Optional[Dict[str, Any]] = None
         self.last_duration_ms: Optional[float] = None
-        self.pending_approval: Optional[Dict[str, Any]] = None
+        self.pending_approvals: Dict[str, ApprovalRecord] = {}
 
     @staticmethod
     def _terminate_process_tree(proc: subprocess.Popen):
         """Terminates an entire process tree (process group) to prevent orphaned child processes."""
-        if not proc:
+        if not proc or proc.poll() is not None:
             return
         pid = proc.pid
         if sys.platform != "win32":
@@ -288,9 +410,12 @@ class TerminalSession:
                     pass
         else:
             try:
-                proc.kill()
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
             except Exception:
-                pass
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
 
     def append_output(self, text: str, stream_name: str = "stdout"):
         """Public helper to append output text to session buffer."""
@@ -337,32 +462,53 @@ class TerminalSession:
         self.cwd = validated
         self._append_output("system", f"Working directory updated to: {self.cwd}")
 
-    def execute_command(self, command: str, args: List[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC, is_background: bool = False, approved: bool = False) -> Dict[str, Any]:
+    def execute_command(
+        self,
+        command: str,
+        args: Optional[List[str]] = None,
+        timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+        is_background: bool = False,
+        caller_uid: Optional[str] = None,
+        _approval_record: Optional[ApprovalRecord] = None,
+        is_ai_initiated: bool = False
+    ) -> Dict[str, Any]:
         """
         Executes a command silently in the background with strict sandboxing and timeouts.
         Returns a structured dictionary with stdout, stderr, exit_code, and execution metadata.
         Supports both synchronous and asynchronous (background server/daemon) execution.
+        Client-controlled 'approved=true' is strictly eliminated; approval must be granted
+        server-side via an atomic one-time ApprovalRecord.
         """
         self.last_activity_at = time.time()
         start_time = time.time()
+
+        if self.state == "terminated":
+            return {
+                "session_id": self.session_id,
+                "status": "error",
+                "error": "session_terminated",
+                "message": f"Session '{self.session_id}' is terminated and cannot execute new commands.",
+                "exit_code": 1,
+                "state": "terminated"
+            }
         
         # Clamp timeout
         timeout = max(1, min(timeout_sec, MAX_TIMEOUT_SEC))
+        clean_args = [str(a) for a in args] if args is not None else []
 
         # Handle compound command strings when args are omitted (e.g. "python -m py_compile main.py")
-        if (not args or len(args) == 0) and command and (" " in command.strip() or "\t" in command):
-            import shlex
+        if not clean_args and command and (" " in command.strip() or "	" in command):
             try:
                 tokens = shlex.split(command.strip())
                 if tokens:
                     command = tokens[0]
-                    args = tokens[1:]
+                    clean_args = tokens[1:]
             except Exception:
                 pass
 
         # Handle built-in 'cd' directly to maintain session directory state
         if command == "cd":
-            target = args[0] if args else self.workspace_path
+            target = clean_args[0] if clean_args else self.workspace_path
             try:
                 self.change_directory(target)
                 self.last_exit_code = 0
@@ -370,8 +516,8 @@ class TerminalSession:
                     "session_id": self.session_id,
                     "command": "cd",
                     "executable": "cd",
-                    "arguments": args,
-                    "args": args,
+                    "arguments": clean_args,
+                    "args": clean_args,
                     "cwd": self.cwd,
                     "exit_code": 0,
                     "stdout": f"Changed working directory to {self.cwd}",
@@ -387,8 +533,8 @@ class TerminalSession:
                     "session_id": self.session_id,
                     "command": "cd",
                     "executable": "cd",
-                    "arguments": args,
-                    "args": args,
+                    "arguments": clean_args,
+                    "args": clean_args,
                     "cwd": self.cwd,
                     "exit_code": 1,
                     "stdout": "",
@@ -402,6 +548,7 @@ class TerminalSession:
         # Resolve command binary (prefer sys.executable for python, venv binaries, local node bin, and system paths)
         extra_search_dirs = [
             os.path.join(self.workspace_path, "venv", "bin"),
+            os.path.join(self.workspace_path, "venv", "Scripts"),
             os.path.expanduser("~/.local/node/bin"),
             os.path.expanduser("~/.aftman/bin"),
             os.path.expanduser("~/.rokit/bin"),
@@ -426,12 +573,59 @@ class TerminalSession:
             if found:
                 cmd_path = found
 
-        # Verify command security policy
-        if approved or os.environ.get("STROKE_TEST_AUTO_APPROVE") == "1":
+        # Validate Authorization and Security Policy
+        if _approval_record is not None:
+            # Atomic Server-Side Approval Validation
+            if not _approval_record.consumed:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_not_consumed",
+                    "message": "Approval record was not consumed atomically."
+                }
+            if _approval_record.session_id != self.session_id:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_session_mismatch",
+                    "message": f"Approval session '{_approval_record.session_id}' does not match target session '{self.session_id}'."
+                }
+            if _approval_record.command != command:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_command_mismatch",
+                    "message": f"Approved command '{_approval_record.command}' does not match requested command '{command}'."
+                }
+            if _approval_record.args != clean_args:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_args_mismatch",
+                    "message": "Approved arguments do not match requested execution arguments."
+                }
+            if _approval_record.cwd != self.cwd:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_cwd_mismatch",
+                    "message": "Working directory was modified since approval was granted."
+                }
+            # Re-evaluate policy: Prohibited commands remain prohibited even if an approval was attempted
+            pol_dec, pol_rat = evaluate_command_security(command, clean_args, is_ai_initiated=is_ai_initiated, workspace_path=self.workspace_path)
+            if pol_dec == SecurityDecision.DENIED:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "command_prohibited",
+                    "message": f"Command '{command}' is prohibited by policy and cannot run even after approval: {pol_rat}"
+                }
+            self.pending_approvals.pop(_approval_record.approval_id, None)
             decision = SecurityDecision.ALLOWED
-            rationale = "Explicitly authorized."
+            rationale = "Authorized via verified one-time server approval record."
         else:
-            decision, rationale = evaluate_command_security(command, args)
+            decision, rationale = evaluate_command_security(command, clean_args, is_ai_initiated=is_ai_initiated, workspace_path=self.workspace_path)
+
         if decision == SecurityDecision.DENIED:
             self._append_output("security", f"BLOCKED: {rationale}")
             self.last_exit_code = 126
@@ -439,8 +633,8 @@ class TerminalSession:
                 "session_id": self.session_id,
                 "command": command,
                 "executable": command,
-                "arguments": args,
-                "args": args,
+                "arguments": clean_args,
+                "args": clean_args,
                 "cwd": self.cwd,
                 "exit_code": 126,
                 "stdout": "",
@@ -452,17 +646,24 @@ class TerminalSession:
             }
 
         if decision == SecurityDecision.REQUIRES_APPROVAL:
-            # Store pending approval request
-            approval_id = f"appr-{uuid.uuid4().hex[:8]}"
+            approval_id = f"appr-{secrets.token_urlsafe(24)}"
+            record = ApprovalRecord(
+                approval_id=approval_id,
+                command=command,
+                args=clean_args,
+                session_id=self.session_id,
+                cwd=self.cwd,
+                uid=caller_uid or self.owner_uid or "internal_daemon",
+                rationale=rationale,
+                created_at=time.time(),
+                expires_at=time.time() + APPROVAL_TTL_SEC,
+                is_background=is_background,
+                timeout_sec=timeout_sec
+            )
+            with _APPROVAL_LOCK:
+                _APPROVAL_REGISTRY[approval_id] = record
+            self.pending_approvals[approval_id] = record
             self.state = "waiting_approval"
-            self.pending_approval = {
-                "approval_id": approval_id,
-                "command": command,
-                "args": args,
-                "rationale": rationale,
-                "created_at": time.time(),
-                "is_background": is_background
-            }
             self._append_output("security", f"APPROVAL REQUIRED: {rationale} (Token: {approval_id})")
             return {
                 "session_id": self.session_id,
@@ -470,17 +671,18 @@ class TerminalSession:
                 "approval_id": approval_id,
                 "command": command,
                 "executable": command,
-                "arguments": args,
-                "args": args,
+                "arguments": clean_args,
+                "args": clean_args,
                 "rationale": rationale,
-                "message": f"{rationale}",
+                "message": rationale,
+                "expires_at": record.expires_at,
                 "is_background": is_background
             }
 
         # Safe for routine execution: Launch real background process
-        full_argv = [cmd_path] + [str(a) for a in args]
+        full_argv = [cmd_path] + clean_args
         self.last_command = " ".join(full_argv)
-        self._append_output("system", f"EXEC: {self.last_command} (cwd: {self.cwd})")
+        self._append_output("system", f"EXEC: {redact_sensitive_data(self.last_command)} (cwd: {self.cwd})")
 
         with self.exec_lock:
             # Clean up prior running process in this session if still active to avoid leaks
@@ -489,11 +691,7 @@ class TerminalSession:
 
             self.state = "running"
             try:
-                env = os.environ.copy()
-                extra_path_str = ":".join(d for d in extra_search_dirs if os.path.isdir(d))
-                env["PATH"] = f"{extra_path_str}:{env.get('PATH', '')}"
-                env["GRPC_ENABLE_FORK_SUPPORT"] = "0"
-                env["GRPC_POLL_STRATEGY"] = "poll"
+                env = get_sanitized_child_env(self.workspace_path, extra_search_dirs)
 
                 # start_new_session=True creates a new process group on POSIX,
                 # allowing clean teardown of child processes and preventing communication pipe hangs.
@@ -510,165 +708,6 @@ class TerminalSession:
 
                 proc = subprocess.Popen(full_argv, **popen_kwargs)
                 self.current_process = proc
-
-                if is_background:
-                    # Persistent background process with concurrent dual-stream reader threads
-                    # (Prevents pipe buffer deadlocks and ensures real-time capture of stderr)
-                    def _stream_pipe(pipe, stream_name):
-                        try:
-                            for line in iter(pipe.readline, b''):
-                                if not line:
-                                    break
-                                raw_line = line.decode("utf-8", errors="replace").rstrip("\r\n")
-                                if stream_name == "stderr" and not strip_system_stderr_noise(raw_line).strip():
-                                    continue
-                                decoded = redact_sensitive_data(raw_line)
-                                self._append_output(stream_name, decoded)
-                        except Exception:
-                            pass
-                        finally:
-                            try:
-                                pipe.close()
-                            except Exception:
-                                pass
-
-                    stdout_thread = threading.Thread(target=_stream_pipe, args=(proc.stdout, "stdout"), daemon=True)
-                    stderr_thread = threading.Thread(target=_stream_pipe, args=(proc.stderr, "stderr"), daemon=True)
-                    stdout_thread.start()
-                    stderr_thread.start()
-                    self.reader_threads = [stdout_thread, stderr_thread]
-
-                    self.state = "running"
-                    return {
-                        "session_id": self.session_id,
-                        "command": command,
-                        "executable": command,
-                        "arguments": args,
-                        "args": args,
-                        "cwd": self.cwd,
-                        "exit_code": None,
-                        "pid": proc.pid,
-                        "stdout": f"Background process started with PID {proc.pid}",
-                        "stderr": "",
-                        "duration_ms": round((time.time() - start_time) * 1000, 2),
-                        "state": "running",
-                        "timed_out": False,
-                        "is_background": True,
-                        "timeout_sec": timeout
-                    }
-
-                timed_out = False
-                stdout_buf = bytearray()
-                stderr_buf = bytearray()
-                stdout_truncated = False
-                stderr_truncated = False
-                stream_cap = MAX_OUTPUT_BYTES
-
-                def _read_bounded(pipe, buf, is_stdout):
-                    nonlocal stdout_truncated, stderr_truncated
-                    try:
-                        while True:
-                            chunk = pipe.read(8192)
-                            if not chunk:
-                                break
-                            if len(buf) < stream_cap:
-                                rem = stream_cap - len(buf)
-                                buf.extend(chunk[:rem])
-                                if len(chunk) > rem:
-                                    if is_stdout:
-                                        stdout_truncated = True
-                                    else:
-                                        stderr_truncated = True
-                            else:
-                                if is_stdout:
-                                    stdout_truncated = True
-                                else:
-                                    stderr_truncated = True
-                    except Exception:
-                        pass
-                    finally:
-                        try:
-                            pipe.close()
-                        except Exception:
-                            pass
-
-                stdout_t = threading.Thread(target=_read_bounded, args=(proc.stdout, stdout_buf, True), daemon=True)
-                stderr_t = threading.Thread(target=_read_bounded, args=(proc.stderr, stderr_buf, False), daemon=True)
-                stdout_t.start()
-                stderr_t.start()
-
-                try:
-                    exit_code = proc.wait(timeout=timeout)
-                    stdout_t.join(timeout=1.0)
-                    stderr_t.join(timeout=1.0)
-                    self.state = "completed" if exit_code == 0 else "failed"
-                except subprocess.TimeoutExpired:
-                    # Terminate entire process tree (group) immediately to kill child processes
-                    self._terminate_process_tree(proc)
-                    stdout_t.join(timeout=0.5)
-                    stderr_t.join(timeout=0.5)
-                    exit_code = -signal.SIGKILL
-                    self.state = "timed_out"
-                    timed_out = True
-                    self._append_output("system", f"TIMEOUT: Command exceeded limit of {timeout}s.")
-
-                stdout_bytes = bytes(stdout_buf)
-                stderr_bytes = bytes(stderr_buf)
-                if stdout_truncated:
-                    stdout_bytes += b"\n[... Output capped at 256KB buffer limit ...]"
-                if stderr_truncated:
-                    stderr_bytes += b"\n[... Stderr capped at 256KB buffer limit ...]"
-
-                stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
-                stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
-
-                # Redact secrets and filter platform-level runtime fork noise
-                clean_stdout = redact_sensitive_data(stdout_text)
-                clean_stderr = redact_sensitive_data(strip_system_stderr_noise(stderr_text))
-
-                self._append_output("stdout", clean_stdout)
-                if clean_stderr.strip():
-                    self._append_output("stderr", clean_stderr)
-
-                # Context Protection: cap returned streams to prevent overwhelming LLM context
-                max_context_chars = 4000
-                model_stdout = clean_stdout
-                if len(clean_stdout) > max_context_chars:
-                    model_stdout = clean_stdout[:max_context_chars] + f"\n\n[... Output truncated ({len(clean_stdout)} total bytes). Use terminal_read_output(tail_lines=N) to inspect more ...]"
-
-                model_stderr = clean_stderr
-                if len(clean_stderr) > max_context_chars:
-                    model_stderr = clean_stderr[:max_context_chars] + f"\n\n[... Error output truncated ({len(clean_stderr)} total bytes) ...]"
-
-                duration_ms = round((time.time() - start_time) * 1000, 2)
-                self.last_exit_code = exit_code
-                self.last_duration_ms = duration_ms
-                self.last_command_info = {
-                    "command": command,
-                    "args": list(args),
-                    "timeout_sec": timeout,
-                    "is_background": is_background
-                }
-
-                return {
-                    "session_id": self.session_id,
-                    "command": command,
-                    "executable": command,
-                    "arguments": args,
-                    "args": args,
-                    "cwd": self.cwd,
-                    "exit_code": exit_code,
-                    "stdout": model_stdout,
-                    "stderr": model_stderr,
-                    "raw_stdout_bytes": len(clean_stdout.encode("utf-8")),
-                    "raw_stderr_bytes": len(clean_stderr.encode("utf-8")),
-                    "duration_ms": duration_ms,
-                    "state": self.state,
-                    "timed_out": timed_out,
-                    "is_background": False,
-                    "timeout_sec": timeout
-                }
-
             except FileNotFoundError:
                 self.state = "failed"
                 self.last_exit_code = 127
@@ -678,8 +717,8 @@ class TerminalSession:
                     "session_id": self.session_id,
                     "command": command,
                     "executable": command,
-                    "arguments": args,
-                    "args": args,
+                    "arguments": clean_args,
+                    "args": clean_args,
                     "cwd": self.cwd,
                     "exit_code": 127,
                     "stdout": "",
@@ -698,8 +737,8 @@ class TerminalSession:
                     "session_id": self.session_id,
                     "command": command,
                     "executable": command,
-                    "arguments": args,
-                    "args": args,
+                    "arguments": clean_args,
+                    "args": clean_args,
                     "cwd": self.cwd,
                     "exit_code": 1,
                     "stdout": "",
@@ -709,9 +748,167 @@ class TerminalSession:
                     "timed_out": False,
                     "is_background": False
                 }
+
+        # Background persistent daemon process
+        if is_background:
+            def _stream_pipe(pipe, stream_name):
+                try:
+                    for line in iter(pipe.readline, b''):
+                        if not line:
+                            break
+                        raw_line = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                        if stream_name == "stderr" and not strip_system_stderr_noise(raw_line).strip():
+                            continue
+                        decoded = redact_sensitive_data(raw_line)
+                        self._append_output(stream_name, decoded)
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        pipe.close()
+                    except Exception:
+                        pass
+
+            stdout_thread = threading.Thread(target=_stream_pipe, args=(proc.stdout, "stdout"), daemon=True)
+            stderr_thread = threading.Thread(target=_stream_pipe, args=(proc.stderr, "stderr"), daemon=True)
+            stdout_thread.start()
+            stderr_thread.start()
+            self.reader_threads = [stdout_thread, stderr_thread]
+
+            self.state = "running"
+            return {
+                "session_id": self.session_id,
+                "command": command,
+                "executable": command,
+                "arguments": clean_args,
+                "args": clean_args,
+                "cwd": self.cwd,
+                "exit_code": None,
+                "pid": proc.pid,
+                "stdout": f"Background process started with PID {proc.pid}",
+                "stderr": "",
+                "duration_ms": round((time.time() - start_time) * 1000, 2),
+                "state": "running",
+                "timed_out": False,
+                "is_background": True,
+                "timeout_sec": timeout
+            }
+
+        # Synchronous execution with bounded output capture
+        timed_out = False
+        stdout_buf = bytearray()
+        stderr_buf = bytearray()
+        stdout_truncated = False
+        stderr_truncated = False
+        stream_cap = MAX_OUTPUT_BYTES
+
+        def _read_bounded(pipe, buf, is_stdout):
+            nonlocal stdout_truncated, stderr_truncated
+            try:
+                while True:
+                    chunk = pipe.read(8192)
+                    if not chunk:
+                        break
+                    if len(buf) < stream_cap:
+                        rem = stream_cap - len(buf)
+                        buf.extend(chunk[:rem])
+                        if len(chunk) > rem:
+                            if is_stdout:
+                                stdout_truncated = True
+                            else:
+                                stderr_truncated = True
+                    else:
+                        if is_stdout:
+                            stdout_truncated = True
+                        else:
+                            stderr_truncated = True
+            except Exception:
+                pass
             finally:
+                try:
+                    pipe.close()
+                except Exception:
+                    pass
+
+        stdout_t = threading.Thread(target=_read_bounded, args=(proc.stdout, stdout_buf, True), daemon=True)
+        stderr_t = threading.Thread(target=_read_bounded, args=(proc.stderr, stderr_buf, False), daemon=True)
+        stdout_t.start()
+        stderr_t.start()
+
+        try:
+            exit_code = proc.wait(timeout=timeout)
+            stdout_t.join(timeout=1.0)
+            stderr_t.join(timeout=1.0)
+            self.state = "completed" if exit_code == 0 else "failed"
+        except subprocess.TimeoutExpired:
+            self._terminate_process_tree(proc)
+            stdout_t.join(timeout=0.5)
+            stderr_t.join(timeout=0.5)
+            exit_code = -signal.SIGKILL if sys.platform != "win32" else 124
+            self.state = "timed_out"
+            timed_out = True
+            self._append_output("system", f"TIMEOUT: Command exceeded limit of {timeout}s.")
+        finally:
+            with self.exec_lock:
                 if not is_background:
                     self.current_process = None
+
+        stdout_bytes = bytes(stdout_buf)
+        stderr_bytes = bytes(stderr_buf)
+        if stdout_truncated:
+            stdout_bytes += b"\n[... Output capped at 256KB buffer limit ...]"
+        if stderr_truncated:
+            stderr_bytes += b"\n[... Stderr capped at 256KB buffer limit ...]"
+
+        stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+
+        # Redact secrets and filter platform-level runtime fork noise
+        clean_stdout = redact_sensitive_data(stdout_text)
+        clean_stderr = redact_sensitive_data(strip_system_stderr_noise(stderr_text))
+
+        self._append_output("stdout", clean_stdout)
+        if clean_stderr.strip():
+            self._append_output("stderr", clean_stderr)
+
+        # Context Protection: cap returned streams to prevent overwhelming LLM context
+        max_context_chars = 4000
+        model_stdout = clean_stdout
+        if len(clean_stdout) > max_context_chars:
+            model_stdout = clean_stdout[:max_context_chars] + f"\n\n[... Output truncated ({len(clean_stdout)} total bytes). Use terminal_read_output(tail_lines=N) to inspect more ...]"
+
+        model_stderr = clean_stderr
+        if len(clean_stderr) > max_context_chars:
+            model_stderr = clean_stderr[:max_context_chars] + f"\n\n[... Error output truncated ({len(clean_stderr)} total bytes) ...]"
+
+        duration_ms = round((time.time() - start_time) * 1000, 2)
+        self.last_exit_code = exit_code
+        self.last_duration_ms = duration_ms
+        self.last_command_info = {
+            "command": command,
+            "args": clean_args,
+            "timeout_sec": timeout,
+            "is_background": is_background
+        }
+
+        return {
+            "session_id": self.session_id,
+            "command": command,
+            "executable": command,
+            "arguments": clean_args,
+            "args": clean_args,
+            "cwd": self.cwd,
+            "exit_code": exit_code,
+            "stdout": model_stdout,
+            "stderr": model_stderr,
+            "raw_stdout_bytes": len(clean_stdout.encode("utf-8")),
+            "raw_stderr_bytes": len(clean_stderr.encode("utf-8")),
+            "duration_ms": duration_ms,
+            "state": self.state,
+            "timed_out": timed_out,
+            "is_background": False,
+            "timeout_sec": timeout
+        }
 
     def read_output(self, tail_lines: Optional[int] = None) -> List[str]:
         """Returns the chronological captured output lines, defaulting to last 50 lines to prevent overwhelming model context."""
@@ -748,28 +945,29 @@ class TerminalSession:
 
     def stop(self) -> Dict[str, Any]:
         """Terminates any active running process in this session and its process group."""
-        with self.exec_lock:
+        with self.lock:
             killed = False
-            if self.current_process:
-                if self.current_process.poll() is None:
+            proc = self.current_process
+            if proc:
+                if proc.poll() is None:
                     try:
-                        self._terminate_process_tree(self.current_process)
+                        self._terminate_process_tree(proc)
                         try:
-                            self.current_process.wait(timeout=1.5)
+                            proc.wait(timeout=1.5)
                         except subprocess.TimeoutExpired:
-                            self.current_process.kill()
-                            self.current_process.wait(timeout=1.0)
+                            proc.kill()
+                            proc.wait(timeout=1.0)
                         killed = True
                     except Exception:
                         pass
                 try:
-                    if self.current_process.stdout:
-                        self.current_process.stdout.close()
+                    if proc.stdout:
+                        proc.stdout.close()
                 except Exception:
                     pass
                 try:
-                    if self.current_process.stderr:
-                        self.current_process.stderr.close()
+                    if proc.stderr:
+                        proc.stderr.close()
                 except Exception:
                     pass
                 self.current_process = None
@@ -784,13 +982,18 @@ class TerminalSession:
 
     def restart(self) -> Dict[str, Any]:
         """Terminates active process and restarts the last executed command with its original arguments."""
-        self.stop()
         if not self.last_command_info:
             return {
                 "session_id": self.session_id,
                 "status": "error",
                 "message": "No previous command executed in this session to restart."
             }
+        with self.lock:
+            proc = self.current_process
+            if proc and proc.poll() is None:
+                self._terminate_process_tree(proc)
+            self.current_process = None
+            self.state = "idle"
         info = self.last_command_info
         self._append_output("system", f"RESTART: Re-executing '{info['command']}' {' '.join(str(a) for a in info['args'])}")
         return self.execute_command(
@@ -818,7 +1021,7 @@ class TerminalSession:
                 "last_exit_code": self.last_exit_code,
                 "last_duration_ms": self.last_duration_ms,
                 "output_lines_count": len(self.output_lines),
-                "pending_approval": bool(self.pending_approval),
+                "pending_approval": bool(self.pending_approvals),
                 "idle_seconds": round(time.time() - self.last_activity_at, 1)
             }
 
@@ -830,31 +1033,37 @@ class TerminalSession:
 class TerminalManager:
     """
     Singleton Manager for background terminal sessions.
-    Exposes the 6 internal AI tools:
+    Exposes the internal AI tools:
       - create_terminal(workspace_path)
       - run_command(session_id, command, args)
       - read_terminal_output(session_id)
       - get_terminal_status(session_id)
       - list_terminals()
       - stop_terminal(session_id)
+      - respond_to_approval(approval_id, approved)
     """
     _sessions: Dict[str, TerminalSession] = {}
     _reaped_history: deque = deque(maxlen=20)
-    _lock = threading.Lock()
+    _lock = threading.RLock()
 
     @classmethod
-    def create_terminal(cls, workspace_path: Optional[str] = None) -> Dict[str, Any]:
+    def create_terminal(cls, workspace_path: Optional[str] = None, caller_uid: str = "internal_daemon") -> Dict[str, Any]:
         """
-        Tool: create_terminal(workspace_path)
         Creates a new independent background terminal session.
-        Uses lock-free LRU reaping to prevent deadlocks when at session capacity.
+        Never evicts active running processes: rejects new sessions if all slots are actively running.
         """
         oldest_session = None
         with cls._lock:
-            # Enforce max sessions limit
             if len(cls._sessions) >= MAX_SESSIONS:
-                # Reap oldest completed/idle session
-                oldest_id = min(cls._sessions.keys(), key=lambda k: cls._sessions[k].last_activity_at)
+                # Only evict sessions that do not have an active running process
+                candidates = [
+                    sid for sid, s in cls._sessions.items()
+                    if s.current_process is None or s.current_process.poll() is not None
+                ]
+                if not candidates:
+                    raise RuntimeError(f"Terminal session capacity reached ({MAX_SESSIONS}/{MAX_SESSIONS} active processes running). Cannot evict running sessions.")
+                
+                oldest_id = min(candidates, key=lambda sid: cls._sessions[sid].last_activity_at)
                 oldest_session = cls._sessions.pop(oldest_id)
                 cls._reaped_history.append((oldest_id, oldest_session))
 
@@ -866,10 +1075,9 @@ class TerminalManager:
                 raise PermissionError(f"Directory traversal denied: '{target_ws}' is outside approved project roots.")
 
             session_id = f"term-{uuid.uuid4().hex[:8]}"
-            session = TerminalSession(session_id, canonical_ws)
+            session = TerminalSession(session_id, canonical_ws, owner_uid=caller_uid)
             cls._sessions[session_id] = session
 
-        # Stop reaped session outside the lock to prevent blocking concurrent creates
         if oldest_session:
             try:
                 oldest_session.stop()
@@ -894,38 +1102,47 @@ class TerminalManager:
         is_background: bool = False,
         executable: Optional[str] = None,
         arguments: Optional[List[str]] = None,
+        caller_uid: str = "internal_daemon",
+        is_ai_initiated: bool = False,
         **kwargs
     ) -> Dict[str, Any]:
         """
-        Tool: run_command / terminal_run
         Executes an approved dev command inside the target session.
-        Accepts command/executable and args/arguments aliases.
+        Unknown session IDs return errors and never auto-create a new default session.
+        Stopped/reaped sessions are read-only and cannot execute commands.
         """
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
                 for sid, sess in cls._reaped_history:
                     if sid == session_id:
-                        session = sess
-                        break
-
-        if not session:
-            # Auto-create fallback session if ID not found
-            created = cls.create_terminal()
-            session_id = created["session_id"]
-            with cls._lock:
-                session = cls._sessions[session_id]
+                        return {
+                            "status": "error",
+                            "error": "session_terminated",
+                            "message": f"Session '{session_id}' is stopped/reaped and cannot execute commands (read-only)."
+                        }
+                return {
+                    "status": "error",
+                    "error": "session_not_found",
+                    "message": f"Terminal session '{session_id}' not found. Auto-creation of unknown sessions is disabled."
+                }
 
         cmd = command or executable or "python"
         args_list = args if args is not None else (arguments or [])
-        approved = bool(kwargs.get("approved", False))
-        return session.execute_command(cmd, args_list, timeout_sec=timeout_sec, is_background=is_background, approved=approved)
+        return session.execute_command(
+            cmd,
+            args_list,
+            timeout_sec=timeout_sec,
+            is_background=is_background,
+            caller_uid=caller_uid,
+            is_ai_initiated=is_ai_initiated
+        )
 
     @classmethod
     def read_terminal_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
         """
-        Tool: read_terminal_output / terminal_read_output
         Reads the captured output of the session (including stopped or reaped sessions).
+        Unknown sessions return error.
         """
         with cls._lock:
             session = cls._sessions.get(session_id)
@@ -936,7 +1153,7 @@ class TerminalManager:
                         break
 
         if not session:
-            return {"status": "error", "message": f"Session '{session_id}' not found."}
+            return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
         lines = session.read_output(tail_lines=tail_lines)
         return {
             "session_id": session_id,
@@ -948,39 +1165,61 @@ class TerminalManager:
     @classmethod
     def get_terminal_status(cls, session_id: str) -> Dict[str, Any]:
         """
-        Tool: get_terminal_status / terminal_get_status
         Returns current state, active process, and exit code.
+        Unknown sessions return error.
         """
         with cls._lock:
             session = cls._sessions.get(session_id)
+            if not session:
+                for sid, sess in cls._reaped_history:
+                    if sid == session_id:
+                        session = sess
+                        break
         if not session:
-            return {"status": "error", "message": f"Session '{session_id}' not found."}
+            return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
         return session.get_status()
 
     @classmethod
     def list_terminals(cls) -> List[Dict[str, Any]]:
-        """
-        Tool: list_terminals / terminal_list_sessions
-        Lists all active background terminal sessions.
-        """
+        """Lists all active background terminal sessions."""
         with cls._lock:
             return [s.get_status() for s in cls._sessions.values()]
 
     @classmethod
     def stop_terminal(cls, session_id: str) -> Dict[str, Any]:
         """
-        Tool: stop_terminal / terminal_stop
         Terminates the background session process and reclaims active resources.
         Buffered output remains inspectable via read_terminal_output.
         """
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
-                return {"status": "error", "message": f"Session '{session_id}' not found."}
+                return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
             res = session.stop()
             cls._reaped_history.append((session_id, session))
             del cls._sessions[session_id]
             return res
+
+    @classmethod
+    def get_session(cls, session_id: str) -> Optional[TerminalSession]:
+        """Looks up an active session by ID under the manager lock."""
+        with cls._lock:
+            return cls._sessions.get(session_id)
+
+    @classmethod
+    def cleanup_all(cls) -> int:
+        """Terminates all active background terminal sessions and reclaims resources."""
+        with cls._lock:
+            sessions = list(cls._sessions.values())
+            cls._sessions.clear()
+        count = 0
+        for session in sessions:
+            try:
+                session.stop()
+                count += 1
+            except Exception:
+                pass
+        return count
 
     @classmethod
     def delete_terminal(cls, session_id: str) -> Dict[str, Any]:
@@ -993,12 +1232,11 @@ class TerminalManager:
         return {"status": "not_found", "session_id": session_id}
 
     # ==========================================================================
-    # CANONICAL TOOL METHOD ALIASES (EXACT NAMES SPECIFIED IN AI SPECIFICATION)
+    # CANONICAL TOOL METHOD ALIASES
     # ==========================================================================
     @classmethod
-    def terminal_create_session(cls, workspace_path: Optional[str] = None) -> Dict[str, Any]:
-        """Tool: terminal_create_session(workspace_path)"""
-        return cls.create_terminal(workspace_path=workspace_path)
+    def terminal_create_session(cls, workspace_path: Optional[str] = None, caller_uid: str = "internal_daemon") -> Dict[str, Any]:
+        return cls.create_terminal(workspace_path=workspace_path, caller_uid=caller_uid)
 
     @classmethod
     def terminal_run(
@@ -1007,82 +1245,136 @@ class TerminalManager:
         executable: str,
         arguments: Optional[List[str]] = None,
         timeout_sec: int = DEFAULT_TIMEOUT_SEC,
-        is_background: bool = False
+        is_background: bool = False,
+        caller_uid: str = "internal_daemon",
+        is_ai_initiated: bool = False
     ) -> Dict[str, Any]:
-        """Tool: terminal_run(session_id, executable, arguments)"""
         return cls.run_command(
             session_id=session_id,
             command=executable,
             args=arguments,
             timeout_sec=timeout_sec,
-            is_background=is_background
+            is_background=is_background,
+            caller_uid=caller_uid,
+            is_ai_initiated=is_ai_initiated
         )
 
     @classmethod
     def terminal_read_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
-        """Tool: terminal_read_output(session_id)"""
         return cls.read_terminal_output(session_id=session_id, tail_lines=tail_lines)
 
     @classmethod
     def terminal_read_output_delta(cls, session_id: str, since_seq: int = 0) -> Dict[str, Any]:
-        """Tool: terminal_read_output_delta(session_id, since_seq) for real-time streaming."""
         session = cls.get_session(session_id)
         if not session:
-            return {"status": "error", "message": f"Session '{session_id}' not found.", "lines": [], "sequence_number": 0}
+            return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found.", "lines": [], "sequence_number": 0}
         return session.read_output_delta(since_seq=since_seq)
 
     @classmethod
     def terminal_get_status(cls, session_id: str) -> Dict[str, Any]:
-        """Tool: terminal_get_status(session_id)"""
         return cls.get_terminal_status(session_id=session_id)
 
     @classmethod
     def terminal_stop(cls, session_id: str) -> Dict[str, Any]:
-        """Tool: terminal_stop(session_id)"""
         return cls.stop_terminal(session_id=session_id)
 
     @classmethod
     def restart_terminal(cls, session_id: str) -> Dict[str, Any]:
-        """
-        Tool: restart_terminal / terminal_restart
-        Restarts the last command executed in the background session.
-        """
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
-                return {"status": "error", "message": f"Session '{session_id}' not found."}
+                return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
             return session.restart()
 
     @classmethod
     def terminal_restart(cls, session_id: str) -> Dict[str, Any]:
-        """Tool: terminal_restart(session_id)"""
         return cls.restart_terminal(session_id=session_id)
 
     @classmethod
     def terminal_list_sessions(cls) -> List[Dict[str, Any]]:
-        """Tool: terminal_list_sessions()"""
         return cls.list_terminals()
 
     @classmethod
-    def respond_to_approval(cls, approval_id: str, approved: bool) -> Dict[str, Any]:
-        """Permits or denies a pending privileged command."""
-        with cls._lock:
-            for session in cls._sessions.values():
-                if session.pending_approval and session.pending_approval.get("approval_id") == approval_id:
-                    pending = session.pending_approval
-                    session.pending_approval = None
-                    if not approved:
-                        session.state = "failed"
-                        session.last_exit_code = 126
-                        return {"status": "denied", "message": f"User denied execution of '{pending['command']}'."}
-                    
-                    # Approved: execute directly
-                    is_bg = pending.get("is_background", False)
-                    return session.execute_command(pending["command"], pending["args"], is_background=is_bg, approved=True)
-            return {"status": "error", "message": f"No pending approval matching token '{approval_id}'."}
+    def respond_to_approval(cls, approval_id: str, approved: bool, caller_uid: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Atomically permits or denies a pending privileged command.
+        Enforces one-time consumption (anti-replay), expiry, UID ownership, and policy verification.
+        """
+        with _APPROVAL_LOCK:
+            record = _APPROVAL_REGISTRY.get(approval_id)
+            if not record:
+                return {
+                    "status": "error",
+                    "error": "approval_not_found_or_already_consumed",
+                    "message": f"Approval '{approval_id}' not found, already consumed, or replayed."
+                }
+            if record.consumed:
+                return {
+                    "status": "error",
+                    "error": "approval_replayed",
+                    "message": f"Approval '{approval_id}' was already consumed (replay rejected)."
+                }
+            if time.time() > record.expires_at:
+                _APPROVAL_REGISTRY.pop(approval_id, None)
+                return {
+                    "status": "error",
+                    "error": "approval_expired",
+                    "message": f"Approval request '{approval_id}' has expired."
+                }
+            if caller_uid and record.uid != "internal_daemon" and record.uid != caller_uid:
+                return {
+                    "status": "error",
+                    "error": "approval_user_mismatch",
+                    "message": f"Approval request belongs to UID '{record.uid}', not '{caller_uid}'."
+                }
+            record.consumed = True
+
+        if not approved:
+            session = cls.get_session(record.session_id)
+            if session:
+                session.pending_approvals.pop(approval_id, None)
+                session.state = "failed"
+                session.last_exit_code = 126
+                session._append_output("security", f"DENIED: User rejected approval for '{record.command}'.")
+            return {"status": "denied", "message": f"Execution of '{record.command}' was declined by user."}
+
+        session = cls.get_session(record.session_id)
+        if not session:
+            return {
+                "status": "error",
+                "error": "session_not_found_or_stopped",
+                "message": f"Session '{record.session_id}' is no longer active."
+            }
+
+        if session.cwd != record.cwd:
+            return {
+                "status": "error",
+                "error": "approval_cwd_mismatch",
+                "message": "Working directory changed since approval was requested."
+            }
+
+        # Policy verification: Prohibited commands can NEVER run even after approval
+        pol_dec, pol_rat = evaluate_command_security(record.command, record.args, is_ai_initiated=False, workspace_path=session.workspace_path)
+        if pol_dec == SecurityDecision.DENIED:
+            return {
+                "status": "error",
+                "error": "command_prohibited",
+                "message": f"Command '{record.command}' is prohibited by policy and cannot run even after approval: {pol_rat}"
+            }
+
+        return session.execute_command(
+            command=record.command,
+            args=record.args,
+            timeout_sec=record.timeout_sec,
+            is_background=record.is_background,
+            caller_uid=caller_uid,
+            _approval_record=record
+        )
+
+# Register automatic cleanup of all child processes at process termination
+atexit.register(TerminalManager.cleanup_all)
 
 
-# ==============================================================================
 # 5. AI TOOL DISPATCHER & PARSER FOR LOCAL LLM REASONING
 # ==============================================================================
 
@@ -1218,6 +1510,7 @@ class ToolDispatcher:
         "terminal_stop", "stop_terminal",
         "terminal_restart", "restart_terminal",
         "terminal_list_sessions", "list_terminals",
+        "respond_to_approval", "terminal_respond_approval",
     }
     WEB_SEARCH_TOOLS = {"web_search"}
     VFX_TOOLS = {"search_vfx_database", "vfx_kinematics_lookup"}
@@ -1347,12 +1640,29 @@ class ToolDispatcher:
                 cmd_args = args.get("arguments") or args.get("args") or []
                 timeout_sec = args.get("timeout_sec", DEFAULT_TIMEOUT_SEC)
                 is_bg = args.get("is_background", False)
+                caller_uid = args.get("caller_uid") or args.get("uid") or "ai_agent"
+                is_ai = bool(args.get("is_ai_initiated", True))
+                if not session_id:
+                    created_sess = TerminalManager.terminal_create_session(caller_uid=caller_uid)
+                    session_id = created_sess["session_id"]
                 return TerminalManager.terminal_run(
                     session_id=session_id,
                     executable=cmd,
                     arguments=cmd_args,
                     timeout_sec=timeout_sec,
-                    is_background=is_bg
+                    is_background=is_bg,
+                    caller_uid=caller_uid,
+                    is_ai_initiated=is_ai
+                )
+
+            elif name in ("respond_to_approval", "terminal_respond_approval"):
+                approval_id = args.get("approval_id") or args.get("id") or ""
+                approved = bool(args.get("approved", False))
+                caller_uid = args.get("caller_uid") or args.get("uid")
+                return TerminalManager.respond_to_approval(
+                    approval_id=approval_id,
+                    approved=approved,
+                    caller_uid=caller_uid
                 )
 
             elif name in ("terminal_read_output", "read_terminal_output"):

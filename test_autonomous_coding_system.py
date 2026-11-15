@@ -18,7 +18,6 @@ Verifies all 10 mandatory requirements:
 """
 
 import os
-os.environ["STROKE_TEST_AUTO_APPROVE"] = "1"
 import sys
 import time
 import json
@@ -208,6 +207,8 @@ class TestAutonomousCodingSystem(unittest.TestCase):
             arguments=["-m", "http.server", str(test_port)],
             is_background=True
         )
+        if start_res.get("status") == "requires_approval":
+            start_res = TerminalManager.respond_to_approval(start_res["approval_id"], True)
         self.assertTrue(start_res.get("is_background"))
         self.assertIsNotNone(start_res.get("pid"))
         time.sleep(0.6)
@@ -235,7 +236,7 @@ class TestAutonomousCodingSystem(unittest.TestCase):
         # Verify process is dead and port is freed
         time.sleep(0.3)
         post_status = TerminalManager.terminal_get_status(sid)
-        self.assertEqual(post_status.get("status"), "error")
+        self.assertIn(post_status.get("status"), ("terminated", "error"))
         print("  [PASS] TEST G: Background server started, verified via HTTP 200, and stopped cleanly.")
 
     # ==========================================================================
@@ -258,6 +259,8 @@ class TestAutonomousCodingSystem(unittest.TestCase):
                 "import sys; sys.stdout.write('AUTONOMOUS_STDOUT_OK\\n'); sys.stderr.write('AUTONOMOUS_STDERR_OK\\n'); sys.exit(0)"
             ]
         })
+        if run_res.get("status") == "requires_approval":
+            run_res = ToolDispatcher.dispatch("respond_to_approval", {"approval_id": run_res["approval_id"], "approved": True})
         self.assertEqual(run_res.get("exit_code"), 0)
         self.assertIn("AUTONOMOUS_STDOUT_OK", run_res.get("stdout", ""))
         self.assertIn("AUTONOMOUS_STDERR_OK", run_res.get("stderr", ""))

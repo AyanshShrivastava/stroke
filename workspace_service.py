@@ -2,17 +2,21 @@
 ================================================================================
 STROKE // APPROVED WORKSPACE & PERMISSIONS SERVICE
 ================================================================================
-Strictly enforces Stroke Requirement 1:
+Strictly enforces Stroke Workspace Boundaries:
 - Stroke must work with the user's actual computer files within explicit workspaces.
 - Stroke remembers approved workspaces securely in per-user app data.
-- NEVER silently grants access to the entire computer.
-- Provides native OS folder selection (macOS osascript, Windows PowerShell/FolderBrowser, Linux zenity/tkinter).
-- Prevents directory traversal attacks, root directory escapes, and unapproved file access.
+- NEVER silently grants access to the entire computer or automatically approves cwd/home.
+- Every workspace must be explicitly approved by the user.
+- System roots, system directories, and broad home-directory roots are strictly rejected.
+- Validates canonical real paths at the point of access, including symlink targets.
+- Prevents symlink traversal, loops, path races, and access outside approved roots.
+- Validates task IDs as strict identifiers; never joins untrusted task IDs into paths.
 ================================================================================
 """
 
 import os
 import sys
+import re
 import json
 import subprocess
 from pathlib import Path
@@ -20,10 +24,38 @@ from typing import List, Dict, Any, Optional
 
 import paths_service
 
+TASK_ID_REGEX = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
+
+DISALLOWED_ROOTS = {
+    "/", "/bin", "/sbin", "/usr", "/usr/bin", "/usr/sbin",
+    "/etc", "/var", "/tmp", "/dev", "/proc", "/sys",
+    "/System", "/Library", "/Applications", "/private",
+    "/private/etc", "/private/var", "/private/tmp"
+}
+
+DISALLOWED_PREFIXES_WINDOWS = (
+    "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)"
+)
+
 
 class WorkspaceSecurityError(PermissionError):
     """Raised when an operation attempts to access files outside approved workspaces."""
     pass
+
+
+def validate_task_id(task_id: str) -> str:
+    """
+    Validates that task_id is a strict alphanumeric/hyphen/underscore identifier.
+    Rejects directory traversal characters ('..', '/', '\\', null bytes).
+    """
+    if not task_id or not isinstance(task_id, str):
+        raise WorkspaceSecurityError("Task ID must be a non-empty string.")
+    clean_id = task_id.strip()
+    if not TASK_ID_REGEX.match(clean_id):
+        raise WorkspaceSecurityError(
+            f"Invalid task ID '{task_id}'. Task IDs must be 1-64 alphanumeric characters, underscores, or hyphens."
+        )
+    return clean_id
 
 
 class WorkspaceManager:
@@ -34,35 +66,36 @@ class WorkspaceManager:
         self._ensure_config()
 
     def _ensure_config(self):
+        """Initializes approved workspaces configuration with an empty list if not present."""
         if not self.config_path.exists():
-            default_workspaces = [
-                str(Path.cwd().resolve()),
-                str(Path.home() / "stroke_workspace")
-            ]
-            self._save_workspaces(default_workspaces)
+            self._save_workspaces([])
 
     def _read_workspaces(self) -> List[str]:
+        """Reads approved workspaces list from disk without silent defaults."""
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return data
-                elif isinstance(data, dict):
-                    return data.get("approved_workspaces", [])
-        except Exception:
-            pass
-        return [str(Path.cwd().resolve())]
+            if self.config_path.exists():
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return data
+                    elif isinstance(data, dict):
+                        return data.get("approved_workspaces", [])
+        except Exception as exc:
+            print(f"[STROKE WORKSPACE WARNING] Error reading {self.config_path}: {exc}", flush=True)
+        return []
 
     def _save_workspaces(self, workspaces: List[str]):
+        """Persists approved workspaces list atomically."""
         clean = []
         for w in workspaces:
             try:
                 resolved = str(Path(w).resolve())
-                if resolved not in clean and Path(resolved).exists():
+                if resolved not in clean and Path(resolved).exists() and Path(resolved).is_dir():
                     clean.append(resolved)
             except Exception:
                 pass
 
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
         temp_cfg = self.config_path.with_suffix(".tmp")
         with open(temp_cfg, "w", encoding="utf-8") as f:
             json.dump({"approved_workspaces": clean}, f, indent=2)
@@ -71,29 +104,71 @@ class WorkspaceManager:
         os.replace(temp_cfg, self.config_path)
 
     def get_approved_workspaces(self) -> List[str]:
-        """Returns the list of canonical paths to approved workspace folders."""
+        """
+        Returns canonical paths to explicitly approved workspace folders.
+        Never automatically injects cwd or home directory.
+        """
         existing = self._read_workspaces()
         valid = [w for w in existing if Path(w).exists() and Path(w).is_dir()]
-        # Always include active project directory
-        cwd_str = str(Path.cwd().resolve())
-        if cwd_str not in valid:
-            valid.insert(0, cwd_str)
         return valid
 
-    def add_approved_workspace(self, folder_path: str) -> Dict[str, Any]:
-        """Validates and persists a new approved project folder."""
+    def add_approved_workspace(self, folder_path: str, label: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Validates and registers an explicitly user-approved project folder.
+        Rejects system roots, system directories, and broad user home roots.
+        """
+        if not folder_path or not str(folder_path).strip():
+            raise ValueError("Folder path cannot be empty.")
+
         p = Path(folder_path).resolve()
         if not p.exists():
             raise FileNotFoundError(f"Selected folder does not exist: {p}")
         if not p.is_dir():
             raise NotADirectoryError(f"Selected path is not a directory: {p}")
 
-        # Block root or system-wide folders
-        os_name = paths_service.get_current_os()
         resolved_str = str(p)
 
-        if resolved_str in ("/", "C:\\", "C:/") or resolved_str.startswith(("/System", "/Library", "C:\\Windows")):
-            raise WorkspaceSecurityError(f"System-level root directory cannot be registered as a workspace: {resolved_str}")
+        raw_clean = str(folder_path).strip().rstrip("/\\") or "/"
+        if resolved_str in DISALLOWED_ROOTS or raw_clean in DISALLOWED_ROOTS:
+            raise WorkspaceSecurityError(
+                f"System-level root directory cannot be registered as a workspace: '{resolved_str}'"
+            )
+
+        # 2. Reject Windows drive roots and system directories
+        os_name = paths_service.get_current_os()
+        if os_name == "windows":
+            # Reject drive roots (e.g. C:\, D:\)
+            if len(p.parts) <= 1 or p == Path(p.anchor):
+                raise WorkspaceSecurityError(
+                    f"Drive root cannot be registered as an entire workspace: '{resolved_str}'"
+                )
+            for win_disallowed in DISALLOWED_PREFIXES_WINDOWS:
+                if resolved_str.lower().startswith(win_disallowed.lower()):
+                    raise WorkspaceSecurityError(
+                        f"Windows system directory cannot be registered as a workspace: '{resolved_str}'"
+                    )
+        else:
+            # POSIX root check
+            if p == Path("/") or resolved_str in ("/", "/root"):
+                raise WorkspaceSecurityError(
+                    f"Filesystem root cannot be registered as an entire workspace."
+                )
+            if resolved_str.startswith(("/System", "/private/etc", "/private/var/root", "/private/var/db", "/Library/Apple", "/Library/System")):
+                raise WorkspaceSecurityError(
+                    f"OS system directory cannot be registered as a workspace: '{resolved_str}'"
+                )
+
+        # 3. Reject broad home-directory roots (user must pick a specific project subfolder)
+        try:
+            home = paths_service.get_home_dir().resolve()
+        except Exception:
+            home = Path.home().resolve()
+
+        if p == home or resolved_str == str(home):
+            raise WorkspaceSecurityError(
+                f"User home directory root cannot be registered as an entire workspace: '{resolved_str}'. "
+                f"Please register a specific project directory inside your user profile."
+            )
 
         workspaces = self._read_workspaces()
         if resolved_str not in workspaces:
@@ -103,19 +178,30 @@ class WorkspaceManager:
         return {
             "status": "approved",
             "workspace": resolved_str,
+            "label": label or p.name or resolved_str,
             "total_approved": len(workspaces)
         }
 
-    def is_path_approved(self, target_path: str) -> bool:
-        """
-        Validates whether target_path resides strictly inside at least one approved workspace.
-        Resolves symlinks and prevents path traversal (../).
-        """
+    def remove_approved_workspace(self, folder_path: str) -> bool:
+        """Removes a folder from the approved workspaces registry."""
         try:
-            canonical = Path(target_path).resolve()
+            resolved_str = str(Path(folder_path).resolve())
+            workspaces = self._read_workspaces()
+            if resolved_str in workspaces:
+                workspaces.remove(resolved_str)
+                self._save_workspaces(workspaces)
+                return True
         except Exception:
-            return False
+            pass
+        return False
 
+    def clear_approved_workspaces(self) -> bool:
+        """Clears all approved workspaces."""
+        self._save_workspaces([])
+        return True
+
+    def _is_canonical_approved(self, canonical: Path, allow_app_data: bool = False) -> bool:
+        """Checks if a canonical path resides strictly inside an approved workspace."""
         for ws in self.get_approved_workspaces():
             try:
                 ws_path = Path(ws).resolve()
@@ -124,32 +210,76 @@ class WorkspaceManager:
             except Exception:
                 continue
 
-        # Also permit Stroke's internal user-level app data / scratch dirs
-        app_data = paths_service.get_app_data_dir()
-        if canonical == app_data or app_data in canonical.parents:
-            return True
+        if allow_app_data:
+            try:
+                app_data = paths_service.get_app_data_dir().resolve()
+                if canonical == app_data or app_data in canonical.parents:
+                    return True
+            except Exception:
+                pass
 
         return False
 
-    def validate_path_access(self, target_path: str) -> Path:
+    def is_path_approved(self, target_path: str, allow_app_data: bool = False) -> bool:
         """
-        Validates path safety and permissions.
-        Returns the resolved Path if approved, or raises WorkspaceSecurityError.
+        Validates whether target_path resides strictly inside at least one approved workspace.
+        Resolves symlinks and prevents traversal.
         """
-        resolved = Path(target_path).resolve()
-        if not self.is_path_approved(str(resolved)):
+        try:
+            p = Path(target_path)
+            canonical = p.resolve(strict=False)
+            
+            # If symlink, also inspect real target
+            if p.is_symlink():
+                real_target = Path(os.path.realpath(str(p)))
+                if not self._is_canonical_approved(real_target, allow_app_data=allow_app_data):
+                    return False
+
+            return self._is_canonical_approved(canonical, allow_app_data=allow_app_data)
+        except Exception:
+            return False
+
+    def validate_path_access(self, target_path: str, allow_app_data: bool = False) -> Path:
+        """
+        Enforces workspace boundary permissions at the point of access.
+        - Resolves canonical real path.
+        - Inspects symlink targets to prevent symlink traversal escapes.
+        - Rejects access outside approved workspaces.
+        """
+        if not target_path:
+            raise WorkspaceSecurityError("Target path cannot be empty.")
+
+        p = Path(target_path)
+        try:
+            canonical = p.resolve(strict=False)
+        except (RuntimeError, OSError) as exc:
+            raise WorkspaceSecurityError(f"Invalid path or symlink loop detected: {target_path} ({exc})")
+
+        # Symlink escape prevention: inspect resolved target of symlink
+        if p.is_symlink():
+            try:
+                real_target = Path(os.path.realpath(str(p)))
+            except (RuntimeError, OSError) as exc:
+                raise WorkspaceSecurityError(f"Symlink traversal or loop detected: {p} ({exc})")
+            if not self._is_canonical_approved(real_target, allow_app_data=allow_app_data):
+                raise WorkspaceSecurityError(
+                    f"Symlink traversal denied: Symlink '{p}' points to target '{real_target}' outside approved workspaces."
+                )
+
+        if not self._is_canonical_approved(canonical, allow_app_data=allow_app_data):
             raise WorkspaceSecurityError(
-                f"Access denied: '{resolved}' is outside user-approved workspaces. "
-                f"Please add this project directory in Stroke Workspace Settings."
+                f"Access denied: '{canonical}' is outside user-approved workspaces. "
+                f"Please explicitly approve this project directory in Stroke Workspace Settings."
             )
-        return resolved
+
+        return canonical
 
 
 _WORKSPACE_MANAGER = WorkspaceManager()
 
 
 def get_approved_workspaces() -> List[str]:
-    """Retrieves list of approved project workspaces."""
+    """Retrieves list of canonical approved project workspaces."""
     return _WORKSPACE_MANAGER.get_approved_workspaces()
 
 
@@ -160,11 +290,8 @@ def list_approved_workspaces() -> List[Dict[str, str]]:
 
 
 def add_approved_workspace(folder_path: str, label: Optional[str] = None) -> Dict[str, Any]:
-    """Adds a new folder to approved workspaces."""
-    res = _WORKSPACE_MANAGER.add_approved_workspace(folder_path)
-    if label:
-        res["label"] = label
-    return res
+    """Adds a new folder to approved workspaces with explicit user consent."""
+    return _WORKSPACE_MANAGER.add_approved_workspace(folder_path, label=label)
 
 
 def approve_workspace(folder_path: str, label: Optional[str] = None) -> Dict[str, Any]:
@@ -172,14 +299,24 @@ def approve_workspace(folder_path: str, label: Optional[str] = None) -> Dict[str
     return add_approved_workspace(folder_path, label=label)
 
 
-def is_path_approved(target_path: str) -> bool:
+def remove_approved_workspace(folder_path: str) -> bool:
+    """Removes a folder from approved workspaces."""
+    return _WORKSPACE_MANAGER.remove_approved_workspace(folder_path)
+
+
+def clear_approved_workspaces() -> bool:
+    """Clears all approved workspaces."""
+    return _WORKSPACE_MANAGER.clear_approved_workspaces()
+
+
+def is_path_approved(target_path: str, allow_app_data: bool = False) -> bool:
     """Checks if a path is inside approved workspaces."""
-    return _WORKSPACE_MANAGER.is_path_approved(target_path)
+    return _WORKSPACE_MANAGER.is_path_approved(target_path, allow_app_data=allow_app_data)
 
 
-def validate_path_access(target_path: str) -> Path:
-    """Enforces workspace boundary permissions."""
-    return _WORKSPACE_MANAGER.validate_path_access(target_path)
+def validate_path_access(target_path: str, allow_app_data: bool = False) -> Path:
+    """Enforces workspace boundary permissions at point of access."""
+    return _WORKSPACE_MANAGER.validate_path_access(target_path, allow_app_data=allow_app_data)
 
 
 def pick_native_folder() -> Optional[str]:
@@ -189,7 +326,7 @@ def pick_native_folder() -> Optional[str]:
     - macOS: AppleScript / osascript choose folder
     - Windows: PowerShell FolderBrowserDialog
     - Linux / Fallback: tkinter.filedialog
-    Adds selected folder to approved workspaces automatically.
+    Adds selected folder to approved workspaces upon user confirmation.
     """
     os_name = paths_service.get_current_os()
     selected = None

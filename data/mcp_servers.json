@@ -4,10 +4,33 @@
       "name": "Roblox Studio",
       "transport": "stdio",
       "enabled": true,
+      "allow_local": false,
       "description": "Imported MCP server Roblox_Studio",
       "command": "/Users/ayansh/Applications/RobloxStudio.app/Contents/MacOS/StudioMCP",
       "args": [],
       "env": {}
+    },
+    "filesystem": {
+      "name": "FileSystem MCP Server",
+      "transport": "stdio",
+      "enabled": true,
+      "allow_local": false,
+      "description": "",
+      "command": "python",
+      "args": [
+        "-m",
+        "http.server"
+      ],
+      "env": {}
+    },
+    "test_offline_server": {
+      "name": "Test Server",
+      "transport": "http",
+      "enabled": true,
+      "allow_local": true,
+      "description": "Test Server Desc",
+      "url": "http://127.0.0.1:59999",
+      "headers": {}
     }
   }
 }

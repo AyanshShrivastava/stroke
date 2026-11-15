@@ -57,6 +57,19 @@ class TestTerminalStress(unittest.TestCase):
             TerminalManager._sessions.clear()
             TerminalManager._reaped_history.clear()
 
+    @staticmethod
+    def _run_with_approval(session_id: str, executable: str, arguments=None, timeout_sec=20, is_background=False):
+        res = TerminalManager.terminal_run(
+            session_id=session_id,
+            executable=executable,
+            arguments=arguments,
+            timeout_sec=timeout_sec,
+            is_background=is_background
+        )
+        if isinstance(res, dict) and res.get("status") == "requires_approval":
+            res = TerminalManager.respond_to_approval(res["approval_id"], approved=True)
+        return res
+
     # ==========================================================================
     # TEST 1: Concurrent Sessions & Thread-Safe Isolation
     # ==========================================================================
@@ -74,7 +87,7 @@ class TestTerminalStress(unittest.TestCase):
                 marker = f"UNIQUE_THREAD_PAYLOAD_{thread_idx:03d}_{time.time()}"
                 
                 # Execute Python command with delay to simulate concurrent runtime
-                run_res = TerminalManager.terminal_run(
+                run_res = self._run_with_approval(
                     session_id=sid,
                     executable="python",
                     arguments=["-c", f"import time; time.sleep(0.05); print('{marker}')"],
@@ -129,7 +142,7 @@ class TestTerminalStress(unittest.TestCase):
             res = TerminalManager.terminal_create_session()
             sid = res["session_id"]
             # Write unique marker so we can verify reaped history retrieval later
-            TerminalManager.terminal_run(
+            self._run_with_approval(
                 session_id=sid,
                 executable="python",
                 arguments=["-c", f"print('SESSION_MARKER_{idx}')"]
@@ -180,7 +193,7 @@ class TestTerminalStress(unittest.TestCase):
             "    time.sleep(0.04)\n"
         )
 
-        bg_res = TerminalManager.terminal_run(
+        bg_res = self._run_with_approval(
             session_id=sid,
             executable="python",
             arguments=["-c", script],
@@ -231,7 +244,7 @@ class TestTerminalStress(unittest.TestCase):
 
         start_t = time.time()
         timeout_val = 1
-        res = TerminalManager.terminal_run(
+        res = self._run_with_approval(
             session_id=sid,
             executable="python",
             arguments=["-c", script],
@@ -273,7 +286,7 @@ class TestTerminalStress(unittest.TestCase):
             "time.sleep(30)\n"
         )
 
-        res = TerminalManager.terminal_run(
+        res = self._run_with_approval(
             session_id=sid,
             executable="python",
             arguments=["-c", script],
@@ -337,7 +350,7 @@ class TestTerminalStress(unittest.TestCase):
             "sys.stdout.flush()\n"
         )
 
-        res = TerminalManager.terminal_run(
+        res = self._run_with_approval(
             session_id=sid,
             executable="python",
             arguments=["-c", script],
@@ -369,7 +382,7 @@ class TestTerminalStress(unittest.TestCase):
         sid = created["session_id"]
 
         # Case 1: Custom exit code (42)
-        res1 = TerminalManager.terminal_run(
+        res1 = self._run_with_approval(
             session_id=sid,
             executable="python",
             arguments=["-c", "import sys; sys.exit(42)"]
@@ -388,7 +401,7 @@ class TestTerminalStress(unittest.TestCase):
         self.assertIn("Binary not found", res2["stderr"])
 
         # Case 3: Python runtime syntax error
-        res3 = TerminalManager.terminal_run(
+        res3 = self._run_with_approval(
             session_id=sid,
             executable="python",
             arguments=["-c", "def broken():"]
@@ -414,8 +427,11 @@ class TestTerminalStress(unittest.TestCase):
         calls1 = ToolDispatcher.parse_and_execute_calls(msg1)
         self.assertEqual(len(calls1), 1)
         self.assertEqual(calls1[0]["tool"], "terminal_run")
-        self.assertEqual(calls1[0]["result"]["exit_code"], 0)
-        self.assertIn("DISPATCH_NESTED_OK", calls1[0]["result"]["stdout"])
+        res1 = calls1[0]["result"]
+        if res1.get("status") == "requires_approval":
+            res1 = ToolDispatcher.dispatch("respond_to_approval", {"approval_id": res1["approval_id"], "approved": True})
+        self.assertEqual(res1["exit_code"], 0)
+        self.assertIn("DISPATCH_NESTED_OK", res1["stdout"])
 
         # 2. Stringified arguments JSON
         msg2 = {
@@ -423,6 +439,8 @@ class TestTerminalStress(unittest.TestCase):
             "arguments": json.dumps({"executable": "python", "arguments": ["-c", "print('DISPATCH_STRINGIFIED_OK')"]})
         }
         res2 = ToolDispatcher.dispatch("terminal_run", msg2["arguments"])
+        if res2.get("status") == "requires_approval":
+            res2 = ToolDispatcher.dispatch("respond_to_approval", {"approval_id": res2["approval_id"], "approved": True})
         self.assertEqual(res2["exit_code"], 0)
         self.assertIn("DISPATCH_STRINGIFIED_OK", res2["stdout"])
 
@@ -434,7 +452,10 @@ class TestTerminalStress(unittest.TestCase):
         )
         calls3 = ToolDispatcher.parse_and_execute_calls(msg3)
         self.assertEqual(len(calls3), 1)
-        self.assertIn("DISPATCH_XML_OK", calls3[0]["result"]["stdout"])
+        res3 = calls3[0]["result"]
+        if res3.get("status") == "requires_approval":
+            res3 = ToolDispatcher.dispatch("respond_to_approval", {"approval_id": res3["approval_id"], "approved": True})
+        self.assertIn("DISPATCH_XML_OK", res3["stdout"])
 
         # 4. Graceful handling of malformed input (no crash)
         calls4 = ToolDispatcher.parse_and_execute_calls("{malformed: true, 'broken'")

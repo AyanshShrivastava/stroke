@@ -2,27 +2,38 @@
 ================================================================================
 STROKE // NON-DESTRUCTIVE USER FILE SYSTEM SERVICE
 ================================================================================
-Strictly enforces Stroke Requirements 1 & 2:
+Strictly enforces Stroke Requirements 1, 2, & Filesystem Safety:
 - USER-LEVEL FILE SYSTEM ACCESS: Read, create, edit, search, patch, inspect.
 - ABSOLUTE NO-DELETE POLICY: Hard restriction. Stroke never deletes existing
   user files or directories under any circumstance.
-- ZERO ELEVATION: Operates purely under standard logged-in user permissions.
-- AUTOMATIC BACKUPS: Pre-modification backups are generated automatically
-  before any user file modification.
+- WORKSPACE BOUNDARIES: Validates paths at point of access, rejects symlink escapes.
+- REAL UNIFIED-DIFF PATCHING: Full hunk parser that preserves untouched source lines,
+  encoding, line endings, and trailing newlines. Rejects malformed/fuzzy/overlapping hunks.
+- INCREMENTAL LINE-RANGE READS: Streams large files without full memory loading.
+- BATCH STATUS ACCURACY: All-failed read_multiple_files reports error, not success.
+- DISTINGUISHES: Binary, invalid UTF-8, inaccessible, missing, and unsupported files.
+- SAFE SCAN LIMITS: Enforces bytes read, max files, depth, and time limits.
+- ZERO DIRECTORY SYMLINK FOLLOWING: Does not follow directory symlinks by default.
 ================================================================================
 """
 
 import os
 import sys
 import re
-import difflib
+import io
+import time
 import fnmatch
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Union, Tuple
 
 import backup_service
 import workspace_service
-from workspace_service import WorkspaceSecurityError
+from workspace_service import WorkspaceSecurityError, validate_path_access
+
+MAX_SCAN_TIME_SEC = 10.0
+MAX_SCAN_FILES = 5_000
+MAX_SCAN_BYTES = 50_000_000  # 50 MB
+DEFAULT_MAX_READ_BYTES = 2_000_000  # 2 MB
 
 
 class NoDeletePolicyViolation(PermissionError):
@@ -30,15 +41,21 @@ class NoDeletePolicyViolation(PermissionError):
     pass
 
 
+class PatchApplicationError(ValueError):
+    """Raised when a unified diff patch cannot be cleanly or unambiguously applied."""
+    pass
+
+
 def list_directory(
     dir_path: str,
     recursive: bool = False,
     max_depth: int = 10,
-    include_hidden: bool = False
+    include_hidden: bool = False,
+    follow_symlinks: bool = False
 ) -> Dict[str, Any]:
     """
     Lists files and directories inside an approved workspace.
-    Returns structured metadata for each item.
+    Enforces time limits, depth limits, and does not follow directory symlinks by default.
     """
     target = workspace_service.validate_path_access(dir_path)
     if not target.exists():
@@ -47,10 +64,15 @@ def list_directory(
         raise NotADirectoryError(f"Path is not a directory: {target}")
 
     items = []
-    
+    start_time = time.time()
+    truncated = False
+
     def _scan(current: Path, depth: int):
-        if depth > max_depth:
+        nonlocal truncated
+        if depth > max_depth or (time.time() - start_time) > MAX_SCAN_TIME_SEC or len(items) >= MAX_SCAN_FILES:
+            truncated = True
             return
+
         try:
             entries = sorted(list(current.iterdir()), key=lambda p: (not p.is_dir(), p.name.lower()))
         except PermissionError:
@@ -59,17 +81,35 @@ def list_directory(
         for entry in entries:
             if not include_hidden and entry.name.startswith("."):
                 continue
-            is_dir = entry.is_dir()
+
+            # Do not follow directory symlinks by default to prevent loops
+            if entry.is_symlink() and not follow_symlinks:
+                is_dir = False
+                is_symlink = True
+            else:
+                is_dir = entry.is_dir()
+                is_symlink = entry.is_symlink()
+
+            try:
+                st = entry.stat()
+                sz = st.st_size if not is_dir else 0
+                mtime = st.st_mtime
+            except Exception:
+                sz = 0
+                mtime = 0
+
             item_info = {
                 "name": entry.name,
                 "path": str(entry),
                 "relative_path": str(entry.relative_to(target)),
                 "is_dir": is_dir,
-                "size_bytes": entry.stat().st_size if not is_dir else 0,
-                "modified_at": entry.stat().st_mtime
+                "is_symlink": is_symlink,
+                "size_bytes": sz,
+                "modified_at": mtime
             }
             items.append(item_info)
-            if recursive and is_dir:
+
+            if recursive and is_dir and not entry.is_symlink():
                 _scan(entry, depth + 1)
 
     _scan(target, 1)
@@ -78,6 +118,7 @@ def list_directory(
         "status": "success",
         "directory": str(target),
         "total_items": len(items),
+        "truncated": truncated,
         "items": items
     }
 
@@ -86,11 +127,13 @@ def read_file(
     file_path: str,
     start_line: Optional[int] = None,
     end_line: Optional[int] = None,
-    max_bytes: int = 2_000_000
+    max_bytes: int = DEFAULT_MAX_READ_BYTES
 ) -> Dict[str, Any]:
     """
     Reads contents of a file in an approved workspace.
-    Supports optional 1-indexed line slicing.
+    - Performs truly incremental line-range reads without loading whole file.
+    - Distinguishes binary files, invalid UTF-8, missing, and inaccessible files.
+    - Enforces max_bytes safety limit.
     """
     target = workspace_service.validate_path_access(file_path)
     if not target.exists():
@@ -99,77 +142,138 @@ def read_file(
         raise IsADirectoryError(f"Path is a directory, not a file: {target}")
 
     file_size = target.stat().st_size
-    if file_size > max_bytes and start_line is None:
-        raise ValueError(f"File size ({file_size} bytes) exceeds safety limit ({max_bytes} bytes). Specify start_line/end_line to read in chunks.")
+
+    # Check for binary file
+    if backup_service.is_binary_file(target):
+        return {
+            "status": "success",
+            "file_path": str(target),
+            "file_name": target.name,
+            "is_binary": True,
+            "size_bytes": file_size,
+            "content": None,
+            "message": f"Binary file ({file_size} bytes). Text reading and line slicing not supported."
+        }
+
+    # If full read requested for oversized file without line limits, reject
+    if file_size > max_bytes and start_line is None and end_line is None:
+        raise ValueError(
+            f"File size ({file_size} bytes) exceeds safety limit ({max_bytes} bytes). "
+            f"Specify start_line and end_line for incremental reading."
+        )
+
+    # Incremental streaming read
+    lines: List[str] = []
+    total_lines = 0
+    s = max(1, start_line or 1)
+    e = end_line
+    bytes_accumulated = 0
 
     try:
-        content = target.read_text(encoding="utf-8", errors="replace")
+        with open(target, "r", encoding="utf-8", errors="strict") as f:
+            for idx, line in enumerate(f, start=1):
+                total_lines = idx
+                if idx < s:
+                    continue
+                if e is not None and idx > e:
+                    # If we only need lines up to e, we can continue just to count or break
+                    # To avoid reading gigabyte files just for total line count when e is small:
+                    if file_size > max_bytes:
+                        break
+                    continue
+
+                line_bytes = len(line.encode("utf-8"))
+                bytes_accumulated += line_bytes
+                if bytes_accumulated > max_bytes:
+                    raise ValueError(
+                        f"Read range exceeded maximum allowed bytes ({max_bytes} bytes). "
+                        f"Narrow your start_line/end_line range."
+                    )
+                lines.append(line)
+    except UnicodeDecodeError as ude:
+        return {
+            "status": "error",
+            "error_type": "invalid_utf8",
+            "file_path": str(target),
+            "error": f"File contains invalid UTF-8 characters: {ude}"
+        }
     except Exception as exc:
         raise IOError(f"Failed to read file: {exc}")
 
-    lines = content.splitlines(keepends=True)
-    total_lines = len(lines)
-
-    if start_line is not None or end_line is not None:
-        s = max(1, start_line or 1)
-        e = min(total_lines, end_line or total_lines)
-        if s > e:
-            sliced_content = ""
-        else:
-            sliced_content = "".join(lines[s - 1:e])
-        is_sliced = True
-    else:
-        sliced_content = content
-        is_sliced = False
-        s = 1
-        e = total_lines
+    actual_end = e if e is not None else total_lines
+    sliced_content = "".join(lines)
 
     return {
         "status": "success",
         "file_path": str(target),
         "file_name": target.name,
+        "is_binary": False,
         "total_lines": total_lines,
         "start_line": s,
-        "end_line": e,
-        "is_sliced": is_sliced,
+        "end_line": actual_end,
+        "is_sliced": (start_line is not None or end_line is not None),
         "content": sliced_content,
-        "size_bytes": file_size
+        "size_bytes": file_size,
+        "bytes_returned": len(sliced_content.encode("utf-8"))
     }
 
 
 def read_multiple_files(file_paths: List[str]) -> Dict[str, Any]:
-    """Reads multiple files in an approved workspace in a single round-trip."""
+    """
+    Reads multiple files in approved workspaces simultaneously.
+    Accurately reports top-level status:
+    - 'error' if all files failed
+    - 'partial_success' if some failed
+    - 'success' if all succeeded
+    """
     results = {}
+    successful = 0
+    failed = 0
+
     for fp in file_paths:
         try:
-            results[fp] = read_file(fp)
+            res = read_file(fp)
+            results[fp] = res
+            if res.get("status") == "error":
+                failed += 1
+            else:
+                successful += 1
         except Exception as exc:
             results[fp] = {"status": "error", "error": str(exc)}
+            failed += 1
+
+    total = len(file_paths)
+    if total > 0 and failed == total:
+        top_status = "error"
+    elif failed > 0:
+        top_status = "partial_success"
+    else:
+        top_status = "success"
 
     return {
-        "status": "success",
-        "total_requested": len(file_paths),
+        "status": top_status,
+        "total_requested": total,
+        "successful_count": successful,
+        "failed_count": failed,
         "files": results
     }
 
 
 def create_file(
     file_path: str,
-    content: str,
+    content: Union[str, bytes],
     overwrite: bool = False,
     task_id: str = "ai_create"
 ) -> Dict[str, Any]:
     """
     Creates a new file in an approved workspace.
-    If the file already exists:
-    - If overwrite is False, rejects to prevent unintentional replacement.
-    - If overwrite is True, generates a full backup first, then writes atomically.
-    Never deletes anything.
+    If overwrite is False and file exists, rejects to prevent accidental clobbering.
+    If overwrite is True, generates automatic backup first, then writes atomically.
     """
     target = workspace_service.validate_path_access(file_path)
     if target.exists() and not overwrite:
         raise FileExistsError(
-            f"File '{target.name}' already exists. Use edit_file() to modify existing user files with automatic version backups."
+            f"File '{target.name}' already exists. Use edit_file() to modify existing files with automatic version backups."
         )
 
     res = backup_service.atomic_write_file(
@@ -184,14 +288,13 @@ def create_file(
 
 def edit_file(
     file_path: str,
-    new_content: str,
+    new_content: Union[str, bytes],
     task_id: str = "ai_edit",
-    description: str = "File edited by Stroke AI"
+    description: str = "File edited by Stroke AI",
+    expected_hash: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Safely edits an existing file.
-    Always generates an automatic full version backup before applying changes.
-    Enforces atomic writing.
+    Safely edits an existing file with conflict detection and automatic pre-modification backup.
     """
     target = workspace_service.validate_path_access(file_path)
     if not target.exists():
@@ -204,13 +307,14 @@ def edit_file(
         content=new_content,
         make_backup_if_exists=True,
         task_id=task_id,
-        description=description
+        description=description,
+        expected_hash=expected_hash
     )
     return res
 
 
 def create_directory(dir_path: str) -> Dict[str, Any]:
-    """Creates a new directory (and any necessary parent directories) in an approved workspace."""
+    """Creates a new directory in an approved workspace."""
     target = workspace_service.validate_path_access(dir_path)
     if target.exists():
         if target.is_dir():
@@ -228,15 +332,23 @@ def create_directory(dir_path: str) -> Dict[str, Any]:
 def search_files(
     workspace_path: str,
     pattern: str = "*",
-    max_results: int = 200
+    max_results: int = 200,
+    follow_symlinks: bool = False
 ) -> Dict[str, Any]:
     """
-    Searches for files matching a filename wildcard pattern (e.g. '*.py', '*hitbox*.luau').
+    Searches for files matching a wildcard pattern inside an approved workspace.
+    Enforces time and result bounds.
     """
     target = workspace_service.validate_path_access(workspace_path)
     matches = []
+    start_time = time.time()
+    truncated = False
 
-    for root, dirs, files in os.walk(target):
+    for root, dirs, files in os.walk(target, followlinks=follow_symlinks):
+        if (time.time() - start_time) > MAX_SCAN_TIME_SEC:
+            truncated = True
+            break
+
         # Filter hidden directories
         dirs[:] = [d for d in dirs if not d.startswith(".")]
         for f in files:
@@ -244,11 +356,15 @@ def search_files(
                 continue
             if fnmatch.fnmatch(f, pattern):
                 full_path = Path(root) / f
+                try:
+                    sz = full_path.stat().st_size
+                except Exception:
+                    sz = 0
                 matches.append({
                     "name": f,
                     "path": str(full_path),
                     "relative_path": str(full_path.relative_to(target)),
-                    "size_bytes": full_path.stat().st_size
+                    "size_bytes": sz
                 })
                 if len(matches) >= max_results:
                     break
@@ -260,6 +376,7 @@ def search_files(
         "workspace": str(target),
         "pattern": pattern,
         "match_count": len(matches),
+        "truncated": truncated,
         "matches": matches
     }
 
@@ -269,11 +386,11 @@ def search_in_files(
     query: str,
     is_regex: bool = False,
     file_pattern: str = "*",
-    max_matches: int = 150
+    max_matches: int = 150,
+    follow_symlinks: bool = False
 ) -> Dict[str, Any]:
     """
-    Searches inside file contents across a workspace.
-    Returns matched file paths, line numbers, and line text.
+    Searches inside text file contents across an approved workspace.
     """
     target = workspace_service.validate_path_access(workspace_path)
     results = []
@@ -287,8 +404,14 @@ def search_in_files(
         query_lower = query.lower()
 
     match_count = 0
+    start_time = time.time()
+    truncated = False
 
-    for root, dirs, files in os.walk(target):
+    for root, dirs, files in os.walk(target, followlinks=follow_symlinks):
+        if (time.time() - start_time) > MAX_SCAN_TIME_SEC:
+            truncated = True
+            break
+
         dirs[:] = [d for d in dirs if not d.startswith(".")]
         for f in files:
             if f.startswith("."):
@@ -297,11 +420,10 @@ def search_in_files(
                 continue
 
             full_path = Path(root) / f
-            # Skip massive files or binary files
-            if full_path.stat().st_size > 2_500_000:
-                continue
-
+            # Skip massive files (>2.5MB) or binary files
             try:
+                if full_path.stat().st_size > 2_500_000 or backup_service.is_binary_file(full_path):
+                    continue
                 content = full_path.read_text(encoding="utf-8", errors="ignore")
             except Exception:
                 continue
@@ -329,13 +451,14 @@ def search_in_files(
         "workspace": str(target),
         "query": query,
         "match_count": match_count,
+        "truncated": truncated,
         "matches": results
     }
 
 
 def inspect_file(file_path: str) -> Dict[str, Any]:
     """
-    Retrieves deep metadata and integrity information for a user file.
+    Retrieves deep metadata, binary detection, and integrity information for a user file.
     """
     target = workspace_service.validate_path_access(file_path)
     if not target.exists():
@@ -343,17 +466,16 @@ def inspect_file(file_path: str) -> Dict[str, Any]:
 
     stat = target.stat()
     is_dir = target.is_dir()
-    
+    is_binary = backup_service.is_binary_file(target) if not is_dir else False
     sha256 = backup_service.compute_file_sha256(target) if not is_dir else None
     line_count = 0
-    is_binary = False
 
-    if not is_dir:
+    if not is_dir and not is_binary:
         try:
-            with open(target, "r", encoding="utf-8") as f:
+            with open(target, "r", encoding="utf-8", errors="replace") as f:
                 line_count = sum(1 for _ in f)
         except Exception:
-            is_binary = True
+            pass
 
     backups = backup_service.list_backups(str(target)) if not is_dir else []
 
@@ -372,6 +494,162 @@ def inspect_file(file_path: str) -> Dict[str, Any]:
     }
 
 
+# ==============================================================================
+# REAL UNIFIED-DIFF PATCH ENGINE
+# ==============================================================================
+
+class _DiffHunk:
+    def __init__(self, orig_start: int, orig_count: int, new_start: int, new_count: int):
+        self.orig_start = orig_start
+        self.orig_count = orig_count
+        self.new_start = new_start
+        self.new_count = new_count
+        self.lines: List[str] = []
+
+
+def parse_and_apply_unified_diff(original_text: str, patch_diff: str) -> Tuple[str, int]:
+    """
+    Applies a standard unified diff to original_text with strict hunk verification:
+    1. Preserves ALL untouched lines before, between, and after hunks.
+    2. Preserves line endings (CRLF vs LF) and final trailing newline.
+    3. Rejects malformed, fuzzy, or ambiguous hunks.
+    4. Rejects overlapping or out-of-order hunks.
+    5. Returns (new_text, applied_line_changes_count).
+    """
+    if not patch_diff or not patch_diff.strip():
+        return original_text, 0
+
+    # Detect original newline convention and final newline presence
+    crlf = "\r\n" in original_text
+    newline = "\r\n" if crlf else "\n"
+    has_trailing_newline = original_text.endswith(("\n", "\r\n"))
+
+    orig_lines = original_text.splitlines()
+
+    # Parse hunks
+    hunk_header_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
+    patch_raw_lines = patch_diff.splitlines()
+
+    hunks: List[_DiffHunk] = []
+    current_hunk: Optional[_DiffHunk] = None
+    seen_hunk = False
+
+    for pline in patch_raw_lines:
+        if pline.startswith("---") or pline.startswith("+++"):
+            continue
+        m = hunk_header_re.match(pline)
+        if m:
+            seen_hunk = True
+            ostart = int(m.group(1))
+            ocount = int(m.group(2)) if m.group(2) is not None else 1
+            nstart = int(m.group(3))
+            ncount = int(m.group(4)) if m.group(4) is not None else 1
+            current_hunk = _DiffHunk(ostart, ocount, nstart, ncount)
+            hunks.append(current_hunk)
+            continue
+
+        if current_hunk is not None:
+            if pline.startswith(("+", "-", " ", "\\")):
+                current_hunk.lines.append(pline)
+            elif pline.strip() == "":
+                # Treat empty line as context line with empty content
+                current_hunk.lines.append(" ")
+
+    if not seen_hunk:
+        raise PatchApplicationError("Malformed patch: No unified diff hunk headers ('@@ -x,y +a,b @@') found.")
+
+    if not hunks:
+        raise PatchApplicationError("Malformed patch: No valid hunks extracted.")
+
+    # Sort hunks by original start line and verify no overlap
+    hunks.sort(key=lambda h: h.orig_start)
+    for i in range(len(hunks) - 1):
+        h1 = hunks[i]
+        h2 = hunks[i + 1]
+        h1_end = h1.orig_start + max(0, h1.orig_count - 1)
+        if h2.orig_start <= h1_end and h1.orig_count > 0:
+            raise PatchApplicationError(
+                f"Overlapping or conflicting diff hunks detected between hunk at line {h1.orig_start} and line {h2.orig_start}."
+            )
+
+    output_lines: List[str] = []
+    orig_idx = 0
+    total_line_changes = 0
+
+    for hunk_idx, hunk in enumerate(hunks, start=1):
+        # 1-indexed to 0-indexed offset in original lines
+        target_idx = max(0, hunk.orig_start - 1)
+
+        if target_idx < orig_idx:
+            raise PatchApplicationError(
+                f"Hunk #{hunk_idx} start line {hunk.orig_start} is before current file cursor ({orig_idx + 1})."
+            )
+
+        if target_idx > len(orig_lines):
+            raise PatchApplicationError(
+                f"Hunk #{hunk_idx} specifies line {hunk.orig_start}, which exceeds original file line count ({len(orig_lines)})."
+            )
+
+        # PRESERVE all untouched lines before this hunk!
+        output_lines.extend(orig_lines[orig_idx:target_idx])
+        orig_idx = target_idx
+
+        # Process lines inside this hunk
+        for hl in hunk.lines:
+            indicator = hl[0]
+            line_val = hl[1:]
+
+            if indicator == " ":
+                # Context line: must match original file
+                if orig_idx >= len(orig_lines):
+                    raise PatchApplicationError(
+                        f"Hunk #{hunk_idx} context line extends beyond end of original file."
+                    )
+                if orig_lines[orig_idx] != line_val:
+                    raise PatchApplicationError(
+                        f"Hunk #{hunk_idx} context mismatch at line {orig_idx + 1}.\n"
+                        f"Expected: '{line_val}'\n"
+                        f"Actual:   '{orig_lines[orig_idx]}'"
+                    )
+                output_lines.append(orig_lines[orig_idx])
+                orig_idx += 1
+
+            elif indicator == "-":
+                # Deletion line: must match original line
+                if orig_idx >= len(orig_lines):
+                    raise PatchApplicationError(
+                        f"Hunk #{hunk_idx} deletion line extends beyond end of original file."
+                    )
+                if orig_lines[orig_idx] != line_val:
+                    raise PatchApplicationError(
+                        f"Hunk #{hunk_idx} deletion line mismatch at line {orig_idx + 1}.\n"
+                        f"Expected: '{line_val}'\n"
+                        f"Actual:   '{orig_lines[orig_idx]}'"
+                    )
+                orig_idx += 1
+                total_line_changes += 1
+
+            elif indicator == "+":
+                # Addition line
+                output_lines.append(line_val)
+                total_line_changes += 1
+
+            elif indicator == "\\":
+                # '\ No newline at end of file' indicator
+                pass
+
+    # PRESERVE all untouched lines after the final hunk!
+    if orig_idx < len(orig_lines):
+        output_lines.extend(orig_lines[orig_idx:])
+
+    # Reconstruct text with original newline format
+    new_text = newline.join(output_lines)
+    if has_trailing_newline and not new_text.endswith(newline):
+        new_text += newline
+
+    return new_text, total_line_changes
+
+
 def apply_patch(
     file_path: str,
     patch_diff: str,
@@ -379,65 +657,47 @@ def apply_patch(
 ) -> Dict[str, Any]:
     """
     Applies a standard unified diff patch to an existing user file.
-    Creates an automatic backup before modifying.
+    - Preserves all untouched lines outside the hunks.
+    - Preserves line endings, encoding, and trailing newlines.
+    - Rejects malformed, fuzzy, or ambiguous hunks.
+    - Takes an automatic version backup before writing.
+    - Leaves the file completely untouched if patch fails.
     """
+    clean_task_id = workspace_service.validate_task_id(task_id) if task_id != "ai_patch" else "ai_patch"
     target = workspace_service.validate_path_access(file_path)
+
     if not target.exists():
         raise FileNotFoundError(f"File not found for patching: {target}")
+    if not target.is_file():
+        raise IsADirectoryError(f"Target is a directory: {target}")
 
-    original_text = target.read_text(encoding="utf-8", errors="replace")
-    original_lines = original_text.splitlines(keepends=True)
+    try:
+        original_text = target.read_text(encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        raise ValueError(f"Cannot apply text patch to binary or non-UTF-8 file: {target}")
 
-    # Parse unified diff patch chunks
-    patched_lines = list(original_lines)
-    patch_lines = patch_diff.strip().splitlines()
+    new_content, applied_changes = parse_and_apply_unified_diff(original_text, patch_diff)
 
-    # Apply line-by-line substitutions or unified diff hunks
-    hunk_pattern = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-    current_hunk = None
-    applied_changes = 0
-
-    new_lines = []
-    orig_idx = 0
-
-    for pl in patch_lines:
-        if pl.startswith("---") or pl.startswith("+++"):
-            continue
-        m = hunk_pattern.match(pl)
-        if m:
-            continue
-        if pl.startswith("+"):
-            new_lines.append(pl[1:] + "\n")
-            applied_changes += 1
-        elif pl.startswith("-"):
-            orig_idx += 1
-            applied_changes += 1
-        elif pl.startswith(" "):
-            new_lines.append(pl[1:] + "\n")
-            orig_idx += 1
-
-    if new_lines:
-        new_content = "".join(new_lines)
-    else:
-        # Fallback if patch was raw replacement
-        new_content = patch_diff
-
-    # Write modified content with auto-backup
+    # Write modified content with automatic backup
     res = edit_file(
         str(target),
         new_content,
-        task_id=task_id,
+        task_id=clean_task_id,
         description=f"Unified patch applied ({applied_changes} line changes)"
     )
     res["patch_applied"] = True
+    res["applied_changes_count"] = applied_changes
     return res
 
 
 def compare_file_versions(file_path: str, comparison_content: str) -> Dict[str, Any]:
-    """Generates a side-by-side / unified diff between current file and proposed content."""
+    """Generates a unified diff comparing current file content against proposed content."""
     target = workspace_service.validate_path_access(file_path)
     if target.exists():
-        current_text = target.read_text(encoding="utf-8", errors="replace")
+        try:
+            current_text = target.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            current_text = "<binary file>"
     else:
         current_text = ""
 
@@ -457,16 +717,22 @@ def compare_file_versions(file_path: str, comparison_content: str) -> Dict[str, 
 
 
 def inspect_workspace(workspace_path: str) -> Dict[str, Any]:
-    """Generates a high-level architectural overview of a project workspace."""
+    """Generates an architectural overview of an approved workspace."""
     target = workspace_service.validate_path_access(workspace_path)
-    
+
     total_files = 0
     total_dirs = 0
     total_bytes = 0
     file_extensions: Dict[str, int] = {}
     key_files = []
+    start_time = time.time()
+    truncated = False
 
-    for root, dirs, files in os.walk(target):
+    for root, dirs, files in os.walk(target, followlinks=False):
+        if (time.time() - start_time) > MAX_SCAN_TIME_SEC or total_files >= MAX_SCAN_FILES:
+            truncated = True
+            break
+
         dirs[:] = [d for d in dirs if not d.startswith(".")]
         total_dirs += len(dirs)
         for f in files:
@@ -482,7 +748,10 @@ def inspect_workspace(workspace_path: str) -> Dict[str, Any]:
             ext = fp.suffix.lower() or "<no_ext>"
             file_extensions[ext] = file_extensions.get(ext, 0) + 1
             if f in ("main.py", "package.json", "Cargo.toml", "index.html", "requirements.txt", "README.md"):
-                key_files.append(str(fp.relative_to(target)))
+                try:
+                    key_files.append(str(fp.relative_to(target)))
+                except Exception:
+                    pass
 
     return {
         "status": "success",
@@ -492,7 +761,8 @@ def inspect_workspace(workspace_path: str) -> Dict[str, Any]:
         "total_directories": total_dirs,
         "total_size_bytes": total_bytes,
         "top_file_types": sorted(file_extensions.items(), key=lambda x: x[1], reverse=True)[:8],
-        "key_manifest_files": key_files
+        "key_manifest_files": key_files,
+        "truncated": truncated
     }
 
 
@@ -505,6 +775,7 @@ def delete_file(*args, **kwargs):
     raise NoDeletePolicyViolation(
         "STROKE SECURITY VIOLATION: Deletion of existing user files is strictly prohibited by Stroke's Absolute No-Delete Policy."
     )
+
 
 def remove_directory(*args, **kwargs):
     """Explicitly prohibited by Stroke Absolute No-Delete Policy."""

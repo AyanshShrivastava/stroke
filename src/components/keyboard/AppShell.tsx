@@ -1,12 +1,29 @@
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Plug, LogOut, Menu, X } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import {
+  Plus,
+  Trash2,
+  SlidersHorizontal,
+  LogOut,
+  Menu,
+  X,
+  MessageSquare,
+  HardDrive,
+} from "lucide-react";
+import { auth, signOut as firebaseSignOut } from "@/lib/firebase";
 import { KeyLogo } from "./KeyLogo";
-import { createChat, deleteChat, loadChats, localBytes, storageStatus, formatBytes, STORAGE_CAP_BYTES, wipeCache, type Chat } from "@/lib/keyboard-store";
+import { ThemeToggle } from "./ThemeToggle";
+import { Progress } from "@/components/ui/progress";
+import {
+  createChat,
+  deleteChat,
+  loadChats,
+  getStorageDiagnostics,
+  wipeCache,
+  type Chat,
+} from "@/lib/keyboard-store";
+import type { StorageDiagnostics } from "@/lib/idb-storage";
 
 export function useChats() {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -21,22 +38,45 @@ export function useChats() {
 
 export function StorageMeter() {
   const chats = useChats();
-  const [bytes, setBytes] = useState(0);
-  useEffect(() => setBytes(localBytes()), [chats]);
-  const s = storageStatus(bytes);
+  const [diag, setDiag] = useState<StorageDiagnostics | null>(null);
+
+  useEffect(() => {
+    getStorageDiagnostics().then((d) => setDiag(d));
+  }, [chats]);
+
   return (
-    <div className="space-y-2 rounded-lg border border-sidebar-border p-3">
-      <div className="flex justify-between font-mono text-xs text-muted-foreground">
-        <span>Local storage</span>
-        <span>{formatBytes(bytes)} / {formatBytes(STORAGE_CAP_BYTES)}</span>
+    <div className="space-y-1.5 rounded-lg border border-sidebar-border/60 bg-sidebar-accent/30 p-2.5">
+      <div className="flex items-center justify-between font-mono text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <HardDrive className="h-3 w-3" />
+          <span>Local Storage</span>
+        </span>
+        <span>
+          {diag ? diag.usageFormatted : "Estimating…"}
+          {diag && diag.quotaReported ? ` / ${diag.quotaFormatted}` : ""}
+        </span>
       </div>
-      <Progress value={Math.max(0.5, s.ratio * 100)} className="h-1.5" />
-      {s.warn && <p className="text-xs text-destructive">Near the 1 GB cap — offload history to Cloud in Integrations.</p>}
+      <Progress
+        value={diag ? Math.max(1, diag.usagePercent) : 1}
+        className="h-1"
+      />
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+        <span>Engine: {diag?.engine || "IndexedDB"}</span>
+        <Link to="/integrations" className="hover:text-foreground underline">
+          Export / Clear
+        </Link>
+      </div>
     </div>
   );
 }
 
-export function AppShell({ activeId, children }: { activeId?: string; children: ReactNode }) {
+export function AppShell({
+  activeId,
+  children,
+}: {
+  activeId?: string;
+  children: ReactNode;
+}) {
   const chats = useChats();
   const navigate = useNavigate();
   const router = useRouter();
@@ -44,7 +84,6 @@ export function AppShell({ activeId, children }: { activeId?: string; children: 
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    // Termination wipe: remove the cache indicator when the app closes.
     const onClose = () => wipeCache();
     window.addEventListener("pagehide", onClose);
     return () => window.removeEventListener("pagehide", onClose);
@@ -54,46 +93,169 @@ export function AppShell({ activeId, children }: { activeId?: string; children: 
     await qc.cancelQueries();
     qc.clear();
     wipeCache();
-    await supabase.auth.signOut();
+    await firebaseSignOut(auth);
     navigate({ to: "/auth", replace: true });
     router.invalidate();
   }
 
+  function handleNewChat() {
+    const c = createChat();
+    setOpen(false);
+    navigate({ to: "/chat/$chatId", params: { chatId: c.id } });
+  }
+
   const sidebar = (
-    <aside className="flex h-full w-72 flex-col gap-3 border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground">
-      <div className="flex items-center gap-2 px-1 py-2">
-        <KeyLogo /><span className="font-bold">Stroke</span>
-        <button className="ml-auto md:hidden" onClick={() => setOpen(false)} aria-label="Close menu"><X className="h-4 w-4" /></button>
+    <aside className="flex h-full w-64 flex-col gap-2.5 border-r border-sidebar-border bg-sidebar p-3 text-sidebar-foreground select-none">
+      {/* Brand Header */}
+      <div className="flex items-center justify-between px-1 py-1">
+        <div className="flex items-center gap-2">
+          <KeyLogo size="sm" />
+          <span className="font-semibold text-sm tracking-tight text-foreground">Stroke</span>
+        </div>
+        <button
+          className="rounded p-1 text-muted-foreground hover:text-foreground md:hidden"
+          onClick={() => setOpen(false)}
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
-      <Button className="justify-start font-mono" onClick={() => { const c = createChat(); setOpen(false); navigate({ to: "/chat/$chatId", params: { chatId: c.id } }); }}>
-        <Plus className="h-4 w-4" /> New chat
-      </Button>
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-        {chats.map((c) => (
-          <div key={c.id} className={`group flex items-center rounded-md ${c.id === activeId ? "bg-sidebar-accent" : "hover:bg-sidebar-accent"}`}>
-            <Link to="/chat/$chatId" params={{ chatId: c.id }} onClick={() => setOpen(false)} className="flex-1 truncate px-3 py-2 text-sm">{c.title}</Link>
-            <button aria-label="Delete chat" className="px-2 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
-              onClick={() => { deleteChat(c.id); if (c.id === activeId) navigate({ to: "/chat" }); }}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+
+      {/* New Chat Button */}
+      <button
+        type="button"
+        onClick={handleNewChat}
+        className="flex w-full items-center justify-between rounded-lg border border-sidebar-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-xs hover:bg-sidebar-accent transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <Plus className="h-3.5 w-3.5 text-primary" />
+          <span>New Chat</span>
+        </span>
+        <kbd className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+          ⌘K
+        </kbd>
+      </button>
+
+      {/* Conversations List */}
+      <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
+        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Recent Chats
+        </div>
+        {chats.length === 0 ? (
+          <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+            No chats yet. Start a new one!
           </div>
-        ))}
+        ) : (
+          chats.map((c) => {
+            const isActive = c.id === activeId;
+            return (
+              <div
+                key={c.id}
+                className={`group flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors ${
+                  isActive
+                    ? "bg-sidebar-accent text-foreground font-medium"
+                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+                }`}
+              >
+                <Link
+                  to="/chat/$chatId"
+                  params={{ chatId: c.id }}
+                  onClick={() => setOpen(false)}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-xs"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                  <span className="truncate">{c.title || "Untitled Chat"}</span>
+                </Link>
+                <button
+                  type="button"
+                  aria-label="Delete chat"
+                  className="ml-1 opacity-0 group-hover:opacity-100 rounded p-1 hover:text-destructive transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteChat(c.id);
+                    if (c.id === activeId) navigate({ to: "/chat" });
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })
+        )}
       </div>
+
+      {/* Storage Status */}
       <StorageMeter />
-      <Link to="/integrations" onClick={() => setOpen(false)} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-sidebar-accent"><Plug className="h-4 w-4" /> Integrations</Link>
-      <button onClick={signOut} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent"><LogOut className="h-4 w-4" /> Sign out</button>
+
+      {/* Bottom Action Bar */}
+      <div className="space-y-1 pt-1 border-t border-sidebar-border/60">
+        <div className="flex items-center justify-between">
+          <ThemeToggle />
+          <Link
+            to="/integrations"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+            title="Settings & Integrations"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <span>Settings</span>
+          </Link>
+        </div>
+
+        <button
+          type="button"
+          onClick={signOut}
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-destructive transition-colors"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          <span>Sign Out</span>
+        </button>
+      </div>
     </aside>
   );
 
   return (
-    <div className="flex h-screen bg-background">
-      <div className="hidden md:block">{sidebar}</div>
-      {open && <div className="fixed inset-0 z-40 flex md:hidden">{sidebar}<div className="flex-1 bg-background/70" onClick={() => setOpen(false)} /></div>}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-border p-3 md:hidden">
-          <button onClick={() => setOpen(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
-          <span className="font-bold">Stroke</span>
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block h-full shrink-0">{sidebar}</div>
+
+      {/* Mobile Sidebar Overlay */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div className="relative z-50 h-full">{sidebar}</div>
+          <div
+            className="flex-1 bg-background/80 backdrop-blur-xs"
+            onClick={() => setOpen(false)}
+          />
         </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
+        {/* Mobile Top Header */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-2.5 md:hidden">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              aria-label="Open navigation menu"
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <KeyLogo size="sm" />
+            <span className="font-semibold text-sm">Stroke</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="rounded p-1 text-primary hover:bg-muted"
+            title="New Chat"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+
         {children}
       </div>
     </div>

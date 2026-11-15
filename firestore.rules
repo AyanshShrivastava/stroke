@@ -1,0 +1,366 @@
+rules_version = '2';
+
+// ===============================================================
+// Stroke V1 — Cloud Firestore Security Rules
+// ===============================================================
+//
+// Assumed Data Model:
+//
+// Root Collection: users
+// Document ID: {userId} (Firebase Auth UID)
+// Fields:
+//   - uid: string (required, immutable) - Must equal request.auth.uid
+//   - email: string (required) - Verified email of owner
+//   - display_name: string (optional)
+//   - database_fed: bool (optional) - True when 5-cycle ingestion completes
+//   - github_connected: bool (optional)
+//   - github_username: string (optional)
+//   - memory_bytes_used_estimate: int (optional, non-negative)
+//   - memory_count: int (optional, non-negative)
+//   - quota_bytes: int (optional, positive)
+//   - migrated_from_email: string (optional)
+//   - migrated_at: timestamp|string (optional)
+//   - created_at: timestamp|string (required on create, immutable)
+//   - updated_at: timestamp|string (required)
+//
+// Subcollection: users/{userId}/chats
+// Document ID: {chatId}
+// Fields:
+//   - session_id: string (required, immutable)
+//   - uid: string (required, immutable) - Must equal userId
+//   - title: string (required, 1-200 chars)
+//   - messages: list (required, max 200 items)
+//   - messages_count: int (required, non-negative)
+//   - is_temporary: bool (optional)
+//   - created_at: timestamp|string (optional)
+//   - updated_at: timestamp|string (required)
+//
+// Subcollection: users/{userId}/memory
+// Document ID: {memoryId}
+// Fields:
+//   - memory_id: string (required, immutable)
+//   - uid: string (required, immutable) - Must equal userId
+//   - summary: string (required, 1-1000 chars)
+//   - prompt_excerpt: string (optional, max 500 chars)
+//   - reply_excerpt: string (optional, max 1000 chars)
+//   - tool_used: string (optional, max 100 chars)
+//   - god_tier_vfx_learned: bool (optional)
+//   - vfx_model_name: string (optional)
+//   - byte_size_estimate: int (required, positive)
+//   - created_at: timestamp|string (required)
+//
+// Subcollection: users/{userId}/records
+// Document ID: {recordId} (e.g. STRK-BAT-001 through STRK-BAT-005)
+// Fields:
+//   - record_id: string (required, matches ^STRK-BAT-\\d{3}$)
+//   - uid: string (required, immutable) - Must equal userId
+//   - cycle: int (required, 1 <= cycle <= 5)
+//   - stage_name: string (required)
+//   - vfx_name: string (required)
+//   - element: string (optional)
+//   - metric_load: number (required, 80.0 <= metric_load <= 100.0)
+//   - status: string (required, in ['optimized', 'active', 'pending'])
+//   - integrity_hash: string (required, size 16 hex chars)
+//   - primary_asset: string (optional)
+//   - color_hex: string (optional)
+//   - particle_count: int (optional)
+//   - beam_count: int (optional)
+//   - models_absorbed: list (optional)
+//   - textures_used: list (optional)
+//   - focus_attributes: list (optional)
+//   - raw_snippet: string (optional)
+//   - ai_synthesis: string (optional)
+//   - chat_learnings_absorbed: int (optional)
+//   - source: string (optional)
+//   - created_at: timestamp|string (required)
+//
+// Subcollection: users/{userId}/feed_state
+// Document ID: current
+// Fields:
+//   - uid: string (required, immutable) - Must equal userId
+//   - active_cycle: int (required, 0 <= active_cycle <= 5)
+//   - completed_cycles: list (required, elements in 1..5)
+//   - is_fully_fed: bool (required)
+//   - last_synthesis: string (optional)
+//   - last_updated: timestamp|string (required)
+//
+// Subcollection: users/{userId}/projects
+// Document ID: {projectId}
+// Fields:
+//   - project_id: string (required, immutable)
+//   - uid: string (required, immutable) - Must equal userId
+//   - name: string (required, 1-100 chars)
+//   - description: string (optional, max 500 chars)
+//   - workspace_path: string (optional, max 500 chars)
+//   - created_at: timestamp|string (required)
+//   - updated_at: timestamp|string (required)
+//
+// Subcollection: users/{userId}/settings
+// Document ID: config
+// Fields:
+//   - uid: string (required, immutable) - Must equal userId
+//   - theme: string (optional, in ['dark', 'light', 'cyber'])
+//   - reasoning_level: string (optional)
+//   - temperature: number (optional)
+//   - selected_model: string (optional)
+//   - updated_at: timestamp|string (required)
+//
+// Subcollection: users/{userId}/integrations
+// Document ID: {integrationId}
+// Fields:
+//   - uid: string (required, immutable) - Must equal userId
+//   - connected: bool (required)
+//   - github_username: string (optional)
+//   - encrypted_token: string (optional)
+//   - updated_at: timestamp|string (required)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function uidUnchanged(userId) {
+      return !('uid' in request.resource.data) || request.resource.data.uid == userId;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             request.resource.data[field] == null ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid == userId &&
+             isValidEmail(data.email) &&
+             (!('database_fed' in data) || data.database_fed is bool) &&
+             (!('memory_bytes_used_estimate' in data) || (data.memory_bytes_used_estimate is int && data.memory_bytes_used_estimate >= 0)) &&
+             (!('memory_count' in data) || (data.memory_count is int && data.memory_count >= 0)) &&
+             (!('quota_bytes' in data) || (data.quota_bytes is int && data.quota_bytes > 0));
+    }
+
+    function isValidChat(data, userId) {
+      return data.keys().hasAll(['session_id', 'uid', 'title', 'messages']) &&
+             data.uid == userId &&
+             data.session_id is string && data.session_id.size() >= 1 && data.session_id.size() <= 100 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.messages is list && data.messages.size() <= 200;
+    }
+
+    function isValidMemory(data, userId) {
+      return data.keys().hasAll(['memory_id', 'uid', 'summary', 'byte_size_estimate']) &&
+             data.uid == userId &&
+             data.memory_id is string && data.memory_id.size() >= 1 && data.memory_id.size() <= 100 &&
+             data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 1000 &&
+             data.byte_size_estimate is int && data.byte_size_estimate > 0;
+    }
+
+    function isValidFeedRecord(data, userId) {
+      return data.keys().hasAll(['record_id', 'uid', 'cycle', 'stage_name', 'vfx_name', 'metric_load', 'status', 'integrity_hash']) &&
+             data.uid == userId &&
+             data.record_id is string && data.record_id.matches("^STRK-BAT-\\d{3}$") &&
+             data.cycle is int && data.cycle >= 1 && data.cycle <= 5 &&
+             data.metric_load is number && data.metric_load >= 80.0 && data.metric_load <= 100.0 &&
+             data.status in ['optimized', 'active', 'pending'] &&
+             data.integrity_hash is string && data.integrity_hash.size() == 16;
+    }
+
+    function isValidFeedState(data, userId) {
+      return data.keys().hasAll(['uid', 'active_cycle', 'completed_cycles', 'is_fully_fed']) &&
+             data.uid == userId &&
+             data.active_cycle is int && data.active_cycle >= 0 && data.active_cycle <= 5 &&
+             data.completed_cycles is list && data.completed_cycles.size() <= 5 &&
+             data.is_fully_fed is bool;
+    }
+
+    function isValidProject(data, userId) {
+      return data.keys().hasAll(['project_id', 'uid', 'name']) &&
+             data.uid == userId &&
+             data.project_id is string && data.project_id.size() >= 1 && data.project_id.size() <= 100 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100;
+    }
+
+    function isValidSettings(data, userId) {
+      return data.keys().hasAll(['uid']) &&
+             data.uid == userId &&
+             (!('theme' in data) || data.theme in ['dark', 'light', 'cyber']);
+    }
+
+    function isValidIntegration(data, userId) {
+      return data.keys().hasAll(['uid', 'connected']) &&
+             data.uid == userId &&
+             data.connected is bool;
+    }
+
+    // ===============================================================
+    // Root Collection: users (UID-Only Ownership)
+    // ===============================================================
+
+    match /users/{userId} {
+      // Owner only: Read user profile
+      allow read: if isOwner(userId);
+
+      // Owner only: Create user profile with required fields & matched UID
+      allow create: if isOwner(userId) &&
+                       isValidUser(request.resource.data, userId) &&
+                       uidUnchanged(userId);
+
+      // Owner only: Update user profile preserving immutable fields
+      allow update: if isOwner(userId) &&
+                       isValidUser(request.resource.data, userId) &&
+                       uidNotModified() &&
+                       areImmutableFieldsUnchanged(['uid', 'created_at']);
+
+      // Owner only: Delete user document
+      allow delete: if isOwner(userId);
+
+      // -------------------------------------------------------------
+      // Subcollection: chats
+      // -------------------------------------------------------------
+      match /chats/{chatId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidChat(request.resource.data, userId) &&
+                         uidUnchanged(userId);
+        allow update: if isOwner(userId) &&
+                         isValidChat(request.resource.data, userId) &&
+                         uidNotModified() &&
+                         areImmutableFieldsUnchanged(['session_id', 'uid']);
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------------
+      // Subcollection: memory
+      // -------------------------------------------------------------
+      match /memory/{memoryId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidMemory(request.resource.data, userId) &&
+                         uidUnchanged(userId);
+        allow update: if isOwner(userId) &&
+                         isValidMemory(request.resource.data, userId) &&
+                         uidNotModified() &&
+                         areImmutableFieldsUnchanged(['memory_id', 'uid', 'created_at']);
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------------
+      // Subcollection: records (5-Cycle Ingestion Records)
+      // -------------------------------------------------------------
+      match /records/{recordId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidFeedRecord(request.resource.data, userId) &&
+                         uidUnchanged(userId);
+        allow update: if isOwner(userId) &&
+                         isValidFeedRecord(request.resource.data, userId) &&
+                         uidNotModified() &&
+                         areImmutableFieldsUnchanged(['record_id', 'uid', 'cycle']);
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------------
+      // Subcollection: feed_state
+      // -------------------------------------------------------------
+      match /feed_state/{stateId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidFeedState(request.resource.data, userId) &&
+                         uidUnchanged(userId);
+        allow update: if isOwner(userId) &&
+                         isValidFeedState(request.resource.data, userId) &&
+                         uidNotModified() &&
+                         areImmutableFieldsUnchanged(['uid']);
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------------
+      // Subcollection: projects
+      // -------------------------------------------------------------
+      match /projects/{projectId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidProject(request.resource.data, userId) &&
+                         uidUnchanged(userId);
+        allow update: if isOwner(userId) &&
+                         isValidProject(request.resource.data, userId) &&
+                         uidNotModified() &&
+                         areImmutableFieldsUnchanged(['project_id', 'uid']);
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------------
+      // Subcollection: settings
+      // -------------------------------------------------------------
+      match /settings/{settingId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidSettings(request.resource.data, userId) &&
+                         uidUnchanged(userId);
+        allow update: if isOwner(userId) &&
+                         isValidSettings(request.resource.data, userId) &&
+                         uidNotModified() &&
+                         areImmutableFieldsUnchanged(['uid']);
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------------
+      // Subcollection: integrations
+      // -------------------------------------------------------------
+      match /integrations/{integrationId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidIntegration(request.resource.data, userId) &&
+                         uidUnchanged(userId);
+        allow update: if isOwner(userId) &&
+                         isValidIntegration(request.resource.data, userId) &&
+                         uidNotModified() &&
+                         areImmutableFieldsUnchanged(['uid']);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // ===============================================================
+    // Deny all other unmatched paths by default
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

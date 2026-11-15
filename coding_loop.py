@@ -24,10 +24,25 @@ import json
 import time
 from typing import Dict, List, Any, Optional, Tuple
 
+import paths_service
+
 try:
     from luaparser import ast as lua_ast
 except Exception:
     lua_ast = None
+
+try:
+    from luau_analyzer import (
+        AuthenticLuauValidator,
+        mask_comments_and_strings,
+        find_system_luau_tool,
+        run_system_luau_compiler
+    )
+except Exception:
+    AuthenticLuauValidator = None
+    mask_comments_and_strings = None
+    find_system_luau_tool = lambda: None
+    run_system_luau_compiler = lambda p, c: (1, "", "luau_analyzer not available")
 
 try:
     import terminal_service
@@ -100,339 +115,23 @@ class LuauSyntaxValidator:
     @staticmethod
     def strip_comments_and_strings(code: str) -> Tuple[str, List[Dict[str, Any]]]:
         """
-        Strips comments and string literals to simplify AST keyword parsing
-        while preserving line numbers and collecting string literals for inspection.
+        Strips comments and string literals using authentic Luau lexer
+        while preserving exact line and column numbers.
         """
-        literals = []
-        cleaned_lines = []
-        in_multiline_comment = False
-        in_multiline_string = False
-
-        for line_idx, line in enumerate(code.splitlines(), start=1):
-            cleaned = ""
-            i = 0
-            n = len(line)
-
-            while i < n:
-                if in_multiline_comment:
-                    if line[i:i+2] == "]]":
-                        in_multiline_comment = False
-                        i += 2
-                    else:
-                        i += 1
-                    continue
-
-                if in_multiline_string:
-                    if line[i:i+2] == "]]":
-                        in_multiline_string = False
-                        i += 2
-                    else:
-                        i += 1
-                    continue
-
-                # Check multiline comment start --[[
-                if line[i:i+4] == "--[[":
-                    in_multiline_comment = True
-                    i += 4
-                    continue
-
-                # Check single-line comment --
-                if line[i:i+2] == "--":
-                    # Comment rest of the line
-                    break
-
-                # Check multiline string [[
-                if line[i:i+2] == "[[":
-                    in_multiline_string = True
-                    i += 2
-                    continue
-
-                # Check string quotes ' or "
-                if line[i] in ('"', "'"):
-                    quote_char = line[i]
-                    start_pos = i
-                    i += 1
-                    str_content = ""
-                    closed = False
-                    while i < n:
-                        if line[i] == "\\" and i + 1 < n:
-                            str_content += line[i:i+2]
-                            i += 2
-                            continue
-                        if line[i] == quote_char:
-                            closed = True
-                            i += 1
-                            break
-                        str_content += line[i]
-                        i += 1
-                    literals.append({
-                        "line": line_idx,
-                        "quote": quote_char,
-                        "closed": closed,
-                        "content": str_content
-                    })
-                    cleaned += f'"{str_content}"' if closed else f'"{str_content}'
-                    continue
-
-                cleaned += line[i]
-                i += 1
-
-            cleaned_lines.append(cleaned)
-
-        return "\n".join(cleaned_lines), literals
+        if mask_comments_and_strings:
+            masked, _ = mask_comments_and_strings(code)
+            return masked, []
+        return code, []
 
     @classmethod
     def check_syntax(cls, code: str) -> List[Dict[str, Any]]:
         """
-        Runs comprehensive syntax validation on Luau code.
-        Returns a list of diagnosed issues: { "type": "error"|"warning", "line": int, "message": str, "suggestion": str }
+        Validates syntax, delimiters, blocks, illegal operators, and authentic Roblox APIs.
+        Never falsely flags strings, comments, or long-bracket content.
         """
-        issues = []
-        raw_lines = code.splitlines()
-
-        # 1. Delimiter balance check: (), [], {}
-        stack = []
-        matching_delims = {')': '(', ']': '[', '}': '{'}
-        
-        for line_idx, line in enumerate(raw_lines, start=1):
-            # Check for illegal operators common from C/JS transitions
-            # Check for != (Lua uses ~=)
-            # Make sure it's not inside comments or quotes
-            if "!=" in line:
-                issues.append({
-                    "type": "error",
-                    "line": line_idx,
-                    "message": "Illegal operator '!=' detected. Luau uses '~=' for inequality.",
-                    "suggestion": "Replace '!=' with '~='."
-                })
-            if "&&" in line:
-                issues.append({
-                    "type": "error",
-                    "line": line_idx,
-                    "message": "Illegal operator '&&' detected. Luau uses keyword 'and'.",
-                    "suggestion": "Replace '&&' with 'and'."
-                })
-            if "||" in line:
-                issues.append({
-                    "type": "error",
-                    "line": line_idx,
-                    "message": "Illegal operator '||' detected. Luau uses keyword 'or'.",
-                    "suggestion": "Replace '||' with 'or'."
-                })
-
-            # Check for unclosed string quotes on a single line
-            s_quotes = line.count("'") - line.count("\\'")
-            d_quotes = line.count('"') - line.count('\\"')
-            # Simple heuristic when string doesn't continue across lines
-            if s_quotes % 2 != 0 and "[[" not in line and "]]" not in line and "--" not in line:
-                issues.append({
-                    "type": "error",
-                    "line": line_idx,
-                    "message": f"Unclosed single quote on line {line_idx}.",
-                    "suggestion": "Ensure all single quotes (') are properly paired."
-                })
-            if d_quotes % 2 != 0 and "[[" not in line and "]]" not in line and "--" not in line:
-                issues.append({
-                    "type": "error",
-                    "line": line_idx,
-                    "message": f"Unclosed double quote on line {line_idx}.",
-                    "suggestion": 'Ensure all double quotes (") are properly paired.'
-                })
-
-        # 2. Block Keyword matching (function, if, for, while, do -> end; repeat -> until)
-        cleaned_code, _ = cls.strip_comments_and_strings(code)
-        block_stack = []
-        inner_debounce_lines = []
-        outer_debounce_lines = []
-
-        for line_idx, line in enumerate(cleaned_code.splitlines(), start=1):
-            deb_match = re.search(r'\blocal\s+(hitCharacters|hitTargets|debounce|damagedTargets|activeHitboxes|hitDebounce)\s*=\s*\{\}', line, re.IGNORECASE)
-            if deb_match:
-                func_depth = sum(1 for b in block_stack if b["token"] == "function")
-                if func_depth > 0:
-                    inner_debounce_lines.append((line_idx, deb_match.group(1)))
-                else:
-                    outer_debounce_lines.append((line_idx, deb_match.group(1)))
-
-            tokens = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", line)
-            for t_idx, token in enumerate(tokens):
-                if token in ("function", "for", "while", "do"):
-                    # Check if 'do' is part of 'while ... do' or 'for ... do'
-                    # In Lua: 'while expr do' introduces ONE end, not two!
-                    if token == "do":
-                        # If preceded by for/while on same line, it closes the for/while clause
-                        if t_idx > 0 and tokens[t_idx - 1] in ("for", "while"):
-                            continue
-                        if block_stack and block_stack[-1]["token"] in ("for", "while"):
-                            # The 'do' pairs with the active for/while
-                            continue
-                    block_stack.append({"token": token, "line": line_idx})
-                elif token == "if":
-                    block_stack.append({"token": "if", "line": line_idx})
-                elif token == "repeat":
-                    block_stack.append({"token": "repeat", "line": line_idx})
-                elif token == "until":
-                    if block_stack and block_stack[-1]["token"] == "repeat":
-                        block_stack.pop()
-                    else:
-                        issues.append({
-                            "type": "error",
-                            "line": line_idx,
-                            "message": f"Unexpected 'until' without a matching 'repeat' on line {line_idx}.",
-                            "suggestion": "Verify repeat...until loop structure."
-                        })
-                elif token == "end":
-                    if not block_stack:
-                        issues.append({
-                            "type": "error",
-                            "line": line_idx,
-                            "message": f"Unexpected 'end' on line {line_idx} with no corresponding opening block.",
-                            "suggestion": "Remove extra 'end' keyword or verify block closures."
-                        })
-                    else:
-                        popped = block_stack.pop()
-                        # 'repeat' expects 'until', not 'end'
-                        if popped["token"] == "repeat":
-                            issues.append({
-                                "type": "error",
-                                "line": line_idx,
-                                "message": f"Repeat block opened on line {popped['line']} must close with 'until', not 'end'.",
-                                "suggestion": "Replace 'end' with 'until <condition>'."
-                            })
-
-        # If blocks remain open
-        for open_block in block_stack:
-            issues.append({
-                "type": "error",
-                "line": open_block["line"],
-                "message": f"Unclosed block '{open_block['token']}' opened on line {open_block['line']}; missing 'end'.",
-                "suggestion": f"Add 'end' to close the '{open_block['token']}' block."
-            })
-
-        # 3. Modern Luau & Roblox Best Practices (Warnings/Suggestions)
-        for line_idx, line in enumerate(raw_lines, start=1):
-            stripped = line.strip()
-            if stripped.startswith("--"):
-                continue
-
-            # Deprecated wait()
-            if re.search(r"\bwait\s*\(", line) and not re.search(r"\btask\.wait\s*\(", line):
-                issues.append({
-                    "type": "warning",
-                    "line": line_idx,
-                    "message": "Deprecated global 'wait()' call detected. Modern Luau requires 'task.wait()'.",
-                    "suggestion": "Replace 'wait(...)' with 'task.wait(...)' for 60Hz frame synchronization."
-                })
-            # Deprecated spawn()
-            if re.search(r"\bspawn\s*\(", line) and not re.search(r"\btask\.spawn\s*\(", line):
-                issues.append({
-                    "type": "warning",
-                    "line": line_idx,
-                    "message": "Deprecated global 'spawn()' call detected. Modern Luau requires 'task.spawn()'.",
-                    "suggestion": "Replace 'spawn(fn)' with 'task.spawn(fn)' to eliminate the 1-frame resume delay."
-                })
-            # Deprecated delay()
-            if re.search(r"\bdelay\s*\(", line) and not re.search(r"\btask\.delay\s*\(", line):
-                issues.append({
-                    "type": "warning",
-                    "line": line_idx,
-                    "message": "Deprecated global 'delay()' call detected. Modern Luau requires 'task.delay()'.",
-                    "suggestion": "Replace 'delay(t, fn)' with 'task.delay(t, fn)'."
-                })
-            # Deprecated :connect(
-            if re.search(r":connect\s*\(", line):
-                issues.append({
-                    "type": "warning",
-                    "line": line_idx,
-                    "message": "Deprecated event method ':connect()' detected (lowercase 'c').",
-                    "suggestion": "Replace ':connect()' with standard uppercase ':Connect()'."
-                })
-
-        # 4. Non-Existent & Hallucinated Roblox APIs (Errors)
-        for pat, msg_template in FAKE_ROBLOX_API_RULES:
-            for match in re.finditer(pat, code):
-                matched_text = match.group(1) if match.groups() else match.group(0)
-                line_no = code[:match.start()].count("\n") + 1
-                msg = msg_template.format(match=matched_text)
-                issues.append({
-                    "type": "error",
-                    "line": line_no,
-                    "message": msg,
-                    "suggestion": "Replace with authentic Roblox Luau APIs."
-                })
-
-        # 5. Invalid DataModel Class Names in Instance.new(...)
-        for inst_match in re.finditer(r'Instance\.new\(["\']([a-zA-Z0-9_]+)["\']\)', code):
-            class_name = inst_match.group(1)
-            line_no = code[:inst_match.start()].count("\n") + 1
-            if class_name not in VALID_ROBLOX_INSTANCES:
-                issues.append({
-                    "type": "error",
-                    "line": line_no,
-                    "message": f"Invalid Roblox class '{class_name}' in Instance.new(). '{class_name}' is not a valid Roblox DataModel class.",
-                    "suggestion": "Use legitimate Roblox classes: Part, ParticleEmitter, Beam, Attachment, Model, Folder, etc."
-                })
-
-        # 5b. Unresolved Capitalized Workspace Global Check
-        if re.search(r'\bWorkspace\s*[:.]', code):
-            has_workspace_declaration = bool(re.search(r'\blocal\s+Workspace\b', code) or re.search(r'\bWorkspace\s*=', code))
-            if not has_workspace_declaration:
-                m = re.search(r'\bWorkspace\s*[:.]', code)
-                line_no = code[:m.start()].count("\n") + 1 if m else 1
-                issues.append({
-                    "type": "error",
-                    "line": line_no,
-                    "message": "Unresolved Global: 'Workspace' (capitalized) is not defined in Luau global scope. In Roblox, the global variable is lowercase 'workspace' or obtained via 'game:GetService(\"Workspace\")'.",
-                    "suggestion": "Replace 'Workspace' with lowercase 'workspace' or 'game:GetService(\"Workspace\")'."
-                })
-
-        # 5c. Incomplete Target Character Resolution Check
-        if re.search(r'\blocal\s+([a-zA-Z0-9_]+)\s*=\s*[a-zA-Z0-9_]+\.Parent\b', code):
-            if not re.search(r':FindFirstAncestor(?:OfClass|WhichIsA)?\(["\']Model["\']\)', code):
-                m = re.search(r'\blocal\s+([a-zA-Z0-9_]+)\s*=\s*[a-zA-Z0-9_]+\.Parent\b', code)
-                line_no = code[:m.start()].count("\n") + 1 if m else 1
-                issues.append({
-                    "type": "warning",
-                    "line": line_no,
-                    "message": "Incomplete Target Character Resolution: 'part.Parent' fails when a hitbox touches an Accessory, Tool, or nested limb because part.Parent is the Accessory/Tool, not the character Model.",
-                    "suggestion": "Use 'part:FindFirstAncestorOfClass(\"Model\")' to reliably locate the character Model containing the Humanoid."
-                })
-
-        # 5d. Function-Level Single-Invocation Debounce Check
-        has_timestamp_cooldown = bool(re.search(r'(?:os\.clock|tick)\s*\(\)', code))
-        has_attribute_debounce = bool(re.search(r':(?:GetAttribute|SetAttribute)\s*\(["\']Hit', code))
-        if inner_debounce_lines and not outer_debounce_lines and not has_timestamp_cooldown and not has_attribute_debounce:
-            for l_no, var_name in inner_debounce_lines:
-                issues.append({
-                    "type": "warning",
-                    "line": l_no,
-                    "message": f"Single-Invocation Debounce Only: The debounce table '{var_name}' is declared locally inside the function and is recreated on every invocation. It only deduplicates limbs within a single query, but does NOT debounce repeated calls across frames.",
-                    "suggestion": "Define the debounce table in a persistent outer scope, or use a timestamp cache ('os.clock() - lastHit < cooldown') or character attribute."
-                })
-
-        # 6. Real AST Syntax Parser via luaparser
-        if lua_ast:
-            try:
-                # Strip Luau-specific type annotations (e.g. : number, : string) before parsing
-                code_no_types = re.sub(r':\s*[a-zA-Z0-9_<>|?]+(?=\s*[=,\)\n])', '', code)
-                lua_ast.parse(code_no_types)
-            except Exception as ast_exc:
-                err_str = str(ast_exc)
-                line_no = 1
-                line_match = re.search(r'line (\d+):(\d+):\s*(.*)', err_str)
-                if line_match:
-                    line_no = int(line_match.group(1))
-                    detail = line_match.group(3)
-                else:
-                    detail = err_str.replace("syntax errors: ", "").strip()
-                issues.append({
-                    "type": "error",
-                    "line": line_no,
-                    "message": f"Luau Syntax Error: {detail}",
-                    "suggestion": "Fix the expression, literal, or token syntax on this line."
-                })
-
-        return issues
+        if AuthenticLuauValidator:
+            return AuthenticLuauValidator.validate_code(code)
+        return []
 
 
 # ==============================================================================
@@ -706,7 +405,29 @@ class RobloxDomainTestRunner:
         test_status = "NOT RUN"
         perf_status = "NOT RUN"
 
-        if TerminalManager:
+        # Real System or Terminal Compiler Execution Check for Luau
+        system_tool = find_system_luau_tool() if find_system_luau_tool else None
+        if system_tool:
+            rc, out, err = run_system_luau_compiler(system_tool, code)
+            commands_executed.append(f"{os.path.basename(system_tool)} -")
+            exit_codes.append(rc)
+            if rc == 0:
+                has_compiler_verified = True
+                compiler_used = f"{os.path.basename(system_tool)} CLI"
+                syntax_status = "PASS"
+                passed_checks.append(f"Luau Native Compilation ({os.path.basename(system_tool)} verified cleanly)")
+            else:
+                syntax_status = "FAIL"
+                has_compiler_verified = False
+                compiler_used = f"{os.path.basename(system_tool)} CLI"
+                err_text = (err or out or "Luau compile error").strip()
+                failed_checks.append({
+                    "type": "error",
+                    "line": 1,
+                    "message": f"Luau Compiler Error: {err_text[:200]}",
+                    "suggestion": "Fix Luau syntax/type errors identified by compiler."
+                })
+        elif TerminalManager:
             try:
                 term_session = TerminalManager.terminal_create_session()
                 session_id = term_session["session_id"]
@@ -729,9 +450,9 @@ class RobloxDomainTestRunner:
                     syntax_status = "PASS"
                 elif ec == 127:
                     # luau-analyze binary not installed on host, AST analysis was used
-                    syntax_status = "NOT RUN (COMPILER NOT INSTALLED)"
+                    syntax_status = "NOT RUN (COMPILER NOT INSTALLED - UNVERIFIED)"
                     compiler_used = "Stroke AST & Roblox Static Rules (Compiler Missing)"
-                    untested_limitations.append("External luau-analyze compiler binary not in host PATH; verified via AST parser and static Roblox DataModel rules only. Live Luau runtime execution is unverified.")
+                    untested_limitations.append("External luau / luau-analyze compiler binary not found on host; static AST and Roblox DataModel rules passed, but bytecode compilation and live runtime remain UNVERIFIED.")
                 else:
                     syntax_status = "FAIL"
                     err_msg = res.get("stderr") or res.get("stdout") or "Semantic warning in Luau script"
@@ -750,6 +471,10 @@ class RobloxDomainTestRunner:
                 TerminalManager.terminal_stop(session_id)
             except Exception as term_exc:
                 untested_limitations.append(f"Private terminal runner note: {term_exc}")
+        else:
+            syntax_status = "NOT RUN (COMPILER NOT INSTALLED - UNVERIFIED)"
+            compiler_used = "Stroke AST & Roblox Static Rules (Compiler Missing)"
+            untested_limitations.append("External luau / luau-analyze compiler binary not found on host; static AST and Roblox DataModel rules passed, but bytecode compilation and live runtime remain UNVERIFIED.")
 
         # Check API and semantic errors
         api_errors = [
@@ -774,14 +499,20 @@ class RobloxDomainTestRunner:
         blocking_errors = [f for f in failed_checks if f.get("type") == "error"]
         if blocking_errors or api_status == "FAIL" or syntax_status == "FAIL" or static_status == "FAIL":
             is_verified = False
+            verification_status = "FAIL"
+        elif has_compiler_verified and syntax_status == "PASS":
+            is_verified = True
+            verification_status = "PASS"
         else:
-            is_verified = has_compiler_verified
+            is_verified = False
+            verification_status = "UNVERIFIED"
 
         return {
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
             "untested_limitations": untested_limitations,
             "is_verified": is_verified,
+            "verification_status": verification_status,
             "has_compiler_verified": has_compiler_verified,
             "syntax_status": syntax_status,
             "static_status": static_status,
@@ -940,13 +671,22 @@ class RobloxDomainTestRunner:
 
         untested_limitations.append("Runtime environment dependencies, operating system differences, and edge-case I/O exceptions.")
         blocking_errors = [f for f in failed_checks if f.get("type") == "error"]
-        is_verified = (len(blocking_errors) == 0 and syntax_status == "PASS" and test_status != "FAIL")
+        if blocking_errors or syntax_status == "FAIL" or test_status == "FAIL":
+            is_verified = False
+            verification_status = "FAIL"
+        elif syntax_status == "PASS" and has_compiler_verified and test_status != "FAIL":
+            is_verified = True
+            verification_status = "PASS"
+        else:
+            is_verified = False
+            verification_status = "UNVERIFIED"
 
         return {
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
             "untested_limitations": untested_limitations,
             "is_verified": is_verified,
+            "verification_status": verification_status,
             "has_compiler_verified": has_compiler_verified,
             "syntax_status": syntax_status,
             "static_status": static_status,
@@ -957,6 +697,34 @@ class RobloxDomainTestRunner:
             "compiler_used": compiler_used,
             "commands_executed": commands_executed,
             "exit_codes": exit_codes
+        }
+
+    @classmethod
+    def test_generic_code(cls, code: str, language: str) -> Dict[str, Any]:
+        """
+        Handles unsupported languages (e.g. JS, TS, C++, Rust).
+        Never returns PASS; strictly marks as UNVERIFIED.
+        """
+        lang_norm = (language or "unknown").strip().lower()
+        return {
+            "passed_checks": [],
+            "failed_checks": [],
+            "untested_limitations": [
+                f"Automated compiler and domain verification pipeline is not configured for '{lang_norm}'.",
+                "Bytecode compilation, type analysis, and runtime behavior remain UNVERIFIED."
+            ],
+            "is_verified": False,
+            "has_compiler_verified": False,
+            "verification_status": "UNVERIFIED",
+            "syntax_status": f"UNVERIFIED (NO COMPILER FOR {lang_norm.upper()})",
+            "static_status": "UNVERIFIED",
+            "api_status": "NOT RUN",
+            "runtime_status": "NOT RUN",
+            "test_status": "NOT RUN",
+            "perf_status": "NOT RUN",
+            "compiler_used": "N/A",
+            "commands_executed": [],
+            "exit_codes": []
         }
 
 
@@ -1006,7 +774,7 @@ class CodingArchivist:
     Retains useful project context, verified code patterns, and test history.
     Stores records locally in data/verified_project_context.json and optionally Firestore.
     """
-    CONTEXT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "verified_project_context.json")
+    CONTEXT_FILE = str(paths_service.get_verified_project_context_path())
 
     @classmethod
     def record_verified_artifact(cls, prompt: str, code: str, language: str, test_report: Dict[str, Any], user_email: Optional[str] = None):
@@ -1038,8 +806,10 @@ class CodingArchivist:
             }
             records.insert(0, entry)
             # Keep top 50 project context entries
-            with open(cls.CONTEXT_FILE, "w", encoding="utf-8") as f:
+            tmp_file = f"{cls.CONTEXT_FILE}.tmp.{os.getpid()}"
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(records[:50], f, indent=2, default=str)
+            os.replace(tmp_file, cls.CONTEXT_FILE)
             print(f"[STROKE ARCHIVIST] Saved verified project context entry: {entry['id']}", flush=True)
         except Exception as exc:
             print(f"[STROKE ARCHIVIST NOTICE] Could not save context record: {exc}", flush=True)
@@ -1093,9 +863,9 @@ class StateLedger:
     """
     Rolling Memory & State Ledger Engine:
     Maintains a high-speed, lean context memory for long-running agentic loops:
-    1. Keep the North Star: Locks original user request permanently at the top.
+    1. Keep the Active Goal: Anchors reasoning to the current active user objective.
     2. Prune Failed Attempts: Deletes intermediate broken code drafts and resolved error traces.
-    3. Maintain State Ledger: Condenses workspace status into a 1-line clean summary.
+    3. Maintain State Ledger: Evidence-derived workspace status reflecting genuine test results.
     """
 
     def __init__(self, north_star_goal: str):
@@ -1103,33 +873,65 @@ class StateLedger:
         self.verified_modules: List[str] = []
         self.total_scripts_created: int = 0
         self.resolved_errors_count: int = 0
+        self.unresolved_errors_count: int = 0
+        self.failed_checks: List[Dict[str, Any]] = []
+        self.verified_checks: List[Dict[str, Any]] = []
         self.active_mcp_servers: List[str] = []
 
-    def record_resolved_check(self, module_name: str, passed_count: int = 1):
-        """Records a successful verification check and marks errors as resolved."""
+    def record_resolved_check(self, module_name: str, passed_count: int = 1, evidence: Optional[Dict[str, Any]] = None):
+        """Records a successful verification check based on actual positive evidence."""
         clean_name = str(module_name).strip()
         if clean_name and clean_name not in self.verified_modules:
             self.verified_modules.append(clean_name)
         self.total_scripts_created = max(1, len(self.verified_modules))
-        self.resolved_errors_count += 1
+        if self.unresolved_errors_count > 0:
+            self.unresolved_errors_count = max(0, self.unresolved_errors_count - 1)
+            self.resolved_errors_count += 1
+        self.verified_checks.append({
+            "module": clean_name,
+            "passed_count": passed_count,
+            "evidence": evidence or {}
+        })
+
+    def record_failed_check(self, module_name: str, error_trace: str):
+        """Records an actual failed compiler or verification check."""
+        self.unresolved_errors_count += 1
+        self.failed_checks.append({
+            "module": str(module_name).strip(),
+            "error": str(error_trace).strip()
+        })
 
     def get_north_star_header(self) -> str:
-        """Returns the locked North Star goal block."""
+        """Returns the active goal block."""
         return (
             "==================================================\n"
-            "NORTH STAR USER GOAL (PERMANENT PRIMARY OBJECTIVE):\n"
+            "NORTH STAR USER GOAL (ACTIVE PRIMARY OBJECTIVE):\n"
             f"{self.north_star_goal}\n"
             "==================================================\n"
             "RULE: Always anchor all reasoning, actions, and code generation to this North Star goal. Never deviate or lose track of this objective.\n"
         )
 
     def get_ledger_summary(self) -> str:
-        """Generates the lean, clean State Ledger system message."""
-        module_text = ", ".join(self.verified_modules[-3:]) if self.verified_modules else "Active workspace script"
-        return (
-            f"System Message (State Ledger): Module '{module_text}' compiled successfully. "
-            f"Current Workspace state: {max(1, self.total_scripts_created)} script(s) created/verified, 0 errors."
-        )
+        """
+        Generates the evidence-bound State Ledger message.
+        Only reports successful compilation when backed by verified checks.
+        """
+        if self.verified_modules:
+            module_text = ", ".join(self.verified_modules[-3:])
+            return (
+                f"System Message (State Ledger): Module '{module_text}' compiled successfully. "
+                f"Current Workspace state: {max(1, self.total_scripts_created)} script(s) created/verified, {self.unresolved_errors_count} errors."
+            )
+        elif self.unresolved_errors_count > 0:
+            return (
+                f"System Message (State Ledger): Workspace has {self.unresolved_errors_count} active error(s). "
+                f"Pending resolution."
+            )
+        else:
+            return (
+                "System Message (State Ledger): Workspace initialized. "
+                "Pending initial compilation and test verification."
+            )
 
     @classmethod
     def prune_intermediate_history(
@@ -1201,12 +1003,12 @@ class StrokeCodingLoop:
 
     @classmethod
     def extract_all_code_blocks(cls, text: str, default_lang: str = "luau") -> List[Dict[str, str]]:
-        """Extracts all code blocks and language tags from markdown code fences."""
+        """Extracts all code blocks and language tags from markdown code fences while preserving internal indentation."""
         pattern = r"```([a-zA-Z0-9_]*)\n([\s\S]*?)```"
         blocks = []
         for match in re.finditer(pattern, text):
             lang, code = match.groups()
-            clean_code = cls._clean_code_artifacts(code).strip()
+            clean_code = cls._clean_code_artifacts(code).strip("\r\n")
             if clean_code:
                 blocks.append({
                     "language": (lang.lower() if lang else default_lang),
@@ -1218,7 +1020,7 @@ class StrokeCodingLoop:
             unclosed_match = re.search(r"```([a-zA-Z0-9_]*)\n([\s\S]+)$", text)
             if unclosed_match:
                 lang, code = unclosed_match.groups()
-                clean_code = cls._clean_code_artifacts(code).strip()
+                clean_code = cls._clean_code_artifacts(code).strip("\r\n")
                 if clean_code:
                     blocks.append({
                         "language": (lang.lower() if lang else default_lang),
@@ -1230,7 +1032,7 @@ class StrokeCodingLoop:
             lines = text.splitlines()
             code_indicators = ["local ", "function ", "import ", "def ", "class ", "game:GetService", "task.wait"]
             if any(any(ind in line for ind in code_indicators) for line in lines[:10]):
-                clean_code = cls._clean_code_artifacts(text).strip()
+                clean_code = cls._clean_code_artifacts(text).strip("\r\n")
                 if clean_code:
                     blocks.append({
                         "language": default_lang,
@@ -1241,22 +1043,11 @@ class StrokeCodingLoop:
 
     @staticmethod
     def _clean_code_artifacts(code: str) -> str:
-        """Strips extreme repetitive loop sequences common in 1B LLM outputs."""
-        lines = code.splitlines()
-        deduped = []
-        consecutive_count = 0
-        prev_line = None
-        for l in lines:
-            stripped = l.strip()
-            if stripped and stripped == prev_line:
-                consecutive_count += 1
-                if consecutive_count > 2:
-                    continue
-            else:
-                consecutive_count = 0
-                prev_line = stripped
-            deduped.append(l)
-        return "\n".join(deduped)
+        """
+        Preserves generated source exactly. Never silently deletes legitimate
+        identical statements, table entries, comments, or code.
+        """
+        return code
 
     @classmethod
     def format_verification_report_markdown(cls, report: Dict[str, Any], iterations: int) -> str:
@@ -1270,9 +1061,13 @@ class StrokeCodingLoop:
         untested = report.get("untested_limitations", [])
         is_verified = report.get("is_verified", False)
         has_compiler_verified = report.get("has_compiler_verified", False)
+        verification_status = report.get(
+            "verification_status",
+            "PASS" if (is_verified and has_compiler_verified) else ("FAIL" if any(f.get("type") == "error" for f in failed) else "UNVERIFIED")
+        )
 
         syntax_status = report.get("syntax_status", "PASS" if (is_verified and has_compiler_verified) else "NOT RUN")
-        static_status = report.get("static_status", "PASS" if is_verified else "FAIL")
+        static_status = report.get("static_status", "PASS" if is_verified else ("FAIL" if verification_status == "FAIL" else "UNVERIFIED"))
         api_status = report.get("api_status", "PASS" if is_verified else "NOT RUN")
         runtime_status = report.get("runtime_status", "NOT RUN")
         test_status = report.get("test_status", "NOT RUN")
@@ -1285,12 +1080,14 @@ class StrokeCodingLoop:
         errors = [f for f in failed if f.get("type") == "error"]
         warnings = [f for f in failed if f.get("type") == "warning"]
 
-        if errors or api_status == "FAIL" or syntax_status == "FAIL" or static_status == "FAIL":
+        if verification_status == "FAIL" or errors or api_status == "FAIL" or syntax_status == "FAIL" or static_status == "FAIL":
             badge = "FAILED (ROBLOX API OR TYPE ERRORS DETECTED)" if api_status == "FAIL" else "FAILED (SYNTAX OR RUNTIME ISSUES DETECTED)"
-        elif is_verified and has_compiler_verified:
+        elif verification_status == "PASS" and is_verified and has_compiler_verified:
             badge = f"VERIFIED ({iterations} PASS{'ES' if iterations > 1 else ''})"
-        elif len(errors) == 0 and api_status == "PASS" and syntax_status in ("PASS", "NOT RUN (COMPILER NOT INSTALLED)"):
+        elif verification_status == "UNVERIFIED" and len(errors) == 0 and api_status == "PASS" and static_status == "PASS":
             badge = "STATIC CHECKS PASSED (COMPILER UNVERIFIED)"
+        elif verification_status == "UNVERIFIED":
+            badge = "UNVERIFIED (UNSUPPORTED LANGUAGE OR COMPILER MISSING)"
         else:
             badge = "COMPLETED WITH WARNINGS"
 
@@ -1298,9 +1095,10 @@ class StrokeCodingLoop:
         tests_passed_status = "PASS" if test_status == "PASS" else ("FAIL" if test_status == "FAIL" else "NOT AVAILABLE")
 
         md = f"\n\n---\n\n### Stroke Verification & Quality Report\n"
-        md += f"> **Status**: `{badge}` | **Engine**: Stroke Autonomous Coding Loop | **Iterations**: `{iterations}`\n\n"
+        md += f"> **Status**: `{badge}` | **Verification State**: `{verification_status}` | **Iterations**: `{iterations}`\n\n"
 
         md += "#### Verification Status Matrix\n"
+        md += f"- Verification State: {verification_status}\n"
         md += f"- Static Validation: {static_status}\n"
         md += f"- Syntax Compilation: {syntax_status}\n"
         md += f"- API Validation: {api_status}\n"
@@ -1505,6 +1303,9 @@ class StrokeCodingLoop:
 
             # If errors remain, continue correcting until solved
             if iteration < safety_ceiling:
+                if blocking_errors:
+                    state_ledger.record_failed_check(f"{primary_lang.title()}Module", str(blocking_errors[0].get("message", "Compilation error")))
+
                 # Step 4: Diagnose
                 loop_steps.append({
                     "name": "Analysing error...",

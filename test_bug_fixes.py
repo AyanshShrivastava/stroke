@@ -18,6 +18,7 @@ Validates all high & critical severity bug fixes:
 
 import os
 import sys
+import time
 import asyncio
 import unittest
 import json
@@ -33,8 +34,6 @@ from fastapi.testclient import TestClient
 import main
 from main import (
     app,
-    _AUTHENTICATED_IDENTITIES,
-    _LOCAL_OTP_STORE,
     _LOCAL_CHAT_SESSIONS,
     _save_local_chat_sessions,
     _LLAMA_THREAD_LOCK,
@@ -52,51 +51,27 @@ from mcp_bridge import execute_studio_mcp_command
 class SystematicBugFixesTestSuite(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
-        _AUTHENTICATED_IDENTITIES.clear()
-        _LOCAL_OTP_STORE.clear()
 
-    def test_01_switch_account_rejects_unauthenticated_impersonation(self):
-        """Security: Arbitrary POST /auth/switch-account without auth must return 401."""
-        res = self.client.post("/auth/switch-account", json={"email": "victim_admin@stroke.internal"})
-        self.assertEqual(res.status_code, 401)
-        self.assertIn("Unauthorized", res.json()["detail"])
+    def test_01_legacy_endpoints_migrated_and_return_410(self):
+        """Security: Deprecated endpoints /auth/switch-account and /auth/send-otp return 410 Gone."""
+        res_switch = self.client.post("/auth/switch-account", json={"email": "victim_admin@stroke.internal"})
+        self.assertEqual(res_switch.status_code, 410)
+        self.assertIn("migrated to Firebase Authentication", res_switch.json()["detail"])
 
-    def test_02_switch_account_allows_authenticated_identity(self):
-        """Security: POST /auth/switch-account succeeds for authenticated identities."""
-        test_email = "verified_dev@stroke.internal"
-        _AUTHENTICATED_IDENTITIES.add(test_email)
+        res_send = self.client.post("/auth/send-otp", json={"email": "dev@stroke.internal"})
+        self.assertEqual(res_send.status_code, 410)
+        self.assertIn("migrated to Firebase Authentication", res_send.json()["detail"])
 
-        res = self.client.post("/auth/switch-account", json={"email": test_email})
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["status"], "success")
-        self.assertEqual(res.json()["email"], test_email)
+    def test_02_firebase_auth_rejects_unauthenticated_requests(self):
+        """Security: Protected user endpoints reject unauthenticated access with 401."""
+        res_me = self.client.get("/auth/me")
+        self.assertEqual(res_me.status_code, 401)
+        self.assertIn("Authentication required", res_me.json()["detail"])
 
-    def test_03_send_otp_throttles_within_15_seconds(self):
-        """Usability: Rapid send-otp requests within 15 seconds are throttled to prevent spam."""
-        test_email = "throttle_test@example.com"
-        res1 = self.client.post("/auth/send-otp", json={"email": test_email, "password": "Password123!"})
-        self.assertEqual(res1.status_code, 200)
-        self.assertEqual(res1.json()["status"], "success")
-
-        # Second request without force_resend within 15s should return throttled response
-        res2 = self.client.post("/auth/send-otp", json={"email": test_email, "password": "Password123!"})
-        self.assertEqual(res2.status_code, 200)
-        self.assertIn("recently dispatched", res2.json()["message"])
-
-    def test_04_send_otp_force_resend_bypasses_throttle(self):
-        """Usability: send-otp with force_resend=True immediately regenerates and sends a new OTP."""
-        test_email = "force_resend_test@example.com"
-        res1 = self.client.post("/auth/send-otp", json={"email": test_email, "password": "Password123!"})
-        first_otp = _LOCAL_OTP_STORE[test_email]["otp_code"]
-
-        # Request with force_resend=True
-        res2 = self.client.post("/auth/send-otp", json={"email": test_email, "password": "Password123!", "force_resend": True})
-        self.assertEqual(res2.status_code, 200)
-        self.assertIn("has been dispatched", res2.json()["message"])
-        second_otp = _LOCAL_OTP_STORE[test_email]["otp_code"]
-
-        self.assertEqual(len(second_otp), 6)
-        self.assertTrue(second_otp.isdigit())
+    def test_03_no_in_memory_identity_trust_stores_remain(self):
+        """Security: In-memory identity and OTP trust dictionaries are permanently removed."""
+        self.assertFalse(hasattr(main, "_AUTHENTICATED_IDENTITIES"))
+        self.assertFalse(hasattr(main, "_LOCAL_OTP_STORE"))
 
     def test_05_json_serialization_safety_in_local_chat_sessions(self):
         """Reliability: _save_local_chat_sessions handles datetime and non-primitive objects via default=str."""
@@ -147,13 +122,22 @@ class SystematicBugFixesTestSuite(unittest.TestCase):
 
     def test_07_user_status_fallback_on_firestore_exception(self):
         """Fault Tolerance: GET /user/status returns resilient local telemetry if Firestore throws."""
-        with patch.object(main.db, "collection", side_effect=RuntimeError("Firestore connection refused")):
-            res = self.client.get("/user/status?email=test_status@stroke.ai")
-            self.assertEqual(res.status_code, 200)
-            data = res.json()
-            self.assertEqual(data["email"], "test_status@stroke.ai")
-            self.assertTrue(data["exists"])
-            self.assertEqual(data["records"], [])
+        mock_claims = {
+            "user_id": "test_user_id",
+            "email": "test_status@stroke.ai",
+            "email_verified": True,
+            "aud": "stroke-cyber-matrix",
+            "iss": "https://securetoken.google.com/stroke-cyber-matrix",
+            "exp": time.time() + 3600
+        }
+        with patch("auth_service.verify_firebase_id_token", return_value=mock_claims):
+            with patch.object(main.db, "collection", side_effect=RuntimeError("Firestore connection refused")):
+                res = self.client.get("/user/status?email=test_status@stroke.ai", headers={"Authorization": "Bearer mock-token"})
+                self.assertEqual(res.status_code, 200)
+                data = res.json()
+                self.assertEqual(data["email"], "test_status@stroke.ai")
+                self.assertTrue(data["exists"])
+                self.assertEqual(data["records"], [])
 
     def test_08_studio_mcp_subprocess_cleanup(self):
         """Leak Prevention: execute_studio_mcp_command always terminates cleanly without hanging."""

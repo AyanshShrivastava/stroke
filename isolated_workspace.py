@@ -2,17 +2,20 @@
 ================================================================================
 STROKE // ISOLATED PER-TASK WORKSPACE & CHANGE RECONCILIATION ENGINE
 ================================================================================
-Strictly enforces Stroke Requirement 2:
+Strictly enforces Stroke Requirement 2 & Isolation Safety:
 - AI-initiated terminal commands run in an isolated per-task working copy.
 - Terminal commands NEVER have unrestricted direct write access to original user files.
+- Task IDs are validated as strict identifiers (no traversal, no slashes).
+- Symlinks are NOT preserved in isolated workspaces if they can reach files outside the sandbox.
 - When a task completes:
     1. Inspects changes made in the isolated workspace.
-    2. Identifies new files.
-    3. Identifies modified files.
-    4. Identifies deleted files.
-    5. Rejects any change set that includes deletion or renaming.
-    6. Applies only new and modified files through the controlled file service.
-    7. Backs up every existing file before modifying it.
+    2. Identifies new, modified, and deleted files.
+    3. REJECTS any change set that includes deletion or renaming (No-Delete Policy).
+    4. Verifies source hashes against the initial snapshot before applying changes;
+       stops and reports conflicts if the user modified the original file during the task.
+    5. Applies new and modified files via atomic byte-exact writes, preserving binaries,
+       encodings, and exact line endings.
+    6. Automatically backs up every modified file prior to replacement.
 ================================================================================
 """
 
@@ -34,6 +37,11 @@ class DestructiveChangeSetError(PermissionError):
     pass
 
 
+class WorkspaceConflictError(ValueError):
+    """Raised when source files were modified externally during task execution."""
+    pass
+
+
 class TaskWorkspaceSandbox:
     """Manages isolated per-task working copies and safe change reconciliation."""
 
@@ -41,22 +49,18 @@ class TaskWorkspaceSandbox:
         self.workspace_path = workspace_path
         self.sandbox_base = paths_service.get_app_data_dir() / "IsolatedTasks"
         self.sandbox_base.mkdir(parents=True, exist_ok=True)
-        # In-memory manifest registry for active tasks: task_id -> { "source": Path, "sandbox": Path, "initial_manifest": dict }
+        # In-memory manifest registry for active tasks:
+        # task_id -> { "source": Path, "sandbox": Path, "initial_manifest": dict, "created_at": float }
         self._active_tasks: Dict[str, Dict[str, Any]] = {}
 
     def _compute_hash(self, path: Path) -> str:
-        h = hashlib.sha256()
-        with open(path, "rb") as f:
-            while True:
-                chunk = f.read(65536)
-                if not chunk:
-                    break
-                h.update(chunk)
-        return h.hexdigest()
+        """Computes SHA-256 digest of a local file."""
+        return backup_service.compute_file_sha256(path)
 
     def _build_manifest(self, base_dir: Path) -> Dict[str, str]:
+        """Builds relative_path -> sha256 manifest of a directory tree."""
         manifest = {}
-        for root, dirs, files in os.walk(base_dir):
+        for root, dirs, files in os.walk(base_dir, followlinks=False):
             dirs[:] = [d for d in dirs if d not in (".git", "venv", "node_modules", "__pycache__", ".stroke_scratch")]
             for f in files:
                 full_p = Path(root) / f
@@ -66,6 +70,55 @@ class TaskWorkspaceSandbox:
                 except Exception:
                     pass
         return manifest
+
+    def _safe_copy_tree(self, source_dir: Path, target_dir: Path):
+        """
+        Recursively copies source_dir into target_dir.
+        CRITICAL SYMLINK SAFETY:
+        Symlinks are inspected: if any symlink points outside source_dir,
+        it is NOT copied as an active symlink to prevent reaching files outside the sandbox.
+        """
+        source_canonical = source_dir.resolve()
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        for root, dirs, files in os.walk(source_dir, followlinks=False):
+            dirs[:] = [d for d in dirs if d not in (".git", "venv", "node_modules", "__pycache__", ".stroke_scratch")]
+            rel_root = Path(root).relative_to(source_dir)
+            dest_root = target_dir / rel_root
+            dest_root.mkdir(parents=True, exist_ok=True)
+
+            for d in dirs:
+                src_d = Path(root) / d
+                if src_d.is_symlink():
+                    try:
+                        resolved_target = src_d.resolve()
+                        if not (resolved_target == source_canonical or source_canonical in resolved_target.parents):
+                            # Symlink escapes source workspace! OMIT to prevent sandbox escape.
+                            print(f"[STROKE SANDBOX WARNING] Omitting escaping directory symlink: {src_d} -> {resolved_target}", flush=True)
+                            continue
+                    except Exception:
+                        continue
+
+            for f in files:
+                src_f = Path(root) / f
+                dest_f = dest_root / f
+
+                if src_f.is_symlink():
+                    try:
+                        resolved_target = src_f.resolve()
+                        if not (resolved_target == source_canonical or source_canonical in resolved_target.parents):
+                            # Symlink escapes source workspace! OMIT to prevent sandbox escape.
+                            print(f"[STROKE SANDBOX WARNING] Omitting escaping file symlink: {src_f} -> {resolved_target}", flush=True)
+                            continue
+                        # If within workspace, copy actual content rather than preserving symlink
+                        shutil.copy2(resolved_target, dest_f)
+                    except Exception as exc:
+                        print(f"[STROKE SANDBOX WARNING] Failed to copy symlink {src_f}: {exc}", flush=True)
+                else:
+                    try:
+                        shutil.copy2(src_f, dest_f)
+                    except Exception as exc:
+                        print(f"[STROKE SANDBOX WARNING] Failed to copy file {src_f}: {exc}", flush=True)
 
     def create_task_copy(self, task_id: str, copy_all: bool = True) -> str:
         """Helper to create an isolated task copy directory."""
@@ -80,36 +133,36 @@ class TaskWorkspaceSandbox:
     ) -> Dict[str, Any]:
         """
         Creates an isolated, non-elevated per-task working copy in Stroke app data.
-        Returns the path to the isolated sandbox directory for terminal execution.
+        Validates task_id as a strict identifier.
         """
+        clean_task_id = workspace_service.validate_task_id(task_id)
+
         target_ws = source_workspace or self.workspace_path
         if not target_ws:
             raise ValueError("No workspace specified for task sandbox.")
+
         source = workspace_service.validate_path_access(target_ws)
         if not source.exists() or not source.is_dir():
             raise NotADirectoryError(f"Source workspace not found: {source}")
 
-        task_sandbox = self.sandbox_base / task_id
+        # Ensure sandbox path is strictly within sandbox_base
+        task_sandbox = (self.sandbox_base / clean_task_id).resolve()
+        if task_sandbox.parent != self.sandbox_base.resolve():
+            raise workspace_service.WorkspaceSecurityError(
+                f"Task ID escape attempt denied: '{clean_task_id}' resolves outside sandbox base."
+            )
+
         if task_sandbox.exists():
             shutil.rmtree(task_sandbox, ignore_errors=True)
         task_sandbox.mkdir(parents=True, exist_ok=True)
 
-        # Copy project files while excluding large dependency trees to keep copy fast
-        ignore_patterns = shutil.ignore_patterns(".git", "venv", "node_modules", "__pycache__", ".stroke_scratch", "*.pyc")
-        
-        for item in source.iterdir():
-            if item.name in (".git", "venv", "node_modules", "__pycache__", ".stroke_scratch"):
-                continue
-            dest = task_sandbox / item.name
-            if item.is_dir():
-                shutil.copytree(item, dest, ignore=ignore_patterns, symlinks=True)
-            else:
-                shutil.copy2(item, dest)
+        # Copy source files with strict symlink containment
+        self._safe_copy_tree(source, task_sandbox)
 
         # Record initial snapshot manifest to detect additions, modifications, and deletions
         initial_manifest = self._build_manifest(task_sandbox)
 
-        self._active_tasks[task_id] = {
+        self._active_tasks[clean_task_id] = {
             "source": source,
             "sandbox": task_sandbox,
             "initial_manifest": initial_manifest,
@@ -118,7 +171,7 @@ class TaskWorkspaceSandbox:
 
         return {
             "status": "created",
-            "task_id": task_id,
+            "task_id": clean_task_id,
             "source_workspace": str(source),
             "isolated_workspace": str(task_sandbox),
             "files_tracked": len(initial_manifest)
@@ -126,19 +179,17 @@ class TaskWorkspaceSandbox:
 
     def inspect_task_changes(self, task_id: str) -> Dict[str, Any]:
         """
-        Inspects changes between the isolated workspace and the original state.
-        Identifies:
-        - new_files
-        - modified_files
-        - deleted_files
+        Inspects changes between the isolated workspace and the initial state.
+        Identifies new_files, modified_files, and deleted_files.
         """
-        task_data = self._active_tasks.get(task_id)
+        clean_task_id = workspace_service.validate_task_id(task_id)
+        task_data = self._active_tasks.get(clean_task_id)
+
         if not task_data:
-            # Check if directory exists on disk
-            task_sandbox = self.sandbox_base / task_id
+            task_sandbox = (self.sandbox_base / clean_task_id).resolve()
             if not task_sandbox.exists():
-                raise KeyError(f"No active isolated workspace found for task ID: {task_id}")
-            raise KeyError(f"Task session metadata missing for: {task_id}")
+                raise KeyError(f"No active isolated workspace found for task ID: {clean_task_id}")
+            raise KeyError(f"Task session metadata missing for: {clean_task_id}")
 
         sandbox = task_data["sandbox"]
         source = task_data["source"]
@@ -163,7 +214,7 @@ class TaskWorkspaceSandbox:
                 new_files.append(rel_path)
 
         return {
-            "task_id": task_id,
+            "task_id": clean_task_id,
             "source_workspace": str(source),
             "isolated_workspace": str(sandbox),
             "new_files": sorted(new_files),
@@ -180,61 +231,90 @@ class TaskWorkspaceSandbox:
     ) -> Dict[str, Any]:
         """
         Reconciles changes from the isolated workspace back to the original source project.
-        ENFORCES ABSOLUTE NO-DELETE POLICY:
-        - If ANY deleted files are found, REJECTS the entire change set immediately.
-        - For every modified file, creates an automatic version backup first.
-        - Safely writes new and modified files via atomic safe writes.
+        Enforces:
+        1. Hard rejection if ANY deleted files are found (Absolute No-Delete Policy).
+        2. Pre-application source hash check: verifies original files on disk still match
+           the initial manifest. Stops and raises WorkspaceConflictError if the user changed
+           the original file during the task.
+        3. Applies modified and new files via byte-exact atomic writes (preserving binary bytes,
+           exact line endings, and encodings).
+        4. Automatic pre-modification backup for every modified file.
         """
-        changes = self.inspect_task_changes(task_id)
-        task_data = self._active_tasks[task_id]
+        clean_task_id = workspace_service.validate_task_id(task_id)
+        changes = self.inspect_task_changes(clean_task_id)
+        task_data = self._active_tasks[clean_task_id]
         sandbox = task_data["sandbox"]
         source = task_data["source"]
+        initial_manifest = task_data["initial_manifest"]
 
         # 1. HARD REJECTION on any file deletion
         if changes["has_deletions"]:
             deleted_list = ", ".join(changes["deleted_files"])
             raise DestructiveChangeSetError(
-                f"REJECTED: Task '{task_id}' attempted to delete existing files: [{deleted_list}]. "
+                f"REJECTED: Task '{clean_task_id}' attempted to delete existing files: [{deleted_list}]. "
                 f"Stroke's Absolute No-Delete Policy prohibits applying change sets containing deletions."
+            )
+
+        # 2. SOURCE HASH CONFLICT DETECTION
+        # Check if the user modified the original files outside the task while it was running
+        conflicts = []
+        for rel_path in changes["modified_files"]:
+            src_file = source / rel_path
+            if src_file.exists():
+                current_src_hash = self._compute_hash(src_file)
+                initial_hash = initial_manifest.get(rel_path)
+                if initial_hash and current_src_hash != initial_hash:
+                    conflicts.append({
+                        "file": rel_path,
+                        "initial_hash": initial_hash,
+                        "current_source_hash": current_src_hash
+                    })
+
+        if conflicts:
+            conflict_files = ", ".join([c["file"] for c in conflicts])
+            raise WorkspaceConflictError(
+                f"Source file conflict detected for task '{clean_task_id}': Original files were modified "
+                f"outside the task while it was running: [{conflict_files}]. "
+                f"Reconciliation stopped to prevent clobbering user changes."
             )
 
         applied_new = []
         applied_modified = []
         backups_created = []
 
-        # 2. Apply modified files with pre-modification backups
+        # 3. Apply modified files with pre-modification backups and byte-exact fidelity
         for rel_path in changes["modified_files"]:
             src_file = source / rel_path
             sandbox_file = sandbox / rel_path
             if not sandbox_file.exists():
                 continue
 
-            content = sandbox_file.read_text(encoding="utf-8", errors="replace")
+            raw_bytes = sandbox_file.read_bytes()
             res = backup_service.atomic_write_file(
                 target_path=str(src_file),
-                content=content,
+                content=raw_bytes,
                 make_backup_if_exists=True,
-                task_id=task_id,
+                task_id=clean_task_id,
                 description=f"{description} (Modified {rel_path})"
             )
             applied_modified.append(rel_path)
             if res.get("backup"):
                 backups_created.append(res["backup"])
 
-        # 3. Apply new files
+        # 4. Apply new files
         for rel_path in changes["new_files"]:
             src_file = source / rel_path
             sandbox_file = sandbox / rel_path
             if not sandbox_file.exists():
                 continue
 
-            content = sandbox_file.read_text(encoding="utf-8", errors="replace")
+            raw_bytes = sandbox_file.read_bytes()
             src_file.parent.mkdir(parents=True, exist_ok=True)
             res = backup_service.atomic_write_file(
                 target_path=str(src_file),
-                content=content,
+                content=raw_bytes,
                 make_backup_if_exists=False,
-                task_id=task_id,
+                task_id=clean_task_id,
                 description=f"{description} (Created {rel_path})"
             )
             applied_new.append(rel_path)
@@ -242,7 +322,7 @@ class TaskWorkspaceSandbox:
         return {
             "status": "success",
             "message": "All verified changes applied safely with automatic version backups.",
-            "task_id": task_id,
+            "task_id": clean_task_id,
             "source_workspace": str(source),
             "new_files_created": applied_new,
             "applied_additions": applied_new,
@@ -254,9 +334,10 @@ class TaskWorkspaceSandbox:
 
     def cleanup_task_workspace(self, task_id: str):
         """Cleans up internal sandbox temp copy after task resolution."""
-        task_data = self._active_tasks.pop(task_id, None)
-        task_sandbox = self.sandbox_base / task_id
-        if task_sandbox.exists():
+        clean_task_id = workspace_service.validate_task_id(task_id)
+        task_data = self._active_tasks.pop(clean_task_id, None)
+        task_sandbox = (self.sandbox_base / clean_task_id).resolve()
+        if task_sandbox.exists() and task_sandbox.parent == self.sandbox_base.resolve():
             shutil.rmtree(task_sandbox, ignore_errors=True)
 
 

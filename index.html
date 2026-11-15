@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Official Firebase Web SDK (Compat v10) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <title>Stroke // AI Systems &amp; VFX Studio</title>
   <!-- Tailwind CSS Engine -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -201,7 +204,7 @@
     <!-- Launch Button -->
     <div class="mt-10 flex flex-col items-center space-y-3">
       <button id="greetingLaunchBtn" class="px-8 py-3 rounded-xl bg-[#a3e635] hover:bg-[#bef264] text-black font-semibold text-sm transition-all duration-200 shadow-glow-lime font-mono flex items-center space-x-2">
-        <span>Launch Stroke (Local Offline) →</span>
+        <span>Launch Stroke / Sign In →</span>
       </button>
       <button id="greetingSignInBtn" type="button" class="text-xs text-neutral-400 hover:text-white font-mono transition-colors">
         Have an account? Sign In with Email
@@ -1001,79 +1004,124 @@
       <div class="flex items-center justify-between border-b border-brand-border pb-3">
         <div class="flex items-center space-x-2">
           <div class="w-6 h-6 rounded bg-brand-accent/20 border border-brand-accent flex items-center justify-center font-bold text-xs text-brand-accent">S</div>
-          <h3 class="font-sans font-bold text-white text-base">Account &amp; Identity</h3>
+          <h3 class="font-sans font-bold text-white text-base">Stroke Authentication</h3>
         </div>
         <button id="closeAuthModalBtn" class="text-brand-muted hover:text-white">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <!-- Current Account Card -->
-      <div class="p-3 rounded-xl bg-brand-surface border border-brand-border flex items-center justify-between">
-        <div class="min-w-0">
-          <div class="text-[10px] text-brand-muted uppercase font-mono">Current Account</div>
-          <div id="authModalCurrentEmail" class="text-xs font-mono text-white truncate font-medium">Not signed in</div>
+      <!-- Current Account Card (Visible when signed in) -->
+      <div id="authActiveUserCard" class="hidden p-3.5 rounded-xl bg-brand-surface border border-brand-border space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="min-w-0">
+            <div class="text-[10px] text-brand-muted uppercase font-mono">Authenticated Developer</div>
+            <div id="authModalCurrentEmail" class="text-xs font-mono text-white truncate font-medium">Not signed in</div>
+          </div>
+          <span id="authEmailVerifyBadge" class="text-[10px] px-2 py-0.5 rounded font-mono font-medium border bg-amber-500/10 text-amber-400 border-amber-500/30">
+            Unverified
+          </span>
         </div>
-        <button id="authModalSignOutBtn" class="hidden text-xs text-brand-danger hover:underline px-2 py-1 rounded hover:bg-red-500/10 transition-colors font-mono">
-          Sign Out
-        </button>
+
+        <div id="authUnverifiedBanner" class="p-2 rounded bg-amber-950/30 border border-amber-500/20 text-[11px] text-amber-200/90 font-mono flex items-center justify-between">
+          <span>Email verification pending.</span>
+          <button id="authResendVerifyBtn" type="button" class="text-xs text-brand-accent hover:underline font-bold ml-2">Resend Email</button>
+        </div>
+
+        <div class="flex items-center justify-between pt-1 border-t border-brand-border/60">
+          <button id="authDeleteAccountBtn" type="button" class="text-xs text-brand-danger hover:underline font-mono">
+            Delete Account
+          </button>
+          <button id="authModalSignOutBtn" type="button" class="text-xs text-brand-muted hover:text-white hover:underline px-2.5 py-1 rounded bg-white/5 font-mono">
+            Sign Out
+          </button>
+        </div>
       </div>
 
-      <!-- Step 1: Email + Password -->
-      <div id="otpStep1" class="space-y-3.5">
+      <!-- Tab Switcher (Visible when not signed in) -->
+      <div id="authTabSwitcher" class="grid grid-cols-2 gap-1 p-1 bg-brand-surface rounded-lg border border-brand-border">
+        <button id="authTabSignInBtn" type="button" class="py-1.5 text-xs font-mono rounded-md bg-brand-accent text-black font-semibold transition-all">Sign In</button>
+        <button id="authTabSignUpBtn" type="button" class="py-1.5 text-xs font-mono rounded-md text-brand-muted hover:text-white transition-all">Create Account</button>
+      </div>
+
+      <!-- Tab 1: Sign In -->
+      <form id="authSignInPanel" class="space-y-3.5">
         <div>
           <label class="block text-[11px] text-brand-muted uppercase mb-1">Developer Email</label>
-          <input id="authEmailInput" type="email" placeholder="you@domain.com" autocomplete="email" spellcheck="false" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+          <input id="authEmailInput" type="email" placeholder="you@domain.com" autocomplete="email" required class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
         </div>
-
         <div>
-          <label class="block text-[11px] text-brand-muted uppercase mb-1">Make / Enter Password</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] text-brand-muted uppercase">Password</label>
+            <button id="authToForgotBtn" type="button" class="text-[10px] text-brand-accent hover:underline font-mono">Forgot password?</button>
+          </div>
           <div class="relative">
-            <input id="authPasswordInput" type="password" placeholder="Enter or create password (min 6 chars)" minlength="6" autocomplete="current-password" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono pr-14">
+            <input id="authPasswordInput" type="password" placeholder="Enter password" required autocomplete="current-password" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono pr-14">
             <button id="toggleAuthPasswordBtn" type="button" class="absolute right-2.5 top-2 text-[11px] text-brand-muted hover:text-white font-mono uppercase">Show</button>
           </div>
-          <p class="text-[10px] text-brand-muted mt-1 font-mono">Enter your email and create a password to receive your 6-digit OTP code.</p>
         </div>
+        <button id="authSignInSubmitBtn" type="submit" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button flex items-center justify-center space-x-2 font-mono">
+          <span>Sign In to Stroke →</span>
+        </button>
+      </form>
 
-        <div class="pt-1 space-y-2">
-          <button id="sendOtpBtn" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button flex items-center justify-center space-x-2 font-mono">
-            <span id="sendOtpBtnText">Send 6-Digit OTP Code →</span>
-          </button>
-          <button id="guestContinueBtn" type="button" class="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-brand-muted hover:text-white text-xs font-mono transition-colors">
-            Continue in Offline / Guest Mode →
-          </button>
-        </div>
-      </div>
-
-      <!-- Step 2: Enter 6-digit OTP from Email -->
-      <div id="otpStep2" class="hidden space-y-3.5">
-        <div class="p-3 rounded-lg bg-brand-surface border border-brand-border text-xs text-brand-text font-mono space-y-1.5">
-          <div class="flex items-center space-x-2 text-brand-accent font-semibold">
-            <svg class="w-4 h-4 text-brand-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-            <span>Verification Email Dispatched</span>
-          </div>
-          <p class="text-[11px] text-brand-muted leading-relaxed">
-            A 6-digit verification code has been dispatched to <span id="otpTargetEmailDisplay" class="text-white font-bold"></span>.
-            Check your inbox and enter the code below.
-          </p>
-        </div>
-
+      <!-- Tab 2: Create Account -->
+      <form id="authSignUpPanel" class="hidden space-y-3.5">
         <div>
-          <label class="block text-[11px] text-brand-muted uppercase mb-1">Enter 6-Digit Code</label>
-          <input id="authOtpInput" type="text" maxlength="6" placeholder="______" autocomplete="one-time-code" class="w-full bg-brand-input border border-brand-accent rounded-lg px-3 py-2 text-white text-xl tracking-[0.25em] text-center focus:outline-none font-mono font-bold">
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Developer Email</label>
+          <input id="authSignUpEmailInput" type="email" placeholder="you@domain.com" autocomplete="email" required class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
         </div>
-
-        <div class="flex items-center justify-between text-[11px] text-brand-muted font-mono pt-0.5">
-          <span>Need new code?</span>
-          <button id="resendOtpBtn" type="button" class="text-brand-accent hover:underline">Regenerate Code</button>
+        <div>
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Password (min 8 chars)</label>
+          <input id="authSignUpPasswordInput" type="password" minlength="8" placeholder="Create strong password" required autocomplete="new-password" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
         </div>
+        <div>
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Confirm Password</label>
+          <input id="authSignUpConfirmPasswordInput" type="password" minlength="8" placeholder="Re-type password" required autocomplete="new-password" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+        </div>
+        <button id="authSignUpSubmitBtn" type="submit" class="w-full py-2.5 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button flex items-center justify-center space-x-2 font-mono">
+          <span>Create Account &amp; Send Verification →</span>
+        </button>
+      </form>
 
-        <div class="flex space-x-2 pt-1">
-          <button id="backToStep1Btn" type="button" class="w-1/3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-mono transition-colors">Back</button>
-          <button id="verifyOtpBtn" type="button" class="w-2/3 py-2 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button font-mono">
-            Verify &amp; Sign In
+      <!-- Tab 3: Forgot Password -->
+      <form id="authForgotPanel" class="hidden space-y-3.5">
+        <p class="text-xs text-brand-muted font-mono leading-relaxed">
+          Enter your registered developer email address. We will dispatch an official Firebase password reset link to your inbox.
+        </p>
+        <div>
+          <label class="block text-[11px] text-brand-muted uppercase mb-1">Developer Email</label>
+          <input id="authForgotEmailInput" type="email" placeholder="you@domain.com" autocomplete="email" required class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+        </div>
+        <div class="flex items-center space-x-2 pt-1">
+          <button id="authBackToSignInBtn" type="button" class="w-1/3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-mono transition-colors">Back</button>
+          <button id="authForgotSubmitBtn" type="submit" class="w-2/3 py-2 rounded-lg bg-brand-accent text-black font-semibold text-xs hover:bg-emerald-400 transition-all glow-button font-mono">
+            Send Reset Link
           </button>
         </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: REAUTHENTICATION (FOR SENSITIVE ACTIONS) -->
+  <div id="reauthModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-brand-card border border-brand-danger/40 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center space-x-2 text-brand-danger">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        <h3 class="font-sans font-bold text-white text-sm">Security Confirmation</h3>
+      </div>
+      <p id="reauthPromptText" class="text-xs text-brand-muted font-mono leading-relaxed">
+        Please enter your account password to confirm account deletion and purge of backend data.
+      </p>
+      <div>
+        <label class="block text-[11px] text-brand-muted uppercase mb-1">Account Password</label>
+        <input id="reauthPasswordInput" type="password" required placeholder="Enter password" class="w-full bg-brand-input border border-brand-border focus:border-brand-accent rounded-lg px-3 py-2 text-white text-sm focus:outline-none font-mono">
+      </div>
+      <div class="flex space-x-2 pt-1">
+        <button id="reauthCancelBtn" type="button" class="w-1/2 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white text-xs font-mono transition-colors">Cancel</button>
+        <button id="reauthConfirmBtn" type="button" class="w-1/2 py-2 rounded-lg bg-brand-danger text-white font-semibold text-xs hover:bg-red-600 transition-all font-mono">
+          Confirm
+        </button>
       </div>
     </div>
   </div>
@@ -1323,6 +1371,8 @@
   <!-- ========================================================================= -->
   <script>
     const state = {
+      idToken: null,
+      firebaseUser: null,
       userEmail: (() => {
         const stored = (localStorage.getItem('stroke_user_email') || '').trim();
         if (!stored || stored === 'null' || stored === 'undefined' || !stored.includes('@')) {
@@ -1431,9 +1481,8 @@
     function syncViewAuthState() {
       const greetingView = document.getElementById('greetingView');
       const appWorkspace = document.getElementById('appWorkspace');
-      const isAuth = !!(state.userEmail && state.userEmail.includes('@'));
-      const shouldShowWorkspace = isAuth || state.hasLaunched || localStorage.getItem('stroke_has_launched') === 'true';
-      if (!shouldShowWorkspace) {
+      const isAuth = !!(state.userEmail && state.idToken);
+      if (!isAuth) {
         if (greetingView) {
           greetingView.classList.remove('hidden');
           greetingView.style.display = 'flex';
@@ -1891,7 +1940,7 @@
       settingsEmailText.textContent = state.userEmail || 'Not signed in';
       settingsTempSlider.value = state.creativity !== undefined ? state.creativity : state.temperature;
       settingsTempValText.textContent = (state.creativity !== undefined ? state.creativity : state.temperature).toFixed(2);
-      const cacheKey = 'stroke_mandatory_vfx_cache_' + (state.userEmail || 'guest');
+      const cacheKey = 'stroke_mandatory_vfx_cache_' + (state.userEmail || 'default');
       const hasCache = !!localStorage.getItem(cacheKey);
       settingsCacheBadge.textContent = hasCache ? 'Active (Cached)' : 'Not Cached';
       settingsCacheBadge.className = hasCache ? 'text-[10px] font-mono text-brand-accent' : 'text-[10px] font-mono text-brand-muted';
@@ -2008,7 +2057,7 @@
         isDanger: true
       });
       if (!confirmed) return;
-      const email = state.userEmail || 'guest';
+      const email = state.userEmail;
       localStorage.removeItem('stroke_mandatory_vfx_cache_' + email);
       settingsCacheBadge.textContent = 'Cache Cleared';
       settingsCacheBadge.className = 'text-[10px] font-mono text-red-400';
@@ -3534,218 +3583,412 @@
     }
 
     // 14. Auth Modal, Sign Out, & OTP Gateway
-    function openAuthModal() {
-      closeAllModals();
-      const email = state.userEmail;
-      const curEmailEl = document.getElementById('authModalCurrentEmail');
-      const curSignOutBtn = document.getElementById('authModalSignOutBtn');
-      if (email) {
-        if (curEmailEl) curEmailEl.textContent = email;
-        if (curSignOutBtn) curSignOutBtn.classList.remove('hidden');
-      } else {
-        if (curEmailEl) curEmailEl.textContent = 'Not signed in';
-        if (curSignOutBtn) curSignOutBtn.classList.add('hidden');
-      }
-      const emailInput = document.getElementById('authEmailInput');
-      const passInput = document.getElementById('authPasswordInput');
-      if (emailInput) {
-        emailInput.value = '';
-        setTimeout(() => emailInput.focus(), 100);
-      }
-      if (passInput) {
-        passInput.value = '';
-        passInput.type = 'password';
-      }
-      const toggleBtn = document.getElementById('toggleAuthPasswordBtn');
-      if (toggleBtn) toggleBtn.textContent = 'SHOW';
+    // =========================================================================
+    // 14. OFFICIAL FIREBASE AUTHENTICATION CONTROLLER & SESSION ENGINE
+    // =========================================================================
+    let firebaseAuth = null;
+    let authInitialized = false;
 
-      document.getElementById('otpStep1').classList.remove('hidden');
-      document.getElementById('otpStep2').classList.add('hidden');
-      authModal.classList.remove('hidden');
+    // Intercept window.fetch to attach verified Firebase ID token to all backend requests
+    const _originalFetch = window.fetch;
+    window.fetch = async function(input, init) {
+      init = init || {};
+      init.headers = init.headers || {};
+      if (state.idToken) {
+        if (init.headers instanceof Headers) {
+          if (!init.headers.has('Authorization')) {
+            init.headers.set('Authorization', `Bearer ${state.idToken}`);
+          }
+        } else if (Array.isArray(init.headers)) {
+          const hasAuth = init.headers.some(([k]) => k.toLowerCase() === 'authorization');
+          if (!hasAuth) {
+            init.headers.push(['Authorization', `Bearer ${state.idToken}`]);
+          }
+        } else {
+          if (!init.headers['Authorization'] && !init.headers['authorization']) {
+            init.headers['Authorization'] = `Bearer ${state.idToken}`;
+          }
+        }
+      }
+      return _originalFetch.call(this, input, init);
+    };
+
+    async function initializeFirebaseAuthClient() {
+      if (authInitialized) return;
+      try {
+        let projectId = 'stroke-cyber-matrix';
+        let emulatorHost = null;
+        try {
+          const cfgRes = await _originalFetch('/auth/config');
+          if (cfgRes.ok) {
+            const cfg = await cfgRes.json();
+            if (cfg.projectId) projectId = cfg.projectId;
+            if (cfg.emulatorHost) emulatorHost = cfg.emulatorHost;
+          }
+        } catch(e) {}
+
+        const fbConfig = window.__STROKE_FIREBASE_CONFIG__ || {
+          apiKey: "AIzaSyDummyStrokeClientKeyForDesktopVerification",
+          authDomain: `${projectId}.firebaseapp.com`,
+          projectId: projectId,
+        };
+
+        if (window.firebase && !window.firebase.apps.length) {
+          window.firebase.initializeApp(fbConfig);
+        }
+        firebaseAuth = window.firebase ? window.firebase.auth() : null;
+
+        if (firebaseAuth && emulatorHost) {
+          try {
+            firebaseAuth.useEmulator(`http://${emulatorHost}`);
+            console.info('[Firebase Auth] Connected to emulator:', emulatorHost);
+          } catch(e) {}
+        }
+
+        if (firebaseAuth) {
+          // Listen to primary auth state
+          firebaseAuth.onAuthStateChanged(async (user) => {
+            if (user) {
+              state.firebaseUser = user;
+              state.userEmail = (user.email || '').toLowerCase();
+              state.idToken = await user.getIdToken();
+              updateUserIdentityUI();
+              syncViewAuthState();
+              const authModal = document.getElementById('authModal');
+              if (authModal && !authModal.classList.contains('hidden') && !document.getElementById('authActiveUserCard')?.classList.contains('hidden')) {
+                // If modal was opened just to sign in, close it
+              }
+              await checkOrRunMandatoryMemorySetup();
+              await fetchMemoryStats();
+              await loadUserChats();
+            } else {
+              state.firebaseUser = null;
+              state.userEmail = null;
+              state.idToken = null;
+              updateUserIdentityUI();
+              syncViewAuthState();
+            }
+          });
+
+          // Keep token fresh automatically
+          firebaseAuth.onIdTokenChanged(async (user) => {
+            if (user) {
+              state.idToken = await user.getIdToken();
+            }
+          });
+        }
+        authInitialized = true;
+      } catch(exc) {
+        console.error('[Firebase Auth Init Error]', exc);
+      }
     }
 
-    function signOutUser() {
+    function openAuthModal() {
+      closeAllModals();
+      const authModal = document.getElementById('authModal');
+      const activeCard = document.getElementById('authActiveUserCard');
+      const tabSwitcher = document.getElementById('authTabSwitcher');
+      const curEmailEl = document.getElementById('authModalCurrentEmail');
+      const verifyBadge = document.getElementById('authEmailVerifyBadge');
+      const unverifiedBanner = document.getElementById('authUnverifiedBanner');
+
+      if (state.firebaseUser && state.userEmail) {
+        // User is authenticated: show account details & management
+        if (activeCard) activeCard.classList.remove('hidden');
+        if (tabSwitcher) tabSwitcher.classList.add('hidden');
+        document.getElementById('authSignInPanel')?.classList.add('hidden');
+        document.getElementById('authSignUpPanel')?.classList.add('hidden');
+        document.getElementById('authForgotPanel')?.classList.add('hidden');
+
+        if (curEmailEl) curEmailEl.textContent = state.userEmail;
+        const isVerified = Boolean(state.firebaseUser.emailVerified);
+        if (verifyBadge) {
+          if (isVerified) {
+            verifyBadge.textContent = 'Verified';
+            verifyBadge.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+          } else {
+            verifyBadge.textContent = 'Unverified';
+            verifyBadge.className = 'text-[10px] px-2 py-0.5 rounded font-mono font-medium border bg-amber-500/10 text-amber-400 border-amber-500/30';
+          }
+        }
+        if (unverifiedBanner) {
+          if (isVerified) unverifiedBanner.classList.add('hidden');
+          else unverifiedBanner.classList.remove('hidden');
+        }
+      } else {
+        // Not authenticated: show sign in tab by default
+        if (activeCard) activeCard.classList.add('hidden');
+        if (tabSwitcher) tabSwitcher.classList.remove('hidden');
+        showAuthTab('signin');
+      }
+      if (authModal) authModal.classList.remove('hidden');
+    }
+
+    function showAuthTab(tab) {
+      const signInTabBtn = document.getElementById('authTabSignInBtn');
+      const signUpTabBtn = document.getElementById('authTabSignUpBtn');
+      const signInPanel = document.getElementById('authSignInPanel');
+      const signUpPanel = document.getElementById('authSignUpPanel');
+      const forgotPanel = document.getElementById('authForgotPanel');
+
+      if (tab === 'signin') {
+        if (signInTabBtn) { signInTabBtn.className = 'py-1.5 text-xs font-mono rounded-md bg-brand-accent text-black font-semibold transition-all'; }
+        if (signUpTabBtn) { signUpTabBtn.className = 'py-1.5 text-xs font-mono rounded-md text-brand-muted hover:text-white transition-all'; }
+        if (signInPanel) signInPanel.classList.remove('hidden');
+        if (signUpPanel) signUpPanel.classList.add('hidden');
+        if (forgotPanel) forgotPanel.classList.add('hidden');
+        document.getElementById('authEmailInput')?.focus();
+      } else if (tab === 'signup') {
+        if (signInTabBtn) { signInTabBtn.className = 'py-1.5 text-xs font-mono rounded-md text-brand-muted hover:text-white transition-all'; }
+        if (signUpTabBtn) { signUpTabBtn.className = 'py-1.5 text-xs font-mono rounded-md bg-brand-accent text-black font-semibold transition-all'; }
+        if (signInPanel) signInPanel.classList.add('hidden');
+        if (signUpPanel) signUpPanel.classList.remove('hidden');
+        if (forgotPanel) forgotPanel.classList.add('hidden');
+        document.getElementById('authSignUpEmailInput')?.focus();
+      } else if (tab === 'forgot') {
+        if (signInPanel) signInPanel.classList.add('hidden');
+        if (signUpPanel) signUpPanel.classList.add('hidden');
+        if (forgotPanel) forgotPanel.classList.remove('hidden');
+        document.getElementById('authForgotEmailInput')?.focus();
+      }
+    }
+
+    async function signOutUser() {
+      try {
+        if (firebaseAuth) {
+          await firebaseAuth.signOut();
+        }
+        await _originalFetch('/auth/logout', {
+          method: 'POST',
+          headers: state.idToken ? { 'Authorization': `Bearer ${state.idToken}` } : {}
+        }).catch(() => {});
+      } catch(e) {}
+
       localStorage.removeItem('stroke_user_email');
+      localStorage.removeItem('stroke_has_launched');
+      state.firebaseUser = null;
       state.userEmail = null;
+      state.idToken = null;
       state.chatMessages = [];
       state.allChats = [];
-      state.hasLaunched = true;
-      localStorage.setItem('stroke_has_launched', 'true');
+
       const list = document.getElementById('recentChatsList');
-      if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">Operating in Local / Offline mode.</div>';
-      messagesList.innerHTML = '';
-      messagesList.classList.add('hidden');
-      emptyStateHero.classList.remove('hidden');
+      if (list) list.innerHTML = '<div class="text-[11px] text-brand-muted px-2.5 py-2 italic">Please sign in to access workspace.</div>';
+      if (messagesList) {
+        messagesList.innerHTML = '';
+        messagesList.classList.add('hidden');
+      }
+      if (emptyStateHero) emptyStateHero.classList.remove('hidden');
+
       closeAllModals();
       syncViewAuthState();
       updateUserIdentityUI();
-      showToast('Signed out of Stroke. Operating in Local / Offline mode.');
+      showToast('Signed out of Stroke successfully.');
     }
 
-    const greetingLaunchBtn = document.getElementById('greetingLaunchBtn');
-    if (greetingLaunchBtn) {
-      greetingLaunchBtn.addEventListener('click', () => {
-        state.hasLaunched = true;
-        localStorage.setItem('stroke_has_launched', 'true');
-        syncViewAuthState();
-      });
-    }
-    const greetingSignInBtn = document.getElementById('greetingSignInBtn');
-    if (greetingSignInBtn) {
-      greetingSignInBtn.addEventListener('click', openAuthModal);
-    }
-    const guestContinueBtn = document.getElementById('guestContinueBtn');
-    if (guestContinueBtn) {
-      guestContinueBtn.addEventListener('click', () => {
-        state.hasLaunched = true;
-        localStorage.setItem('stroke_has_launched', 'true');
-        closeAllModals();
-        syncViewAuthState();
-        updateUserIdentityUI();
-        showToast('Operating in Local / Offline mode.');
-      });
-    }
+    // Modal close and greeting triggers
+    document.getElementById('closeAuthModalBtn')?.addEventListener('click', () => {
+      document.getElementById('authModal')?.classList.add('hidden');
+    });
 
-    document.getElementById('closeAuthModalBtn').addEventListener('click', () => authModal.classList.add('hidden'));
-    document.getElementById('authModalSignOutBtn').addEventListener('click', async () => {
-      const email = state.userEmail || 'current session';
+    document.getElementById('greetingLaunchBtn')?.addEventListener('click', openAuthModal);
+    document.getElementById('greetingSignInBtn')?.addEventListener('click', openAuthModal);
+
+    document.getElementById('authTabSignInBtn')?.addEventListener('click', () => showAuthTab('signin'));
+    document.getElementById('authTabSignUpBtn')?.addEventListener('click', () => showAuthTab('signup'));
+    document.getElementById('authToForgotBtn')?.addEventListener('click', () => showAuthTab('forgot'));
+    document.getElementById('authBackToSignInBtn')?.addEventListener('click', () => showAuthTab('signin'));
+
+    // Toggle password view
+    document.getElementById('toggleAuthPasswordBtn')?.addEventListener('click', () => {
+      const passInput = document.getElementById('authPasswordInput');
+      const toggleBtn = document.getElementById('toggleAuthPasswordBtn');
+      if (!passInput) return;
+      if (passInput.type === 'password') {
+        passInput.type = 'text';
+        if (toggleBtn) toggleBtn.textContent = 'HIDE';
+      } else {
+        passInput.type = 'password';
+        if (toggleBtn) toggleBtn.textContent = 'SHOW';
+      }
+    });
+
+    // 1. Sign In submission
+    document.getElementById('authSignInPanel')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('authEmailInput')?.value.trim();
+      const password = document.getElementById('authPasswordInput')?.value;
+      if (!email || !password) return;
+
+      const submitBtn = document.getElementById('authSignInSubmitBtn');
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Authenticating...'; }
+
+      try {
+        if (!firebaseAuth) await initializeFirebaseAuthClient();
+        await firebaseAuth.signInWithEmailAndPassword(email, password);
+        document.getElementById('authModal')?.classList.add('hidden');
+        showToast('Signed in successfully as ' + email);
+      } catch(err) {
+        showToast(err.message || 'Authentication failed. Please verify email and password.');
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Sign In to Stroke →'; }
+      }
+    });
+
+    // 2. Sign Up submission
+    document.getElementById('authSignUpPanel')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('authSignUpEmailInput')?.value.trim();
+      const password = document.getElementById('authSignUpPasswordInput')?.value;
+      const confirmPassword = document.getElementById('authSignUpConfirmPasswordInput')?.value;
+
+      if (!email || !password) return;
+      if (password.length < 8) {
+        showToast('Password must be at least 8 characters long.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        showToast('Passwords do not match. Please re-enter.');
+        return;
+      }
+
+      const submitBtn = document.getElementById('authSignUpSubmitBtn');
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating Account...'; }
+
+      try {
+        if (!firebaseAuth) await initializeFirebaseAuthClient();
+        const userCred = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+        if (userCred.user) {
+          try {
+            await userCred.user.sendEmailVerification();
+            showToast('Account created! A verification email has been dispatched to ' + email);
+          } catch(e) {
+            showToast('Account created successfully.');
+          }
+        }
+        document.getElementById('authModal')?.classList.add('hidden');
+      } catch(err) {
+        showToast(err.message || 'Failed to create account.');
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account & Send Verification →'; }
+      }
+    });
+
+    // 3. Forgot Password submission
+    document.getElementById('authForgotPanel')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('authForgotEmailInput')?.value.trim();
+      if (!email) return;
+
+      const submitBtn = document.getElementById('authForgotSubmitBtn');
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending Link...'; }
+
+      try {
+        if (!firebaseAuth) await initializeFirebaseAuthClient();
+        await firebaseAuth.sendPasswordResetEmail(email);
+        showToast('Password reset link sent to ' + email + '. Check your inbox.');
+        showAuthTab('signin');
+      } catch(err) {
+        showToast(err.message || 'Failed to send password reset email.');
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send Reset Link'; }
+      }
+    });
+
+    // 4. Resend Verification Email
+    document.getElementById('authResendVerifyBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('authResendVerifyBtn');
+      if (!state.firebaseUser) return;
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+      try {
+        await state.firebaseUser.sendEmailVerification();
+        showToast('Verification email re-sent. Please check your inbox.');
+      } catch(err) {
+        showToast(err.message || 'Failed to resend verification email.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Resend Email'; }
+      }
+    });
+
+    // 5. Sign Out button
+    document.getElementById('authModalSignOutBtn')?.addEventListener('click', async () => {
       const confirmed = await askConfirmation({
         title: 'Sign Out',
-        message: `Do you want to sign out of ${email}? You will need to verify via email OTP to sign back in.`,
+        message: `Do you want to sign out of ${state.userEmail}?`,
         confirmText: 'Sign Out',
         isDanger: true
       });
       if (confirmed) {
-        signOutUser();
+        await signOutUser();
       }
     });
 
-    const toggleAuthPasswordBtn = document.getElementById('toggleAuthPasswordBtn');
-    if (toggleAuthPasswordBtn) {
-      toggleAuthPasswordBtn.addEventListener('click', () => {
-        const passInput = document.getElementById('authPasswordInput');
-        if (!passInput) return;
-        if (passInput.type === 'password') {
-          passInput.type = 'text';
-          toggleAuthPasswordBtn.textContent = 'HIDE';
-        } else {
-          passInput.type = 'password';
-          toggleAuthPasswordBtn.textContent = 'SHOW';
-        }
-      });
+    // 6. Delete Account & Reauthentication Flow
+    let pendingReauthAction = null;
+    function openReauthModal(actionPrompt, onConfirm) {
+      const promptEl = document.getElementById('reauthPromptText');
+      const passInput = document.getElementById('reauthPasswordInput');
+      if (promptEl) promptEl.textContent = actionPrompt;
+      if (passInput) passInput.value = '';
+      pendingReauthAction = onConfirm;
+      document.getElementById('reauthModal')?.classList.remove('hidden');
+      setTimeout(() => passInput?.focus(), 100);
     }
 
-    async function handleSendOtp(forceResend = false) {
-      const email = document.getElementById('authEmailInput').value.trim().toLowerCase();
-      const password = (document.getElementById('authPasswordInput')?.value || '').trim();
+    document.getElementById('reauthCancelBtn')?.addEventListener('click', () => {
+      document.getElementById('reauthModal')?.classList.add('hidden');
+      pendingReauthAction = null;
+    });
 
-      if (!email || !email.includes('@') || !email.includes('.')) {
-        showToast('Please enter a valid developer email address.');
-        document.getElementById('authEmailInput')?.focus();
+    document.getElementById('reauthConfirmBtn')?.addEventListener('click', async () => {
+      const password = document.getElementById('reauthPasswordInput')?.value;
+      if (!password) {
+        showToast('Please enter your password.');
         return;
       }
-      if (!password || password.length < 6) {
-        showToast('Please enter or create a password (minimum 6 characters).');
-        document.getElementById('authPasswordInput')?.focus();
-        return;
-      }
+      if (!state.firebaseUser || !state.userEmail) return;
 
-      const btn = document.getElementById('sendOtpBtn');
-      const btnText = document.getElementById('sendOtpBtnText');
-      if (btn) btn.disabled = true;
-      if (btnText) btnText.textContent = 'Sending 6-Digit OTP...';
+      const btn = document.getElementById('reauthConfirmBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Verifying...'; }
 
       try {
-        const res = await fetch('/auth/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, force_resend: forceResend })
-        });
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          const targetEl = document.getElementById('otpTargetEmailDisplay');
-          if (targetEl) targetEl.textContent = email;
-
-          document.getElementById('otpStep1').classList.add('hidden');
-          document.getElementById('otpStep2').classList.remove('hidden');
-
-          const otpInput = document.getElementById('authOtpInput');
-          if (otpInput) {
-            otpInput.value = '';
-            otpInput.focus();
-          }
-          showToast(data.message || ('Verification email sent to ' + email + '. Check your inbox.'));
-        } else {
-          const err = await res.json().catch(() => ({}));
-          showToast(err.detail || 'Failed to dispatch verification email.');
+        const cred = window.firebase.auth.EmailAuthProvider.credential(state.userEmail, password);
+        await state.firebaseUser.reauthenticateWithCredential(cred);
+        document.getElementById('reauthModal')?.classList.add('hidden');
+        if (pendingReauthAction) {
+          const action = pendingReauthAction;
+          pendingReauthAction = null;
+          await action();
         }
-      } catch(e) {
-        showToast('Network error during verification dispatch.');
+      } catch(err) {
+        showToast(err.message || 'Reauthentication failed. Incorrect password.');
       } finally {
-        if (btn) btn.disabled = false;
-        if (btnText) btnText.textContent = 'Send Verification Code →';
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirm'; }
       }
-    }
-
-    document.getElementById('sendOtpBtn').addEventListener('click', () => handleSendOtp(false));
-
-    const resendOtpBtn = document.getElementById('resendOtpBtn');
-    if (resendOtpBtn) {
-      resendOtpBtn.addEventListener('click', async () => {
-        resendOtpBtn.disabled = true;
-        resendOtpBtn.textContent = 'Resending...';
-        await handleSendOtp(true);
-        let cd = 30;
-        const iv = setInterval(() => {
-          cd--;
-          if (cd <= 0) {
-            clearInterval(iv);
-            resendOtpBtn.disabled = false;
-            resendOtpBtn.textContent = 'Resend Code';
-          } else {
-            resendOtpBtn.textContent = `Resend in ${cd}s`;
-          }
-        }, 1000);
-      });
-    }
-
-    const authEmailInputEl = document.getElementById('authEmailInput');
-    if (authEmailInputEl) {
-      authEmailInputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          document.getElementById('authPasswordInput')?.focus();
-        }
-      });
-    }
-
-    const authPasswordInputEl = document.getElementById('authPasswordInput');
-    if (authPasswordInputEl) {
-      authPasswordInputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          handleSendOtp();
-        }
-      });
-    }
-
-    const authOtpInputEl = document.getElementById('authOtpInput');
-    if (authOtpInputEl) {
-      authOtpInputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          document.getElementById('verifyOtpBtn').click();
-        }
-      });
-    }
-
-    document.getElementById('backToStep1Btn').addEventListener('click', () => {
-      document.getElementById('otpStep2').classList.add('hidden');
-      document.getElementById('otpStep1').classList.remove('hidden');
     });
 
-    // 14. Two Types of Memory: Mandatory Memory (Local Cache) & AI Memory (Firestore 100 MB Quota)
-    async function updateMemoryMeterUI(memData) {
+    document.getElementById('authDeleteAccountBtn')?.addEventListener('click', () => {
+      openReauthModal(
+        `Are you absolutely sure you want to delete ${state.userEmail}? All saved chats, AI memory, and profile data will be permanently wiped.`,
+        async () => {
+          try {
+            // First call backend to purge chats, memory, and profile
+            await fetch('/auth/account', { method: 'DELETE' });
+            // Then delete user from Firebase Auth
+            await state.firebaseUser.delete();
+            await signOutUser();
+            showToast('Account and all associated data permanently deleted.');
+          } catch(err) {
+            showToast(err.message || 'Failed to delete account.');
+          }
+        }
+      );
+    });
+
+    // Initialize Firebase Auth Client immediately on load
+    initializeFirebaseAuthClient();
+
+    function updateMemoryMeterUI(memData) {
       if (!memData) return;
       const pct = Math.min(100, Math.max(0, memData.percent_used || memData.memory_percent || 0));
       const usedBytes = memData.total_bytes_used || memData.memory_bytes_used || 0;
@@ -3772,7 +4015,7 @@
     }
 
     async function checkOrRunMandatoryMemorySetup(force = false) {
-      const email = state.userEmail || 'guest';
+      const email = state.userEmail;
       const cacheKey = 'stroke_mandatory_vfx_cache_' + email;
       const existingCache = localStorage.getItem(cacheKey);
 
@@ -3896,43 +4139,7 @@
       });
     }
 
-    // Verify OTP Button: Sets Identity & Initiates Mandatory Memory Check / 5X Loading Bar
-    document.getElementById('verifyOtpBtn').addEventListener('click', async () => {
-      const email = document.getElementById('authEmailInput').value.trim().toLowerCase();
-      const code = document.getElementById('authOtpInput').value.trim();
-      const password = (document.getElementById('authPasswordInput')?.value || '').trim();
-
-      if (!code || code.length !== 6) {
-        showToast('Please enter the 6-digit code received in your email.');
-        document.getElementById('authOtpInput')?.focus();
-        return;
-      }
-      try {
-        const res = await fetch('/auth/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, otp_code: code, password })
-        });
-        if (res.ok) {
-          state.userEmail = email;
-          localStorage.setItem('stroke_user_email', email);
-          updateUserIdentityUI();
-          syncViewAuthState();
-          authModal.classList.add('hidden');
-
-          // Checks for local cache; if absent, shows loading bar while 5X loop executes
-          await checkOrRunMandatoryMemorySetup();
-          await fetchMemoryStats();
-          await loadUserChats();
-          showToast('Signed in successfully as ' + email);
-        } else {
-          const err = await res.json().catch(() => ({}));
-          showToast(err.detail || 'Invalid or expired 6-digit verification code.');
-        }
-      } catch(e){
-        showToast('Verification request failed. Please check your connection.');
-      }
-    });
+// Legacy verifyOtpBtn listener removed: migrated to Firebase Auth
 
     // Check Mandatory Memory local cache & fetch memory quota stats on app startup
     checkOrRunMandatoryMemorySetup();

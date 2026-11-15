@@ -43,3 +43,14 @@ build/
 src-tauri/target/
 data/.vault_key
 *.vault_key
+*.enc
+data/*.enc
+data/local_firestore_db.json
+data/agent_tasks.json
+data/backups/
+*.tmp
+*.vault
+*.key
+credentials/
+
+

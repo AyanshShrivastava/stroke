@@ -35,7 +35,6 @@ Tests:
 
 import sys
 import os
-os.environ["STROKE_TEST_AUTO_APPROVE"] = "1"
 import json
 import time
 import subprocess
@@ -79,13 +78,20 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
         status_after = TerminalManager.terminal_get_status(session_id)
         self.assertIn(status_after.get("status"), ("error", "stopped", "terminated"))
 
+    @staticmethod
+    def _run_with_approval(session_id, command, args, timeout_sec=5):
+        res = TerminalManager.terminal_run(session_id, command, args, timeout_sec=timeout_sec)
+        if res.get("status") == "requires_approval":
+            return TerminalManager.respond_to_approval(res["approval_id"], True)
+        return res
+
     def test_02_terminal_stdout_stderr_and_exit_codes(self):
         """Test separate stdout/stderr capture and accurate exit codes."""
         session = TerminalManager.terminal_create_session()
         session_id = session["session_id"]
         try:
             # Test stdout
-            res1 = TerminalManager.terminal_run(
+            res1 = self._run_with_approval(
                 session_id, "python", ["-c", "print('stroke_stdout_token')"], timeout_sec=5
             )
             self.assertEqual(res1["exit_code"], 0)
@@ -93,14 +99,14 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
             self.assertEqual(res1["stderr"].strip(), "")
 
             # Test stderr separation
-            res2 = TerminalManager.terminal_run(
+            res2 = self._run_with_approval(
                 session_id, "python", ["-c", "import sys; sys.stderr.write('stroke_stderr_token\\n')"], timeout_sec=5
             )
             self.assertEqual(res2["exit_code"], 0)
             self.assertIn("stroke_stderr_token", res2["stderr"])
 
             # Test non-zero exit code
-            res3 = TerminalManager.terminal_run(
+            res3 = self._run_with_approval(
                 session_id, "python", ["-c", "import sys; sys.exit(37)"], timeout_sec=5
             )
             self.assertEqual(res3["exit_code"], 37)
@@ -114,7 +120,7 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
         try:
             # Generate 15,000 characters of output
             code = "print('X' * 15000)"
-            res = TerminalManager.terminal_run(session_id, "python", ["-c", code], timeout_sec=5)
+            res = self._run_with_approval(session_id, "python", ["-c", code], timeout_sec=5)
             self.assertIn("truncated", res["stdout"].lower())
             self.assertLessEqual(len(res["stdout"]), 4500)
         finally:
@@ -125,14 +131,16 @@ class TestStrokeEngineeringAudit(unittest.TestCase):
         session = TerminalManager.terminal_create_session()
         session_id = session["session_id"]
         try:
-            res1 = TerminalManager.terminal_run(
+            res1 = self._run_with_approval(
                 session_id, "python", ["-c", "print('command_v1')"], timeout_sec=5
             )
             self.assertEqual(res1["exit_code"], 0)
             self.assertIn("command_v1", res1["stdout"])
 
-            # Restart
+            # Restart re-evaluates security and requires approval if needed
             res_restart = TerminalManager.terminal_restart(session_id)
+            if res_restart.get("status") == "requires_approval":
+                res_restart = TerminalManager.respond_to_approval(res_restart["approval_id"], True)
             self.assertEqual(res_restart["exit_code"], 0)
             self.assertIn("command_v1", res_restart["stdout"])
         finally:

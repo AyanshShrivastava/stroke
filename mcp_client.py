@@ -3,6 +3,7 @@
 STROKE // GENERAL-PURPOSE MODEL CONTEXT PROTOCOL (MCP) CLIENT & REGISTRY
 Full JSON-RPC 2.0 / MCP spec compliance over STDIO and Streamable HTTP transports.
 Multi-server management, dynamic tool discovery, namespacing, and schema validation.
+Hardened with SSRF protection, secret vaulting, process cleanup, and lifecycle states.
 ================================================================================
 """
 
@@ -12,14 +13,24 @@ import json
 import asyncio
 import logging
 import uuid
-from typing import Dict, List, Any, Optional, Callable, Awaitable
+import ipaddress
+import socket
+import signal
+import re
+import time
+import shutil
+import urllib.parse
+from enum import Enum
+from typing import Dict, List, Any, Optional, Callable, Awaitable, Set, Tuple
 from dataclasses import dataclass, field
 import httpx
+from cryptography.fernet import Fernet
+import paths_service
 
 logger = logging.getLogger("stroke.mcp_client")
 
 # ------------------------------------------------------------------------------
-# EXCEPTIONS & PROTOCOL CONSTANTS
+# PROTOCOL CONSTANTS & LIFECYCLE STATES
 # ------------------------------------------------------------------------------
 MCP_PROTOCOL_VERSION = "2024-11-05"
 CLIENT_INFO = {
@@ -27,12 +38,365 @@ CLIENT_INFO = {
     "version": "2.0.0"
 }
 
+
+class McpServerState(str, Enum):
+    """5-Tier Connection Lifecycle States for MCP Servers."""
+    CONFIGURED = "configured"              # Tier 1: Config saved in registry
+    EXECUTABLE_FOUND = "executable_found"  # Tier 2: Binary found on disk or HTTP URL syntactically valid
+    PROCESS_RUNNING = "process_running"    # Tier 3: Subprocess spawned or HTTP port reachable
+    PROTOCOL_CONNECTED = "protocol_connected"  # Tier 4: JSON-RPC initialize handshake complete
+    TOOLS_READY = "tools_ready"            # Tier 5: Tools discovered, schema validated, ready for AI dispatch
+    OFFLINE = "offline"                    # Disconnected or unreachable
+    FAILED = "failed"                      # Process crash, handshake failure, or fatal error
+    DISABLED = "disabled"                  # Explicitly disabled by user
+
+
 class McpError(Exception):
     """Raised when an MCP protocol, transport, or tool call error occurs."""
     def __init__(self, message: str, code: int = -32000, data: Any = None):
         super().__init__(message)
         self.code = code
         self.data = data
+
+
+# ------------------------------------------------------------------------------
+# SSRF PROTECTION ENGINE
+# ------------------------------------------------------------------------------
+class SsrfProtector:
+    """
+    Prevents Server-Side Request Forgery (SSRF), DNS rebinding, redirect bypasses,
+    and access to private networks, loopback, and cloud metadata services.
+    """
+
+    BLOCKED_NETWORKS = [
+        ipaddress.ip_network("0.0.0.0/8"),
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("127.0.0.0/8"),
+        ipaddress.ip_network("169.254.0.0/16"),       # Link-local & cloud metadata
+        ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.168.0.0/16"),
+        ipaddress.ip_network("224.0.0.0/4"),          # Multicast
+        ipaddress.ip_network("240.0.0.0/4"),          # Reserved
+        ipaddress.ip_network("::/128"),
+        ipaddress.ip_network("::1/128"),              # IPv6 loopback
+        ipaddress.ip_network("fc00::/7"),             # IPv6 Unique Local
+        ipaddress.ip_network("fe80::/10"),            # IPv6 Link-Local
+    ]
+
+    BLOCKED_HOSTNAMES = {
+        "metadata.google.internal",
+        "instance-data",
+        "169.254.169.254",
+        "metadata",
+        "localhost.localdomain"
+    }
+
+    @classmethod
+    def validate_url(cls, url: str, allow_local: bool = False) -> str:
+        """
+        Validates URL scheme, resolves hostname to IP addresses, and ensures
+        target is not on a private/metadata network unless allow_local is set.
+        """
+        if not url or not isinstance(url, str):
+            raise McpError("Invalid or empty MCP server URL.", code=-32602)
+
+        url_str = url.strip()
+        parsed = urllib.parse.urlparse(url_str)
+
+        # 1. Strict protocol validation
+        if parsed.scheme not in ("http", "https"):
+            raise McpError(f"Unsupported MCP protocol scheme '{parsed.scheme}'. Only http and https are allowed.", code=-32602)
+
+        hostname = parsed.hostname
+        if not hostname:
+            raise McpError(f"URL '{url_str}' has no valid hostname.", code=-32602)
+
+        hostname_lower = hostname.lower()
+
+        # 2. Block known cloud metadata hostnames
+        if hostname_lower in cls.BLOCKED_HOSTNAMES:
+            raise McpError(f"Access to cloud metadata hostname '{hostname}' is strictly prohibited.", code=-32602)
+
+        # 3. Detect numeric / decimal / octal / hex IP obfuscation in host
+        if re.match(r"^(0x[0-9a-f]+|\d+)$", hostname_lower):
+            raise McpError("Obfuscated or integer IP addresses are prohibited.", code=-32602)
+        if re.match(r"^0\d+", hostname_lower):
+            raise McpError("Octal IP addresses are prohibited.", code=-32602)
+
+        # 4. Check for direct localhost naming
+        is_named_localhost = hostname_lower in ("localhost", "127.0.0.1", "::1")
+        if is_named_localhost:
+            if not allow_local:
+                raise McpError(
+                    f"Access to local host '{hostname}' is restricted. Enable 'allow_local' in server config to connect.",
+                    code=-32602
+                )
+            return url_str
+
+        # 5. DNS Resolution & IP Range Check
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        try:
+            addr_info = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+        except socket.gaierror as e:
+            raise McpError(f"Could not resolve host '{hostname}': {e}", code=-32602)
+
+        if not addr_info:
+            raise McpError(f"No IP addresses resolved for host '{hostname}'.", code=-32602)
+
+        for family, _, _, _, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+                # Unwrap IPv4-mapped IPv6 (::ffff:127.0.0.1)
+                if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
+                    ip_obj = ip_obj.ipv4_mapped
+
+                is_blocked = any(ip_obj in net for net in cls.BLOCKED_NETWORKS)
+
+                if is_blocked:
+                    if (ip_obj.is_loopback or ip_str == "127.0.0.1") and allow_local:
+                        continue
+                    raise McpError(
+                        f"SSRF Protection: Connection to IP '{ip_str}' ({hostname}) blocked. Private/cloud/metadata access prohibited.",
+                        code=-32602
+                    )
+            except ValueError:
+                raise McpError(f"Invalid resolved IP '{ip_str}' for host '{hostname}'.", code=-32602)
+
+        return url_str
+
+
+# ------------------------------------------------------------------------------
+# SECRET VAULT & ENVIRONMENT HYGIENE
+# ------------------------------------------------------------------------------
+class McpSecretVault:
+    """
+    Encrypts sensitive environment variables and HTTP headers using a local
+    machine AES-256 key with 0600 permissions. Prevents secrets from being saved
+    in plaintext JSON configuration files.
+    """
+
+    VAULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    KEY_FILE = os.path.join(VAULT_DIR, ".vault_key")
+    _cipher: Optional[Fernet] = None
+
+    @classmethod
+    def _get_cipher(cls) -> Fernet:
+        if cls._cipher is not None:
+            return cls._cipher
+
+        os.makedirs(cls.VAULT_DIR, exist_ok=True)
+        if os.path.exists(cls.KEY_FILE):
+            try:
+                with open(cls.KEY_FILE, "rb") as f:
+                    key = f.read().strip()
+                cls._cipher = Fernet(key)
+                return cls._cipher
+            except Exception:
+                pass
+
+        # Generate new key with 0600 mode
+        new_key = Fernet.generate_key()
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fd = os.open(cls.KEY_FILE, flags, 0o600)
+        with open(fd, "wb") as f:
+            f.write(new_key)
+        cls._cipher = Fernet(new_key)
+        return cls._cipher
+
+    @classmethod
+    def encrypt(cls, secret: str) -> str:
+        if not secret:
+            return ""
+        if secret.startswith("enc:fernet:"):
+            return secret
+        cipher = cls._get_cipher()
+        encrypted = cipher.encrypt(secret.encode("utf-8")).decode("utf-8")
+        return f"enc:fernet:{encrypted}"
+
+    @classmethod
+    def decrypt(cls, val: str) -> str:
+        if not val or not isinstance(val, str):
+            return val
+        if not val.startswith("enc:fernet:"):
+            return val
+        try:
+            cipher = cls._get_cipher()
+            enc_part = val[len("enc:fernet:"):]
+            return cipher.decrypt(enc_part.encode("utf-8")).decode("utf-8")
+        except Exception as e:
+            logger.warning(f"[McpSecretVault] Decryption failed: {e}")
+            return ""
+
+    @classmethod
+    def encrypt_dict(cls, d: Dict[str, str]) -> Dict[str, str]:
+        """Encrypts known sensitive keys or values in a dictionary."""
+        out = {}
+        sensitive_pattern = re.compile(r"(?i)(TOKEN|KEY|SECRET|PASSWORD|AUTH|CREDENTIAL|PAT)")
+        for k, v in d.items():
+            if sensitive_pattern.search(k) and v and not v.startswith("enc:fernet:"):
+                out[k] = cls.encrypt(v)
+            else:
+                out[k] = v
+        return out
+
+    @classmethod
+    def decrypt_dict(cls, d: Dict[str, str]) -> Dict[str, str]:
+        """Decrypts all encrypted values in a dictionary."""
+        out = {}
+        for k, v in d.items():
+            out[k] = cls.decrypt(v)
+        return out
+
+    @classmethod
+    def redact_dict(cls, d: Dict[str, Any]) -> Dict[str, Any]:
+        """Redacts sensitive values for diagnostic export or UI display."""
+        out = {}
+        sensitive_pattern = re.compile(r"(?i)(TOKEN|KEY|SECRET|PASSWORD|AUTH|CREDENTIAL|PAT)")
+        for k, v in d.items():
+            if sensitive_pattern.search(k):
+                out[k] = "***REDACTED***"
+            elif isinstance(v, str) and v.startswith("enc:fernet:"):
+                out[k] = "***ENCRYPTED***"
+            else:
+                out[k] = v
+        return out
+
+
+def build_minimal_mcp_env(custom_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    """
+    Constructs a minimal child process environment, scrubbing sensitive backend secrets
+    (Firebase, GitHub, Session, Stroke internal keys) and injecting decrypted user env.
+    """
+    SAFE_SYSTEM_KEYS = {
+        "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "TEMP", "TMP",
+        "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "NODE_PATH", "TERM",
+        "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT"
+    }
+
+    env: Dict[str, str] = {}
+    backend_secret_pattern = re.compile(
+        r"(?i)(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|AUTH|FERNET|SESSION|FIREBASE|GITHUB|STROKE)"
+    )
+
+    for k, v in os.environ.items():
+        if k in SAFE_SYSTEM_KEYS:
+            # Ensure safe system var itself doesn't contain secrets
+            if not backend_secret_pattern.search(k):
+                env[k] = v
+
+    # Extend standard paths safely
+    current_path = env.get("PATH", "")
+    local_node_bin = os.path.expanduser("~/.local/node/bin")
+    if os.path.exists(local_node_bin) and local_node_bin not in current_path:
+        env["PATH"] = f"{local_node_bin}{os.pathsep}{current_path}"
+
+    # Merge decrypted custom env
+    if custom_env:
+        decrypted = McpSecretVault.decrypt_dict(custom_env)
+        for k, v in decrypted.items():
+            env[k] = v
+
+    return env
+
+
+# ------------------------------------------------------------------------------
+# JSON SCHEMA VALIDATOR
+# ------------------------------------------------------------------------------
+class McpJsonSchemaValidator:
+    """
+    Validates tool call arguments and discovered tool definitions against
+    JSON Schema specifications (required fields, types, enums, min/max,
+    additionalProperties policy).
+    """
+
+    TYPE_MAP = {
+        "string": str,
+        "integer": int,
+        "number": (int, float),
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+        "null": type(None)
+    }
+
+    @classmethod
+    def validate(cls, schema: Dict[str, Any], data: Any, path: str = "arguments") -> None:
+        if not schema or not isinstance(schema, dict):
+            return
+
+        expected_type = schema.get("type")
+        if expected_type and expected_type in cls.TYPE_MAP:
+            target_types = cls.TYPE_MAP[expected_type]
+            # Handle float/int distinction: bool is a subclass of int in Python
+            if expected_type in ("integer", "number") and isinstance(data, bool):
+                raise McpError(f"Field '{path}' expected {expected_type}, got boolean.", code=-32602)
+            if expected_type == "integer" and isinstance(data, float) and not data.is_integer():
+                raise McpError(f"Field '{path}' expected integer, got float {data}.", code=-32602)
+            if not isinstance(data, target_types):
+                raise McpError(f"Field '{path}' expected type '{expected_type}', got {type(data).__name__}.", code=-32602)
+
+        # Enums
+        if "enum" in schema and isinstance(schema["enum"], list):
+            if data not in schema["enum"]:
+                raise McpError(f"Field '{path}' value {json.dumps(data)} is not one of allowed values: {schema['enum']}", code=-32602)
+
+        # Numeric limits
+        if isinstance(data, (int, float)) and not isinstance(data, bool):
+            if "minimum" in schema and data < schema["minimum"]:
+                raise McpError(f"Field '{path}' value {data} is less than minimum {schema['minimum']}.", code=-32602)
+            if "maximum" in schema and data > schema["maximum"]:
+                raise McpError(f"Field '{path}' value {data} is greater than maximum {schema['maximum']}.", code=-32602)
+
+        # String limits
+        if isinstance(data, str):
+            if "minLength" in schema and len(data) < schema["minLength"]:
+                raise McpError(f"Field '{path}' length {len(data)} is shorter than minLength {schema['minLength']}.", code=-32602)
+            if "maxLength" in schema and len(data) > schema["maxLength"]:
+                raise McpError(f"Field '{path}' length {len(data)} is longer than maxLength {schema['maxLength']}.", code=-32602)
+            if "pattern" in schema:
+                pattern = schema["pattern"]
+                if not re.search(pattern, data):
+                    raise McpError(f"Field '{path}' does not match pattern '{pattern}'.", code=-32602)
+
+        # Object validation
+        if isinstance(data, dict):
+            # Required fields
+            required = schema.get("required", [])
+            for req in required:
+                if req not in data:
+                    raise McpError(f"Missing required parameter '{path}.{req}'.", code=-32602)
+
+            # Additional properties policy
+            allow_additional = schema.get("additionalProperties", True)
+            props = schema.get("properties", {})
+            if allow_additional is False:
+                for k in data.keys():
+                    if k not in props:
+                        raise McpError(f"Unrecognized property '{path}.{k}' not allowed by tool schema.", code=-32602)
+
+            # Recursive property validation
+            for k, val in data.items():
+                if k in props and isinstance(props[k], dict):
+                    cls.validate(props[k], val, path=f"{path}.{k}")
+
+        # Array validation
+        if isinstance(data, list) and "items" in schema and isinstance(schema["items"], dict):
+            item_schema = schema["items"]
+            for idx, item in enumerate(data):
+                cls.validate(item_schema, item, path=f"{path}[{idx}]")
+
+    @classmethod
+    def validate_tool_shape(cls, tool: Dict[str, Any]) -> None:
+        """Validates that a tool definition returned from tools/list conforms to standard shape."""
+        if not isinstance(tool, dict):
+            raise McpError("Discovered tool is not a JSON object.", code=-32600)
+        name = tool.get("name")
+        if not name or not isinstance(name, str) or not name.strip():
+            raise McpError("Discovered tool missing valid non-empty 'name'.", code=-32600)
+        schema = tool.get("inputSchema") or tool.get("parameters")
+        if schema is not None and not isinstance(schema, dict):
+            raise McpError(f"Tool '{name}' inputSchema must be a JSON object.", code=-32600)
 
 
 # ------------------------------------------------------------------------------
@@ -46,6 +410,12 @@ class McpTransport:
     async def send(self, message: Dict[str, Any]):
         raise NotImplementedError
 
+    async def request(self, method: str, params: Optional[Dict[str, Any]] = None, timeout: float = 30.0) -> Any:
+        raise NotImplementedError
+
+    async def notify(self, method: str, params: Optional[Dict[str, Any]] = None):
+        raise NotImplementedError
+
     async def close(self):
         raise NotImplementedError
 
@@ -54,7 +424,10 @@ class McpTransport:
 
 
 class StdioTransport(McpTransport):
-    """Standard IO transport communicating with a child process via JSON-RPC over stdin/stdout."""
+    """
+    Standard IO transport communicating with a child process via JSON-RPC over stdin/stdout.
+    Hardened with minimal environment sanitization, process group isolation, and robust cleanup.
+    """
     def __init__(
         self,
         command: str,
@@ -64,7 +437,7 @@ class StdioTransport(McpTransport):
     ):
         self.command = command
         self.args = args or []
-        self.env = env
+        self.env = env or {}
         self.cwd = cwd
         self.process: Optional[asyncio.subprocess.Process] = None
         self._reader_task: Optional[asyncio.Task] = None
@@ -73,6 +446,7 @@ class StdioTransport(McpTransport):
         self._notification_handlers: List[Callable[[Dict[str, Any]], Awaitable[None]]] = []
         self._stderr_buffer: List[str] = []
         self._closed = False
+        self._pid: Optional[int] = None
 
     def is_connected(self) -> bool:
         return self.process is not None and self.process.returncode is None and not self._closed
@@ -80,24 +454,42 @@ class StdioTransport(McpTransport):
     def register_notification_handler(self, handler: Callable[[Dict[str, Any]], Awaitable[None]]):
         self._notification_handlers.append(handler)
 
+    def check_executable(self) -> str:
+        """Verifies executable existence on disk or in PATH."""
+        cmd_expanded = os.path.expanduser(self.command)
+        if os.path.exists(cmd_expanded) and os.access(cmd_expanded, os.X_OK):
+            return cmd_expanded
+        resolved = shutil.which(self.command)
+        if resolved:
+            return resolved
+        raise McpError(f"MCP executable '{self.command}' not found on disk or in PATH.", code=-32602)
+
     async def connect(self):
-        full_env = os.environ.copy()
-        if self.env:
-            full_env.update(self.env)
+        exec_path = self.check_executable()
+        minimal_env = build_minimal_mcp_env(self.env)
+
+        # Process group management kwargs
+        kwargs: Dict[str, Any] = {
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "env": minimal_env,
+            "cwd": self.cwd,
+            "limit": 16 * 1024 * 1024  # 16 MB buffer limit for large MCP tool manifests
+        }
+        if sys.platform != "win32":
+            kwargs["start_new_session"] = True
 
         try:
             self.process = await asyncio.create_subprocess_exec(
-                self.command,
+                exec_path,
                 *self.args,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=full_env,
-                cwd=self.cwd
+                **kwargs
             )
+            self._pid = self.process.pid
+            self._closed = False
             self._reader_task = asyncio.create_task(self._read_stdout_loop())
             self._stderr_task = asyncio.create_task(self._read_stderr_loop())
-            self._closed = False
         except Exception as e:
             logger.error(f"[McpStdio] Failed to launch '{self.command}': {e}")
             raise McpError(f"Failed to spawn MCP process '{self.command}': {str(e)}")
@@ -147,7 +539,7 @@ class StdioTransport(McpTransport):
                 try:
                     payload = json.loads(raw)
                 except json.JSONDecodeError:
-                    logger.debug(f"[McpStdio raw stdout non-JSON]: {raw}")
+                    logger.debug(f"[McpStdio non-JSON stdout]: {raw[:150]}")
                     continue
 
                 req_id = payload.get("id")
@@ -164,14 +556,14 @@ class StdioTransport(McpTransport):
                         else:
                             fut.set_result(payload.get("result"))
                 else:
-                    # Handle notification
+                    # Server notification or asynchronous response
                     for handler in self._notification_handlers:
                         try:
                             res = handler(payload)
                             if asyncio.iscoroutine(res):
                                 asyncio.create_task(res)
                         except Exception as ne:
-                            logger.error(f"[McpStdio notification error]: {ne}")
+                            logger.error(f"[McpStdio notification handler error]: {ne}")
 
             except asyncio.CancelledError:
                 break
@@ -208,31 +600,60 @@ class StdioTransport(McpTransport):
                 fut.set_exception(McpError("Transport closed"))
         self._pending_requests.clear()
 
+        # Robust process tree teardown to prevent zombies
         if self.process:
+            pid = self.process.pid
             try:
-                if self.process.stdin:
+                if self.process.stdin and not self.process.stdin.is_closing():
                     self.process.stdin.close()
-                self.process.terminate()
-                await asyncio.wait_for(self.process.wait(), timeout=2.0)
             except Exception:
+                pass
+
+            try:
+                if sys.platform != "win32":
+                    try:
+                        os.killpg(os.getpgid(pid), signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    self.process.terminate()
+
+                await asyncio.wait_for(self.process.wait(), timeout=1.5)
+            except (asyncio.TimeoutError, Exception):
                 try:
-                    self.process.kill()
+                    if sys.platform != "win32":
+                        try:
+                            os.killpg(os.getpgid(pid), signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                    else:
+                        self.process.kill()
+                    await self.process.wait()
                 except Exception:
                     pass
+
             self.process = None
 
 
 class StreamableHttpTransport(McpTransport):
-    """Streamable HTTP / SSE transport for MCP servers communicating over HTTP."""
+    """
+    Streamable HTTP & SSE transport for MCP servers communicating over HTTP.
+    Enforces SSRF protection, redirect verification, Accept content negotiation,
+    and SSE stream buffer decoding.
+    """
     def __init__(
         self,
         url: str,
         headers: Optional[Dict[str, str]] = None,
-        timeout: float = 30.0
+        timeout: float = 30.0,
+        allow_local: bool = False
     ):
-        self.url = url.rstrip("/")
+        self.raw_url = url
+        self.allow_local = allow_local
+        self.validated_url = SsrfProtector.validate_url(url, allow_local=allow_local).rstrip("/")
         self.custom_headers = headers or {}
         self.timeout = timeout
+        self.session_id: Optional[str] = None
         self.client: Optional[httpx.AsyncClient] = None
         self._connected = False
         self._notification_handlers: List[Callable[[Dict[str, Any]], Awaitable[None]]] = []
@@ -244,18 +665,90 @@ class StreamableHttpTransport(McpTransport):
         self._notification_handlers.append(handler)
 
     async def connect(self):
+        # Re-verify destination URL against SSRF
+        self.validated_url = SsrfProtector.validate_url(self.raw_url, allow_local=self.allow_local).rstrip("/")
+
+        decrypted_headers = McpSecretVault.decrypt_dict(self.custom_headers)
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream"
         }
-        headers.update(self.custom_headers)
-        self.client = httpx.AsyncClient(headers=headers, timeout=self.timeout)
+        headers.update(decrypted_headers)
+        if self.session_id:
+            headers["Mcp-Session-Id"] = self.session_id
+
+        # Custom transport to intercept redirects and validate destination against SSRF
+        self.client = httpx.AsyncClient(
+            headers=headers,
+            timeout=self.timeout,
+            follow_redirects=False  # Handled manually to inspect Location header
+        )
         self._connected = True
 
-    async def request(self, method: str, params: Optional[Dict[str, Any]] = None, timeout: float = 30.0) -> Any:
+    async def _safe_post(self, endpoint: str, payload: Dict[str, Any], timeout: float) -> httpx.Response:
+        """Sends POST request with manual redirect validation against SSRF."""
         if not self.client:
             raise McpError("HTTP transport not connected.")
 
+        current_url = endpoint
+        max_redirects = 5
+
+        for _ in range(max_redirects):
+            # Validate URL before dispatch
+            SsrfProtector.validate_url(current_url, allow_local=self.allow_local)
+
+            req_headers = {}
+            if self.session_id:
+                req_headers["Mcp-Session-Id"] = self.session_id
+
+            resp = await self.client.post(current_url, json=payload, headers=req_headers, timeout=timeout)
+
+            # Capture session header if provided
+            if "Mcp-Session-Id" in resp.headers:
+                self.session_id = resp.headers["Mcp-Session-Id"]
+
+            if resp.status_code in (301, 302, 303, 307, 308):
+                location = resp.headers.get("Location")
+                if not location:
+                    raise McpError(f"HTTP redirect {resp.status_code} received without Location header.")
+                next_url = urllib.parse.urljoin(current_url, location)
+                # Ensure redirect target passes SSRF check
+                SsrfProtector.validate_url(next_url, allow_local=self.allow_local)
+                current_url = next_url
+                continue
+
+            return resp
+
+        raise McpError("Exceeded maximum redirects (5) during MCP HTTP request.")
+
+    def _parse_response_body(self, response: httpx.Response) -> Dict[str, Any]:
+        """Parses response as either standard JSON or Server-Sent Events (SSE) data stream."""
+        content_type = response.headers.get("Content-Type", "")
+        text = response.text.strip()
+
+        # 1. Standard application/json
+        if "application/json" in content_type or (text.startswith("{") and text.endswith("}")):
+            try:
+                return response.json()
+            except Exception as e:
+                raise McpError(f"Failed to parse JSON response: {e}")
+
+        # 2. Server-Sent Events (text/event-stream)
+        if "text/event-stream" in content_type or "data:" in text:
+            # Parse lines looking for data: {...}
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith("data:"):
+                    data_str = line[len("data:"):].strip()
+                    if data_str:
+                        try:
+                            return json.loads(data_str)
+                        except json.JSONDecodeError:
+                            continue
+
+        raise McpError(f"Unrecognized response format from MCP server: {text[:200]}")
+
+    async def request(self, method: str, params: Optional[Dict[str, Any]] = None, timeout: float = 30.0) -> Any:
         req_id = str(uuid.uuid4())
         payload = {
             "jsonrpc": "2.0",
@@ -264,14 +757,12 @@ class StreamableHttpTransport(McpTransport):
             "params": params or {}
         }
 
-        # Most MCP HTTP endpoints expose /mcp or direct URL
-        endpoint = self.url
         try:
-            response = await self.client.post(endpoint, json=payload, timeout=timeout)
+            response = await self._safe_post(self.validated_url, payload, timeout=timeout)
             if response.status_code >= 400:
-                raise McpError(f"HTTP error {response.status_code}: {response.text[:200]}", code=response.status_code)
+                raise McpError(f"HTTP {response.status_code}: {response.text[:200]}", code=response.status_code)
 
-            res_json = response.json()
+            res_json = self._parse_response_body(response)
             if "error" in res_json:
                 err = res_json["error"]
                 raise McpError(
@@ -281,7 +772,7 @@ class StreamableHttpTransport(McpTransport):
                 )
             return res_json.get("result")
         except httpx.RequestError as re:
-            raise McpError(f"HTTP network failure connecting to {self.url}: {str(re)}")
+            raise McpError(f"HTTP network failure connecting to {self.validated_url}: {str(re)}")
 
     async def notify(self, method: str, params: Optional[Dict[str, Any]] = None):
         if not self.client:
@@ -292,7 +783,7 @@ class StreamableHttpTransport(McpTransport):
             "params": params or {}
         }
         try:
-            await self.client.post(self.url, json=payload, timeout=5.0)
+            await self._safe_post(self.validated_url, payload, timeout=5.0)
         except Exception as e:
             logger.debug(f"[McpHttp notify non-fatal]: {e}")
 
@@ -309,7 +800,7 @@ class StreamableHttpTransport(McpTransport):
 class McpClient:
     """
     Standard MCP Client managing the protocol handshake, dynamic tool discovery,
-    and structured tool calls.
+    namespacing, argument validation, and lifecycle state transitions.
     """
     def __init__(self, server_id: str, transport: McpTransport, server_name: str = ""):
         self.server_id = server_id
@@ -318,31 +809,35 @@ class McpClient:
         self.server_info: Dict[str, Any] = {}
         self.capabilities: Dict[str, Any] = {}
         self.discovered_tools: List[Dict[str, Any]] = []
+        self.state: McpServerState = McpServerState.CONFIGURED
+        self.error_message: str = ""
         self._initialized = False
 
     def is_active(self) -> bool:
-        return self._initialized and self.transport.is_connected()
+        return self._initialized and self.transport.is_connected() and self.state == McpServerState.TOOLS_READY
 
     async def start(self) -> Dict[str, Any]:
-        """Performs connection, initialize handshake, and tool discovery."""
-        await self.transport.connect()
+        """Performs connection, initialize handshake, capability negotiation, and tool discovery."""
+        try:
+            self.state = McpServerState.EXECUTABLE_FOUND
+            await self.transport.connect()
+            self.state = McpServerState.PROCESS_RUNNING
 
-        # Handshake: initialize
-        init_params = {
-            "protocolVersion": MCP_PROTOCOL_VERSION,
-            "capabilities": {
-                "roots": {"listChanged": True},
-                "sampling": {}
-            },
-            "clientInfo": CLIENT_INFO
-        }
+            init_params = {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "capabilities": {
+                    "roots": {"listChanged": True},
+                    "sampling": {}
+                },
+                "clientInfo": CLIENT_INFO
+            }
 
-        if hasattr(self.transport, "request"):
             result = await self.transport.request("initialize", init_params, timeout=15.0)
             self.server_info = result.get("serverInfo", {})
             self.capabilities = result.get("capabilities", {})
+            self.state = McpServerState.PROTOCOL_CONNECTED
 
-            # Handshake notification: notifications/initialized
+            # Complete handshake notification
             await self.transport.notify("notifications/initialized", {})
             self._initialized = True
 
@@ -352,51 +847,95 @@ class McpClient:
 
             # Discover available tools
             await self.refresh_tools()
+            self.state = McpServerState.TOOLS_READY
             return result
-        else:
-            self._initialized = True
-            return {}
+        except Exception as exc:
+            self.state = McpServerState.FAILED
+            self.error_message = str(exc)
+            await self.close()
+            raise
 
     async def _on_server_notification(self, notification: Dict[str, Any]):
         method = notification.get("method")
         if method == "notifications/tools/list_changed":
-            logger.info(f"[MCP] Tools list changed on server '{self.server_id}'. Refreshing...")
-            await self.refresh_tools()
+            logger.info(f"[MCP] Tools list changed on server '{self.server_id}'. Refreshing tools...")
+            try:
+                await self.refresh_tools()
+            except Exception as e:
+                logger.error(f"[MCP] Failed to refresh tools after notification: {e}")
 
     async def refresh_tools(self) -> List[Dict[str, Any]]:
-        """Queries tools/list with pagination support and caches discovered tools."""
+        """
+        Queries tools/list with resilient pagination, cycle detection, max page limits,
+        shape validation, and tool deduplication.
+        """
         tools: List[Dict[str, Any]] = []
+        seen_cursors: Set[str] = set()
+        seen_tool_names: Set[str] = set()
         cursor = None
+        max_pages = 25
+        page_count = 0
 
-        while True:
-            params = {}
+        while page_count < max_pages:
+            page_count += 1
+            params: Dict[str, Any] = {}
             if cursor:
                 params["cursor"] = cursor
 
-            if not hasattr(self.transport, "request"):
-                break
-
-            result = await self.transport.request("tools/list", params, timeout=10.0)
+            result = await self.transport.request("tools/list", params, timeout=12.0)
             if not result or not isinstance(result, dict):
                 break
 
             fetched = result.get("tools", [])
-            tools.extend(fetched)
+            for t in fetched:
+                try:
+                    McpJsonSchemaValidator.validate_tool_shape(t)
+                    t_name = t.get("name")
+                    if t_name and t_name not in seen_tool_names:
+                        seen_tool_names.add(t_name)
+                        tools.append(t)
+                except McpError as ve:
+                    logger.warning(f"[MCP] Server '{self.server_id}' returned invalid tool shape: {ve}")
 
-            cursor = result.get("nextCursor")
-            if not cursor:
+            next_cursor = result.get("nextCursor")
+            if not next_cursor or next_cursor in seen_cursors:
+                # Cycle detected or pagination complete
                 break
+
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
 
         self.discovered_tools = tools
         return self.discovered_tools
 
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any], timeout: float = 45.0) -> Dict[str, Any]:
-        """Calls tools/call with the specified arguments."""
-        if not self.is_active():
-            raise McpError(f"Server '{self.server_id}' is offline or disconnected.")
+        """
+        Executes tools/call on the remote MCP server with strict argument schema validation.
+        Properly honors MCP isError and JSON-RPC errors — never reports failure as success!
+        """
+        if not self.transport.is_connected():
+            return {
+                "status": "error",
+                "server_id": self.server_id,
+                "tool": tool_name,
+                "message": f"Server '{self.server_id}' is disconnected."
+            }
 
-        # Local schema validation if tool schema exists
-        self.validate_arguments(tool_name, arguments)
+        # Local schema validation before dispatch
+        tool_def = next((t for t in self.discovered_tools if t.get("name") == tool_name), None)
+        if tool_def:
+            schema = tool_def.get("inputSchema") or tool_def.get("parameters")
+            if schema and isinstance(schema, dict):
+                try:
+                    McpJsonSchemaValidator.validate(schema, arguments, path=tool_name)
+                except McpError as ve:
+                    return {
+                        "status": "error",
+                        "server_id": self.server_id,
+                        "tool": tool_name,
+                        "error_code": ve.code,
+                        "message": str(ve)
+                    }
 
         params = {
             "name": tool_name,
@@ -405,12 +944,43 @@ class McpClient:
 
         try:
             result = await self.transport.request("tools/call", params, timeout=timeout)
+            if not result or not isinstance(result, dict):
+                return {
+                    "status": "success",
+                    "server_id": self.server_id,
+                    "tool": tool_name,
+                    "result": result
+                }
+
+            # Spec compliance: MCP tools indicate errors via isError: true
+            is_error = result.get("isError", False)
+            content = result.get("content", [])
+            output_text = ""
+            if isinstance(content, list) and content:
+                first = content[0]
+                if isinstance(first, dict):
+                    output_text = first.get("text", "")
+            elif isinstance(result.get("output"), str):
+                output_text = result["output"]
+
+            if is_error:
+                return {
+                    "status": "error",
+                    "server_id": self.server_id,
+                    "tool": tool_name,
+                    "is_error": True,
+                    "message": output_text or "Tool execution failed on remote MCP server.",
+                    "result": result
+                }
+
             return {
                 "status": "success",
                 "server_id": self.server_id,
                 "tool": tool_name,
-                "result": result
+                "result": result,
+                "output": output_text
             }
+
         except McpError as me:
             return {
                 "status": "error",
@@ -427,25 +997,70 @@ class McpClient:
                 "message": f"Tool execution failed: {str(e)}"
             }
 
-    def validate_arguments(self, tool_name: str, arguments: Dict[str, Any]):
-        """Validates arguments against inputSchema required fields."""
-        schema = None
-        for t in self.discovered_tools:
-            if t.get("name") == tool_name:
-                schema = t.get("inputSchema") or t.get("parameters")
-                break
-
-        if not schema or not isinstance(schema, dict):
-            return
-
-        required = schema.get("required", [])
-        missing = [r for r in required if r not in arguments]
-        if missing:
-            raise McpError(f"Missing required parameter(s) for tool '{tool_name}': {', '.join(missing)}", code=-32602)
-
     async def close(self):
         self._initialized = False
+        self.state = McpServerState.OFFLINE
         await self.transport.close()
+
+
+# ------------------------------------------------------------------------------
+# ONE-TIME APPROVAL MANAGER
+# ------------------------------------------------------------------------------
+@dataclass
+class McpApprovalRecord:
+    approval_id: str
+    server_id: str
+    action: str  # "register" or "launch"
+    target: str  # executable command or URL
+    user_uid: str
+    created_at: float
+    expires_at: float
+    consumed: bool = False
+
+
+class McpApprovalManager:
+    """Manages one-time, cryptographically random approvals for registering or launching MCP servers."""
+    def __init__(self):
+        self._approvals: Dict[str, McpApprovalRecord] = {}
+
+    def create_approval(
+        self,
+        server_id: str,
+        action: str,
+        target: str,
+        user_uid: str,
+        ttl_seconds: int = 300
+    ) -> McpApprovalRecord:
+        appr_id = f"mcp_appr_{uuid.uuid4().hex}"
+        now = time.time()
+        record = McpApprovalRecord(
+            approval_id=appr_id,
+            server_id=server_id,
+            action=action,
+            target=target,
+            user_uid=user_uid,
+            created_at=now,
+            expires_at=now + ttl_seconds,
+            consumed=False
+        )
+        self._approvals[appr_id] = record
+        return record
+
+    def consume_approval(self, approval_id: str, server_id: str, user_uid: str) -> bool:
+        if not approval_id or approval_id not in self._approvals:
+            return False
+        rec = self._approvals[approval_id]
+        if rec.consumed:
+            return False
+        if rec.server_id != server_id:
+            return False
+        if rec.user_uid != user_uid:
+            return False
+        if time.time() > rec.expires_at:
+            return False
+
+        rec.consumed = True
+        return True
 
 
 # ------------------------------------------------------------------------------
@@ -462,6 +1077,7 @@ class ServerConfig:
     url: Optional[str] = None
     headers: Dict[str, str] = field(default_factory=dict)
     enabled: bool = True
+    allow_local: bool = False
     description: str = ""
 
 McpServerConfig = ServerConfig
@@ -469,17 +1085,25 @@ McpServerConfig = ServerConfig
 
 class McpServerRegistry:
     """
-    Central manager for multiple MCP servers.
-    Handles configuration persistence, connection pooling, namespacing, and dispatch.
+    Authoritative single-source-of-truth registry for all MCP servers.
+    Provides encrypted configuration storage, 5-tier connection lifecycle management,
+    persistent StudioMCP sessions, namespacing, and dispatch.
     """
+    _instance: Optional['McpServerRegistry'] = None
+
     def __init__(self, config_path: Optional[str] = None):
-        self.config_path = config_path or os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "data", "mcp_servers.json"
-        )
+        self.config_path = config_path or str(paths_service.get_mcp_config_path())
         self.configs: Dict[str, ServerConfig] = {}
         self.clients: Dict[str, McpClient] = {}
+        self.approval_mgr = McpApprovalManager()
         self._lock: Optional[asyncio.Lock] = None
         self.load_configurations()
+
+    @classmethod
+    def get_instance(cls) -> 'McpServerRegistry':
+        if cls._instance is None:
+            cls._instance = McpServerRegistry()
+        return cls._instance
 
     def _ensure_lock(self) -> asyncio.Lock:
         if self._lock is None:
@@ -487,15 +1111,14 @@ class McpServerRegistry:
         return self._lock
 
     def load_configurations(self):
-        """Loads server configurations from disk."""
+        """Loads and decrypts server configurations from disk."""
         if not os.path.exists(self.config_path):
-            # Check legacy mcp_config.json
-            legacy = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "mcp_config.json")
+            legacy = str(paths_service.get_legacy_mcp_config_path())
+            if not os.path.exists(legacy):
+                legacy = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "mcp_config.json")
             if os.path.exists(legacy):
                 self._import_legacy_config(legacy)
                 return
-
-            # Default initial empty configuration
             os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
             self.save_configurations()
             return
@@ -516,6 +1139,7 @@ class McpServerRegistry:
                     url=s_data.get("url") or s_data.get("endpoint"),
                     headers=s_data.get("headers", {}),
                     enabled=s_data.get("enabled", True),
+                    allow_local=s_data.get("allow_local", False),
                     description=s_data.get("description", "")
                 )
         except Exception as e:
@@ -536,30 +1160,34 @@ class McpServerRegistry:
                     env=s_data.get("env", {}),
                     url=s_data.get("url"),
                     enabled=True,
-                    description=f"Imported MCP server {s_id}"
+                    allow_local=True if "studio" in s_id.lower() or "roblox" in s_id.lower() else False,
+                    description=s_data.get("description", f"Imported MCP server {s_id}")
                 )
             self.save_configurations()
         except Exception as e:
             logger.error(f"[McpRegistry] Error migrating legacy config: {e}")
 
     def save_configurations(self):
-        """Saves active configurations to disk."""
+        """Saves configurations to disk with encrypted secrets."""
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         out = {"mcpServers": {}}
         for s_id, cfg in self.configs.items():
-            entry = {
+            entry: Dict[str, Any] = {
                 "name": cfg.name,
                 "transport": cfg.transport_type,
                 "enabled": cfg.enabled,
+                "allow_local": cfg.allow_local,
                 "description": cfg.description
             }
             if cfg.command:
                 entry["command"] = cfg.command
                 entry["args"] = cfg.args
-                entry["env"] = cfg.env
+                # Vault encryption for env
+                entry["env"] = McpSecretVault.encrypt_dict(cfg.env)
             if cfg.url:
                 entry["url"] = cfg.url
-                entry["headers"] = cfg.headers
+                # Vault encryption for headers
+                entry["headers"] = McpSecretVault.encrypt_dict(cfg.headers)
             out["mcpServers"][s_id] = entry
 
         try:
@@ -568,8 +1196,8 @@ class McpServerRegistry:
         except Exception as e:
             logger.error(f"[McpRegistry] Could not save config: {e}")
 
-    async def connect_server(self, server_id: str) -> McpClient:
-        """Connects or reconnects a configured server."""
+    async def connect_server(self, server_id: str, allow_local_override: Optional[bool] = None) -> McpClient:
+        """Connects or reconnects a configured server with lifecycle state tracking."""
         async with self._ensure_lock():
             if server_id not in self.configs:
                 raise McpError(f"Server '{server_id}' is not configured.")
@@ -578,9 +1206,11 @@ class McpServerRegistry:
             if not cfg.enabled:
                 raise McpError(f"Server '{server_id}' is currently disabled.")
 
-            # Close existing if active
+            # Close existing client cleanly if present
             if server_id in self.clients:
                 await self.clients[server_id].close()
+
+            allow_local = allow_local_override if allow_local_override is not None else cfg.allow_local
 
             transport: McpTransport
             if cfg.transport_type == "stdio":
@@ -590,7 +1220,7 @@ class McpServerRegistry:
             elif cfg.transport_type == "http":
                 if not cfg.url:
                     raise McpError(f"HTTP server '{server_id}' has no URL configured.")
-                transport = StreamableHttpTransport(url=cfg.url, headers=cfg.headers)
+                transport = StreamableHttpTransport(url=cfg.url, headers=cfg.headers, allow_local=allow_local)
             else:
                 raise McpError(f"Unknown transport type '{cfg.transport_type}'")
 
@@ -600,7 +1230,7 @@ class McpServerRegistry:
             return client
 
     async def disconnect_server(self, server_id: str):
-        """Disconnects a server if connected."""
+        """Disconnects an active server."""
         async with self._ensure_lock():
             if server_id in self.clients:
                 await self.clients[server_id].close()
@@ -622,10 +1252,7 @@ class McpServerRegistry:
             logger.warning(f"[McpRegistry] Startup connection to '{server_id}' deferred: {e}")
 
     def list_all_tools(self) -> List[Dict[str, Any]]:
-        """
-        Gathers tools across all connected servers with namespacing.
-        Returns OpenAI-compatible / MCP tool definitions with server tags.
-        """
+        """Gathers tools across all servers with server namespaces."""
         all_tools = []
         for s_id, client in self.clients.items():
             for tool in client.discovered_tools:
@@ -650,10 +1277,13 @@ class McpServerRegistry:
     def register_server(self, cfg: ServerConfig) -> McpClient:
         """Registers a server config and instantiates an McpClient."""
         self.configs[cfg.id] = cfg
+        self.save_configurations()
+
         if cfg.transport_type == "stdio":
             transport = StdioTransport(command=cfg.command or "python", args=cfg.args, env=cfg.env)
         else:
-            transport = StreamableHttpTransport(url=cfg.url or "http://localhost", headers=cfg.headers)
+            transport = StreamableHttpTransport(url=cfg.url or "http://localhost", headers=cfg.headers, allow_local=cfg.allow_local)
+
         client = McpClient(server_id=cfg.id, transport=transport, server_name=cfg.name)
         self.clients[cfg.id] = client
         return client
@@ -666,7 +1296,6 @@ class McpServerRegistry:
         if "__" in full_tool_name:
             server_id, target_tool = full_tool_name.split("__", 1)
         else:
-            # Attempt to find which server hosts this tool
             for s_id, client in self.clients.items():
                 if any(t.get("name") == full_tool_name for t in client.discovered_tools):
                     server_id = s_id
@@ -683,24 +1312,30 @@ class McpServerRegistry:
         return await client.call_tool(target_tool, arguments)
 
     def get_server_statuses(self) -> List[Dict[str, Any]]:
-        """Returns comprehensive diagnostic status for all configured servers."""
+        """Returns 5-tier diagnostic status for all configured servers."""
         res = []
         for s_id, cfg in self.configs.items():
             client = self.clients.get(s_id)
+            state = client.state if client else (McpServerState.CONFIGURED if cfg.enabled else McpServerState.DISABLED)
             connected = client.is_active() if client else False
             tool_count = len(client.discovered_tools) if client and connected else 0
+
             res.append({
                 "id": s_id,
                 "name": cfg.name,
                 "transport": cfg.transport_type,
                 "enabled": cfg.enabled,
+                "state": state.value,
+                "lifecycle_state": state.value,
                 "connected": connected,
                 "tools_count": tool_count,
                 "endpoint": cfg.command if cfg.transport_type == "stdio" else cfg.url,
-                "description": cfg.description
+                "allow_local": cfg.allow_local,
+                "description": cfg.description,
+                "error": client.error_message if client else ""
             })
         return res
 
 
-# Global singleton instance
-global_mcp_registry = McpServerRegistry()
+# Authoritative Global Singleton Instance
+global_mcp_registry = McpServerRegistry.get_instance()

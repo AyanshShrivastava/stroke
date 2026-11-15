@@ -40,9 +40,15 @@ def run_build():
         f".env.example{sep}."
     ]
 
-    # Embed Elemental Worlds VFX Database if present
-    if os.path.exists("data"):
-        add_data.append(f"data{sep}data")
+    # Embed Elemental Worlds VFX Database assets safely (exclude .vault_key and user data)
+    static_vfx_assets = [
+        os.path.join("data", "vfx_data.json"),
+        os.path.join("data", "vfx_dump.txt"),
+        os.path.join("data", "VFX_ASSET_MANIFEST.md"),
+    ]
+    for asset in static_vfx_assets:
+        if os.path.exists(asset):
+            add_data.append(f"{asset}{sep}data")
 
     # If offline neural models exist locally, bundle them directly for all-in-one distribution
     if os.path.exists("models"):

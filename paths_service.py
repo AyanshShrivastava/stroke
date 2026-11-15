@@ -61,10 +61,17 @@ def get_home_dir() -> Path:
 def get_app_data_dir() -> Path:
     """
     Returns Stroke's per-user application data directory.
+    - Honors STROKE_APP_DATA / STROKE_DATA_DIR environment variables if set.
     - Windows: %LOCALAPPDATA%\\Stroke
     - macOS:   ~/Library/Application Support/Stroke
     - Linux:   ~/.local/share/Stroke
     """
+    env_dir = os.environ.get("STROKE_APP_DATA") or os.environ.get("STROKE_DATA_DIR")
+    if env_dir:
+        app_dir = Path(env_dir).resolve()
+        app_dir.mkdir(parents=True, exist_ok=True)
+        return app_dir
+
     os_name = get_current_os()
     home = get_home_dir()
 
@@ -151,6 +158,90 @@ def get_workspaces_config_path() -> Path:
     return get_app_data_dir() / "approved_workspaces.json"
 
 
+def get_user_chats_path() -> Path:
+    """Path to the user chat sessions JSON file."""
+    return get_app_data_dir() / "local_chat_sessions.json"
+
+
+def get_mcp_config_path() -> Path:
+    """Path to the user MCP servers JSON configuration."""
+    return get_app_data_dir() / "mcp_servers.json"
+
+
+def get_legacy_mcp_config_path() -> Path:
+    """Path to the legacy MCP config JSON file in user app data."""
+    return get_app_data_dir() / "mcp_config.json"
+
+
+def get_verified_project_context_path() -> Path:
+    """Path to the verified project context JSON file."""
+    return get_app_data_dir() / "verified_project_context.json"
+
+
+def get_local_firestore_db_path() -> Path:
+    """Path to the local disk-backed Firestore database."""
+    return get_app_data_dir() / "local_firestore_db.json"
+
+
+def get_vfx_dir() -> Path:
+    """Path to the user-learned VFX dataset directory."""
+    vfx_dir = get_app_data_dir() / "vfx"
+    vfx_dir.mkdir(parents=True, exist_ok=True)
+    return vfx_dir.resolve()
+
+
+def atomic_write_json(file_path: Path, data: Any) -> None:
+    """Safely and atomically writes JSON data to file_path using a temporary file and replace."""
+    import json
+    file_path = Path(file_path).resolve()
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = file_path.with_suffix(f"{file_path.suffix}.tmp.{os.getpid()}")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, file_path)
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+
+def migrate_legacy_data(legacy_source_dir: Optional[Path] = None) -> Dict[str, bool]:
+    """
+    Safely migrates legacy data files from the source/package directory to
+    the user application-data directory if the destination does not exist yet.
+    Never overwrites existing user data and never writes into read-only package dirs.
+    """
+    source_dir = legacy_source_dir if legacy_source_dir else (Path(__file__).resolve().parent / "data")
+    results = {}
+
+    mappings = {
+        "local_chat_sessions.json": get_user_chats_path(),
+        "mcp_servers.json": get_mcp_config_path(),
+        "mcp_config.json": get_legacy_mcp_config_path(),
+        "verified_project_context.json": get_verified_project_context_path(),
+        "local_firestore_db.json": get_local_firestore_db_path(),
+    }
+
+    for filename, dest_path in mappings.items():
+        src_path = Path(source_dir) / filename
+        if src_path.exists() and not dest_path.exists():
+            try:
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                dest_path.write_bytes(src_path.read_bytes())
+                results[filename] = True
+            except Exception:
+                results[filename] = False
+        else:
+            results[filename] = False
+
+    return results
+
+
 def ensure_user_directories() -> Dict[str, str]:
     """
     Verifies and initializes all Stroke user-level folders without root/admin permissions.
@@ -161,6 +252,8 @@ def ensure_user_directories() -> Dict[str, str]:
     backups = get_backups_dir()
     downloads = get_downloads_dir()
     install_dir = get_app_installation_dir()
+    vfx_dir = get_vfx_dir()
+    migrate_legacy_data()
 
     return {
         "app_data": str(app_data),
@@ -168,6 +261,7 @@ def ensure_user_directories() -> Dict[str, str]:
         "backups": str(backups),
         "downloads": str(downloads),
         "install_dir": str(install_dir),
+        "vfx_dir": str(vfx_dir),
         "os": get_current_os(),
         "user": get_current_username()
     }
