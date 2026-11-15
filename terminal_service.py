@@ -1857,8 +1857,18 @@ class ToolDispatcher:
         "project_get_dependencies", "project_dependencies",
         "project_find_symbol", "project_symbols"
     }
+    ROBLOX_SPECIALIST_TOOLS = {
+        "roblox_analyze_luau", "analyze_luau",
+        "roblox_analyze_remotes", "analyze_remotes",
+        "roblox_inspect_hierarchy", "inspect_hierarchy",
+        "roblox_generate_ui", "generate_ui",
+        "roblox_generate_terrain", "generate_terrain",
+        "roblox_generate_vfx", "generate_vfx",
+        "roblox_diagnose_errors", "diagnose_errors",
+        "roblox_verify_object", "verify_object"
+    }
 
-    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS | FILE_TOOLS | PROJECT_TOOLS | DYNAMIC_TOOLS
+    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS | FILE_TOOLS | PROJECT_TOOLS | ROBLOX_SPECIALIST_TOOLS | DYNAMIC_TOOLS
 
     @classmethod
     def is_supported(cls, tool_name: str) -> bool:
@@ -2184,6 +2194,56 @@ class ToolDispatcher:
                         return {"status": "success", "symbols": idx.symbol_table.get_symbols_for_file(file_path)}
                     return {"status": "success", "symbols": idx.find_symbol(sym_name, kind=kind)}
 
+            # 7. Roblox Studio Specialist Tools
+            elif name in cls.ROBLOX_SPECIALIST_TOOLS:
+                import roblox_specialist_service
+
+                if name in ("roblox_analyze_luau", "analyze_luau"):
+                    source = args.get("code") or args.get("source") or ""
+                    role = args.get("script_role") or "ModuleScript"
+                    return roblox_specialist_service.LuauAnalyzer.analyze_source(source, script_role=role)
+
+                elif name in ("roblox_analyze_remotes", "analyze_remotes"):
+                    ws = args.get("workspace_path") or args.get("workspace") or "."
+                    import project_context_service
+                    idx = project_context_service.get_project_index(ws)
+                    files_code = {p: rec.content for p, rec in idx.files.items() if rec.language in ("luau", "lua")}
+                    return roblox_specialist_service.RemoteContractAnalyzer.audit_workspace_network(files_code)
+
+                elif name in ("roblox_inspect_hierarchy", "inspect_hierarchy"):
+                    target_path = args.get("target_path") or args.get("path") or ""
+                    ws = args.get("workspace_path") or args.get("workspace")
+                    return roblox_specialist_service.HierarchyInspector.resolve_datamodel_path(target_path, workspace_path=ws)
+
+                elif name in ("roblox_generate_ui", "generate_ui"):
+                    title = args.get("title") or "StrokeUI"
+                    elements = args.get("elements") or []
+                    theme = args.get("theme") or "dark_glass"
+                    code = roblox_specialist_service.UiBuilder.generate_ui_script(title, elements, theme_name=theme)
+                    return {"status": "success", "title": title, "theme": theme, "code": code}
+
+                elif name in ("roblox_generate_terrain", "generate_terrain"):
+                    biome = args.get("biome") or "plains"
+                    size = tuple(args.get("size") or (256, 32, 256))
+                    code = roblox_specialist_service.TerrainBuilder.generate_terrain_script(biome=biome, size=size)
+                    return {"status": "success", "biome": biome, "code": code}
+
+                elif name in ("roblox_generate_vfx", "generate_vfx"):
+                    vfx_type = args.get("vfx_type") or "FireAura"
+                    code = roblox_specialist_service.VfxBuilder.generate_particle_vfx(vfx_type=vfx_type)
+                    return {"status": "success", "vfx_type": vfx_type, "code": code}
+
+                elif name in ("roblox_diagnose_errors", "diagnose_errors"):
+                    lines = args.get("lines") or args.get("console_output") or []
+                    if isinstance(lines, str):
+                        lines = lines.splitlines()
+                    return roblox_specialist_service.StudioErrorDiagnoser.diagnose_console(lines)
+
+                elif name in ("roblox_verify_object", "verify_object"):
+                    target_path = args.get("target_path") or args.get("path") or ""
+                    ws = args.get("workspace_path") or args.get("workspace")
+                    return await roblox_specialist_service.PlaytestAndVerificationEngine.verify_object(target_path, workspace_path=ws)
+
             return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
         except Exception as exc:
             return {"status": "error", "message": f"Tool execution failed: {str(exc)}"}
@@ -2209,6 +2269,8 @@ class ToolDispatcher:
         elif name in cls.FILE_TOOLS:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
         elif name in cls.PROJECT_TOOLS:
+            return _run_coroutine_sync(cls.dispatch_async(name, args))
+        elif name in cls.ROBLOX_SPECIALIST_TOOLS:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
         elif name in cls.WEB_SEARCH_TOOLS:
             q = args.get("query") or args.get("q") or args.get("search") or args.get("search_query") or ""

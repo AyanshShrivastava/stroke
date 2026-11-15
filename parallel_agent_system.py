@@ -121,6 +121,16 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
         "project_get_dependencies", "project_dependencies",
         "project_find_symbol", "project_symbols"
     }
+    roblox_specialist_tools = {
+        "roblox_analyze_luau", "analyze_luau",
+        "roblox_analyze_remotes", "analyze_remotes",
+        "roblox_inspect_hierarchy", "inspect_hierarchy",
+        "roblox_generate_ui", "generate_ui",
+        "roblox_generate_terrain", "generate_terrain",
+        "roblox_generate_vfx", "generate_vfx",
+        "roblox_diagnose_errors", "diagnose_errors",
+        "roblox_verify_object", "verify_object"
+    }
 
     if role == AgentRole.RESEARCHER:
         return AgentPermissions(
@@ -136,7 +146,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_in_files", "fs_search_in_files", "inspect_file", "fs_inspect_file",
                 "web_search", "search_vfx_database", "studio_get_console",
                 "studio_search_scripts", "script_search", "github_get_file_contents"
-            } | project_read_tools,
+            } | project_read_tools | roblox_specialist_tools,
             disallowed_tools={
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch", "run_command", "terminal_run"
@@ -153,7 +163,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
             allowed_tools={
                 "read_file", "fs_read_file", "list_directory", "fs_list_directory",
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files"
-            } | project_read_tools,
+            } | project_read_tools | roblox_specialist_tools,
             disallowed_tools={
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch", "run_command", "terminal_run"
@@ -172,7 +182,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch", "inspect_file", "fs_inspect_file"
-            } | project_read_tools
+            } | project_read_tools | roblox_specialist_tools
         )
     elif role == AgentRole.TESTER:
         return AgentPermissions(
@@ -187,7 +197,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "run_tests", "check_luau_syntax", "check_python_syntax",
                 "terminal_run", "run_command"
-            } | project_read_tools,
+            } | project_read_tools | roblox_specialist_tools,
             disallowed_tools={
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch"
@@ -205,7 +215,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "read_file", "fs_read_file", "list_directory", "fs_list_directory",
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "inspect_file", "fs_inspect_file"
-            } | project_read_tools,
+            } | project_read_tools | roblox_specialist_tools,
             disallowed_tools={
                 "create_file", "fs_create_file", "edit_file", "fs_edit_file",
                 "apply_patch", "fs_apply_patch", "run_command", "terminal_run"
@@ -224,7 +234,7 @@ def get_default_permissions_for_role(role: AgentRole) -> AgentPermissions:
                 "search_files", "fs_search_files", "search_in_files", "fs_search_in_files",
                 "edit_file", "fs_edit_file", "apply_patch", "fs_apply_patch",
                 "run_tests", "check_luau_syntax", "check_python_syntax"
-            } | project_read_tools
+            } | project_read_tools | roblox_specialist_tools
         )
     return AgentPermissions()
 

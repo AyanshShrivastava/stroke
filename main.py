@@ -531,6 +531,46 @@ class ProjectSearchPayload(BaseModel):
     max_results: Optional[int] = Field(5, description="Maximum number of file snippets to return")
 
 
+class RobloxAnalyzeLuauPayload(BaseModel):
+    code: str = Field(..., description="Luau source code to analyze")
+    script_role: Optional[str] = Field("ModuleScript", description="ServerScript, LocalScript, or ModuleScript")
+
+
+class RobloxAnalyzeRemotesPayload(BaseModel):
+    workspace_path: Optional[str] = Field(None, description="Workspace path containing scripts")
+
+
+class RobloxInspectHierarchyPayload(BaseModel):
+    target_path: str = Field(..., description="DataModel path (e.g. ReplicatedStorage.VFX.HitFx)")
+    workspace_path: Optional[str] = Field(None, description="Workspace path")
+
+
+class RobloxGenerateUiPayload(BaseModel):
+    title: str = Field(..., description="UI Title")
+    elements: List[Dict[str, Any]] = Field(default_factory=list, description="UI element definitions")
+    theme: Optional[str] = Field("dark_glass", description="dark_glass, cyberpunk, or fantasy_rpg")
+
+
+class RobloxGenerateTerrainPayload(BaseModel):
+    biome: Optional[str] = Field("plains", description="plains, desert, snow, or volcanic")
+    size: Optional[List[int]] = Field(default_factory=lambda: [256, 32, 256], description="Size vector [X, Y, Z]")
+    center: Optional[List[int]] = Field(default_factory=lambda: [0, 0, 0], description="Center vector [X, Y, Z]")
+
+
+class RobloxGenerateVfxPayload(BaseModel):
+    vfx_type: Optional[str] = Field("FireAura", description="FireAura, LightningDischarge, CosmicNova, etc.")
+    target_name: Optional[str] = Field("VFXEmitterPart", description="Name of emitter part")
+
+
+class RobloxDiagnoseErrorsPayload(BaseModel):
+    lines: List[str] = Field(..., description="Console log or traceback lines")
+
+
+class RobloxVerifyObjectPayload(BaseModel):
+    target_path: str = Field(..., description="Target DataModel path to verify")
+    workspace_path: Optional[str] = Field(None, description="Workspace path")
+
+
 
 # ==============================================================================
 # ROUTE HANDLERS: FRONTEND ASSET SERVING
@@ -4643,6 +4683,101 @@ async def project_symbols_endpoint(
         "symbols_count": len(symbols),
         "symbols": symbols
     }
+
+
+# ==============================================================================
+# ROBLOX STUDIO SPECIALIST ENDPOINTS
+# ==============================================================================
+
+@app.post("/roblox/analyze/luau", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/analyze/luau", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_analyze_luau_endpoint(payload: RobloxAnalyzeLuauPayload):
+    """Analyzes Luau source for modern standards, strict typing, deprecated APIs, and context safety."""
+    import roblox_specialist_service
+    analysis = roblox_specialist_service.LuauAnalyzer.analyze_source(payload.code, script_role=payload.script_role or "ModuleScript")
+    return {"status": "success", "analysis": analysis}
+
+
+@app.post("/roblox/analyze/remotes", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/analyze/remotes", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_analyze_remotes_endpoint(payload: Optional[RobloxAnalyzeRemotesPayload] = None):
+    """Audits RemoteEvent and RemoteFunction contracts, paired endpoints, and client-authoritative security."""
+    import project_context_service
+    import roblox_specialist_service
+    ws = payload.workspace_path if payload and payload.workspace_path else None
+    idx = project_context_service.get_project_index(ws)
+    files_code = {p: rec.content for p, rec in idx.files.items() if rec.language in ("luau", "lua")}
+    report = roblox_specialist_service.RemoteContractAnalyzer.audit_workspace_network(files_code)
+    return {"status": "success", "report": report}
+
+
+@app.post("/roblox/hierarchy/inspect", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/hierarchy/inspect", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_hierarchy_inspect_endpoint(payload: RobloxInspectHierarchyPayload):
+    """Truthfully inspects Explorer hierarchy, resolving DataModel paths without fabricating state."""
+    import roblox_specialist_service
+    result = roblox_specialist_service.HierarchyInspector.resolve_datamodel_path(payload.target_path, workspace_path=payload.workspace_path)
+    return {"status": "success", "result": result}
+
+
+@app.post("/roblox/generate/ui", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/generate/ui", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_generate_ui_endpoint(payload: RobloxGenerateUiPayload):
+    """Generates responsive multi-device Luau UI hierarchy script with Scale vs Offset constraints."""
+    import roblox_specialist_service
+    code = roblox_specialist_service.UiBuilder.generate_ui_script(
+        payload.title,
+        payload.elements,
+        theme_name=payload.theme or "dark_glass"
+    )
+    return {"status": "success", "title": payload.title, "code": code}
+
+
+@app.post("/roblox/generate/terrain", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/generate/terrain", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_generate_terrain_endpoint(payload: RobloxGenerateTerrainPayload):
+    """Generates procedural terrain filling script for biomes and water planes."""
+    import roblox_specialist_service
+    size_tup = tuple(payload.size) if payload.size and len(payload.size) == 3 else (256, 32, 256)
+    center_tup = tuple(payload.center) if payload.center and len(payload.center) == 3 else (0, 0, 0)
+    code = roblox_specialist_service.TerrainBuilder.generate_terrain_script(
+        biome=payload.biome or "plains",
+        size=size_tup,
+        center=center_tup
+    )
+    return {"status": "success", "biome": payload.biome or "plains", "code": code}
+
+
+@app.post("/roblox/generate/vfx", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/generate/vfx", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_generate_vfx_endpoint(payload: RobloxGenerateVfxPayload):
+    """Generates complete particle emitter, highlight, and beam VFX script."""
+    import roblox_specialist_service
+    vfx_type = payload.vfx_type or "FireAura"
+    target_name = payload.target_name or "VFXEmitterPart"
+    code = roblox_specialist_service.VfxBuilder.generate_particle_vfx(vfx_type=vfx_type, target_name=target_name)
+    return {"status": "success", "vfx_type": vfx_type, "code": code}
+
+
+@app.post("/roblox/diagnostics/errors", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/diagnostics/errors", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_diagnostics_errors_endpoint(payload: RobloxDiagnoseErrorsPayload):
+    """Parses studio console output and stack traces, providing automated root-cause diagnoses."""
+    import roblox_specialist_service
+    diagnoses = roblox_specialist_service.StudioErrorDiagnoser.diagnose_console(payload.lines)
+    return {"status": "success", "diagnoses": diagnoses}
+
+
+@app.post("/roblox/verify/object", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+@app.post("/api/roblox/verify/object", dependencies=[Depends(verify_terminal_access)], tags=["Roblox Specialist"])
+async def roblox_verify_object_endpoint(payload: RobloxVerifyObjectPayload):
+    """Truthfully verifies that an object was instantiated in live Studio or workspace tree."""
+    import roblox_specialist_service
+    verification = await roblox_specialist_service.PlaytestAndVerificationEngine.verify_object(
+        payload.target_path,
+        workspace_path=payload.workspace_path
+    )
+    return {"status": "success", "verification": verification}
 
 
 # ==============================================================================
