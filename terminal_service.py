@@ -1850,8 +1850,15 @@ class ToolDispatcher:
         "list_approved_workspaces", "workspace_list_approved",
         "approve_workspace", "workspace_approve"
     }
+    PROJECT_TOOLS = {
+        "project_index", "project_scan",
+        "project_search", "project_retrieve_context",
+        "project_get_architecture", "project_architecture",
+        "project_get_dependencies", "project_dependencies",
+        "project_find_symbol", "project_symbols"
+    }
 
-    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS | FILE_TOOLS | DYNAMIC_TOOLS
+    SUPPORTED_TOOLS = TERMINAL_TOOLS | WEB_SEARCH_TOOLS | VFX_TOOLS | STUDIO_TOOLS | GITHUB_TOOLS | FILE_TOOLS | PROJECT_TOOLS | DYNAMIC_TOOLS
 
     @classmethod
     def is_supported(cls, tool_name: str) -> bool:
@@ -2136,6 +2143,47 @@ class ToolDispatcher:
                         return {"status": "error", "message": "Missing required argument 'path'."}
                     return workspace_service.approve_workspace(path, label)
 
+            # 6. Project Intelligence Tools
+            elif name in cls.PROJECT_TOOLS:
+                import project_context_service
+                ws = args.get("workspace_path") or args.get("workspace") or args.get("path")
+                idx = project_context_service.get_project_index(ws)
+
+                if name in ("project_index", "project_scan"):
+                    return idx.scan_and_index()
+
+                elif name in ("project_search", "project_retrieve_context"):
+                    query = args.get("query") or args.get("q") or ""
+                    max_results = int(args.get("max_results", 5))
+                    return {
+                        "status": "success",
+                        "results": idx.retrieve_context(query, max_results=max_results)
+                    }
+
+                elif name in ("project_get_architecture", "project_architecture"):
+                    markdown = bool(args.get("markdown", False))
+                    return {
+                        "status": "success",
+                        "architecture": idx.get_architecture_summary(markdown=markdown)
+                    }
+
+                elif name in ("project_get_dependencies", "project_dependencies"):
+                    file_path = args.get("file_path") or args.get("file") or args.get("path")
+                    if not file_path:
+                        return {"status": "error", "message": "Missing required argument 'file_path'."}
+                    return {
+                        "status": "success",
+                        **idx.get_dependencies_for_file(file_path)
+                    }
+
+                elif name in ("project_find_symbol", "project_symbols"):
+                    sym_name = args.get("name") or args.get("symbol") or ""
+                    kind = args.get("kind")
+                    file_path = args.get("file_path") or args.get("file")
+                    if file_path:
+                        return {"status": "success", "symbols": idx.symbol_table.get_symbols_for_file(file_path)}
+                    return {"status": "success", "symbols": idx.find_symbol(sym_name, kind=kind)}
+
             return {"status": "error", "message": f"Unknown terminal tool '{tool_name}'."}
         except Exception as exc:
             return {"status": "error", "message": f"Tool execution failed: {str(exc)}"}
@@ -2159,6 +2207,8 @@ class ToolDispatcher:
         if name in cls.TERMINAL_TOOLS:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
         elif name in cls.FILE_TOOLS:
+            return _run_coroutine_sync(cls.dispatch_async(name, args))
+        elif name in cls.PROJECT_TOOLS:
             return _run_coroutine_sync(cls.dispatch_async(name, args))
         elif name in cls.WEB_SEARCH_TOOLS:
             q = args.get("query") or args.get("q") or args.get("search") or args.get("search_query") or ""

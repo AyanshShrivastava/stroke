@@ -4576,10 +4576,73 @@ async def project_index_clear_endpoint():
     import project_context_service
     idx = project_context_service.get_project_index()
     idx.files.clear()
+    idx.dependency_graph = project_context_service.ProjectDependencyGraph()
+    idx.symbol_table = project_context_service.ProjectSymbolTable()
     idx.total_bytes = 0
     idx.last_indexed_at = 0.0
     idx.persist()
     return {"status": "success", "message": "Project context index cleared."}
+
+
+@app.get("/project/architecture", dependencies=[Depends(verify_terminal_access)], tags=["Project Context"])
+@app.get("/api/project/architecture", dependencies=[Depends(verify_terminal_access)], tags=["Project Context"])
+async def project_architecture_endpoint(
+    workspace_path: Optional[str] = Query(None),
+    markdown: bool = Query(False)
+):
+    """Returns the architectural blueprint, archetypes, entry points, and structural layers."""
+    import project_context_service
+    idx = project_context_service.get_project_index(workspace_path)
+    summary = idx.get_architecture_summary(markdown=markdown)
+    return {
+        "status": "success",
+        "workspace_path": str(idx.workspace_path),
+        "project_name": idx.project_name,
+        "architecture": summary
+    }
+
+
+@app.get("/project/dependencies", dependencies=[Depends(verify_terminal_access)], tags=["Project Context"])
+@app.get("/api/project/dependencies", dependencies=[Depends(verify_terminal_access)], tags=["Project Context"])
+async def project_dependencies_endpoint(
+    file_path: str = Query(..., description="Relative file path to inspect"),
+    workspace_path: Optional[str] = Query(None)
+):
+    """Returns outgoing dependencies, incoming callers, and impact radius for a specific file."""
+    import project_context_service
+    idx = project_context_service.get_project_index(workspace_path)
+    data = idx.get_dependencies_for_file(file_path)
+    return {
+        "status": "success",
+        "workspace_path": str(idx.workspace_path),
+        **data
+    }
+
+
+@app.get("/project/symbols", dependencies=[Depends(verify_terminal_access)], tags=["Project Context"])
+@app.get("/api/project/symbols", dependencies=[Depends(verify_terminal_access)], tags=["Project Context"])
+async def project_symbols_endpoint(
+    name: Optional[str] = Query(None, description="Symbol name to query across the codebase"),
+    file_path: Optional[str] = Query(None, description="Optional relative file path"),
+    kind: Optional[str] = Query(None, description="Optional kind filter (e.g. function, class, type)"),
+    workspace_path: Optional[str] = Query(None)
+):
+    """Finds symbol declarations across files or retrieves all symbols for a specific file."""
+    import project_context_service
+    idx = project_context_service.get_project_index(workspace_path)
+    if file_path:
+        symbols = idx.symbol_table.get_symbols_for_file(file_path)
+    elif name:
+        symbols = idx.find_symbol(name, kind=kind)
+    else:
+        symbols = []
+        for f, syms in idx.symbol_table.symbols_by_file.items():
+            symbols.extend(syms)
+    return {
+        "status": "success",
+        "symbols_count": len(symbols),
+        "symbols": symbols
+    }
 
 
 # ==============================================================================

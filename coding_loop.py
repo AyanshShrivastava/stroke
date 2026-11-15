@@ -1114,7 +1114,23 @@ class ProjectInspectionEngine:
                 except Exception:
                     pass
 
-        # 2. If no mentioned files found, inspect top files matching target language
+        # 2. Use Project Context Intelligence to retrieve the most relevant files for the user goal
+        if not inspected:
+            try:
+                import project_context_service
+                idx = project_context_service.get_project_index(str(ws))
+                if not idx.files:
+                    idx.scan_and_index()
+                results = idx.retrieve_context(goal_spec.user_goal, max_results=5)
+                for item in results:
+                    p = ws / item["path"]
+                    if p.exists() and item["path"] not in seen_paths:
+                        seen_paths.add(item["path"])
+                        inspected.append(cls._inspect_single_file(p, ws, goal_spec.target_language))
+            except Exception:
+                pass
+
+        # 3. Fallback: inspect top files matching target language
         if not inspected:
             ext_map = {"luau": [".luau", ".lua"], "python": [".py"], "typescript": [".ts", ".tsx"]}
             target_exts = ext_map.get(goal_spec.target_language, [".luau", ".py"])
