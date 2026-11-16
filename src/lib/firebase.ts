@@ -15,11 +15,18 @@ import {
   type User,
 } from "firebase/auth";
 
+const storedApiKey =
+  typeof window !== "undefined" && window.localStorage
+    ? window.localStorage.getItem("stroke_firebase_api_key")
+    : null;
+
 // Public client Firebase configuration.
 // No private secrets or service account keys are bundled or exposed.
 const firebaseConfig = {
   apiKey:
-    import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyStrokeClientKeyForDesktopVerification",
+    storedApiKey ||
+    import.meta.env.VITE_FIREBASE_API_KEY ||
+    "AIzaSyDummyStrokeClientKeyForDesktopVerification",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "stroke-cyber-matrix.firebaseapp.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "stroke-cyber-matrix",
   storageBucket:

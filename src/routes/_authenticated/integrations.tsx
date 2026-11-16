@@ -83,7 +83,7 @@ function Integrations() {
   const [prefs, setPrefs] = useState(() => loadUserPreferences());
   const [diagRunning, setDiagRunning] = useState(false);
   const [diagMode, setDiagMode] = useState<"fast" | "full">("fast");
-  const [diagReport, setDiagReport] = useState<any>(null);
+  const [diagReport, setDiagReport] = useState<Record<string, unknown> | null>(null);
   const [gh, setGh] = useState({ pat: "", repo: "" });
   const [ghStatus, setGhStatus] = useState<{
     connected: boolean;
@@ -546,8 +546,9 @@ function Integrations() {
       toast.success(
         `Diagnostics finished: ${data.report?.summary?.total_passed ?? 0} passed, ${data.report?.summary?.total_failed ?? 0} failed`,
       );
-    } catch (e: any) {
-      toast.error(e.message || "Failed to run diagnostics");
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      toast.error(errMsg || "Failed to run diagnostics");
     } finally {
       setDiagRunning(false);
     }
@@ -1447,57 +1448,58 @@ function Integrations() {
                         Subsystem Diagnostics Breakdown
                       </h3>
                       <div className="space-y-1.5 font-mono text-xs">
-                        {diagReport.results?.map((res: any, idx: number) => {
-                          const isPass = res.status === "passed";
-                          const isWarn = res.status === "warning";
-                          return (
-                            <div
-                              key={idx}
-                              className={`flex items-start justify-between rounded-lg border p-3 ${
-                                isPass
-                                  ? "border-emerald-500/20 bg-emerald-500/5 text-foreground"
-                                  : isWarn
-                                    ? "border-amber-500/30 bg-amber-500/5 text-foreground"
-                                    : "border-destructive/30 bg-destructive/10 text-destructive"
-                              }`}
-                            >
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2 font-medium">
-                                  {isPass ? (
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                                  ) : isWarn ? (
-                                    <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                  ) : (
-                                    <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
-                                  )}
-                                  <span className="font-semibold">{res.target}</span>
-                                  <span className="text-[10px] text-muted-foreground uppercase">
-                                    {res.category}
-                                  </span>
-                                </div>
-                                <div className="text-[11px] text-muted-foreground leading-relaxed pl-5 font-sans">
-                                  {res.message}
-                                </div>
-                                {res.error_details && (
-                                  <pre className="mt-1 ml-5 overflow-x-auto rounded bg-background/80 p-2 font-mono text-[10px] text-destructive border border-destructive/20 whitespace-pre-wrap">
-                                    {res.error_details}
-                                  </pre>
-                                )}
-                              </div>
-                              <span
-                                className={`text-[10px] font-bold uppercase rounded px-2 py-0.5 ${
+                        {Array.isArray(diagReport.results) &&
+                          diagReport.results.map((res: Record<string, unknown>, idx: number) => {
+                            const isPass = res.status === "passed";
+                            const isWarn = res.status === "warning";
+                            return (
+                              <div
+                                key={idx}
+                                className={`flex items-start justify-between rounded-lg border p-3 ${
                                   isPass
-                                    ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                                    ? "border-emerald-500/20 bg-emerald-500/5 text-foreground"
                                     : isWarn
-                                      ? "bg-amber-500/20 text-amber-500"
-                                      : "bg-destructive/20 text-destructive"
+                                      ? "border-amber-500/30 bg-amber-500/5 text-foreground"
+                                      : "border-destructive/30 bg-destructive/10 text-destructive"
                                 }`}
                               >
-                                {res.status}
-                              </span>
-                            </div>
-                          );
-                        })}
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 font-medium">
+                                    {isPass ? (
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                    ) : isWarn ? (
+                                      <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                    ) : (
+                                      <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                                    )}
+                                    <span className="font-semibold">{res.target}</span>
+                                    <span className="text-[10px] text-muted-foreground uppercase">
+                                      {res.category}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground leading-relaxed pl-5 font-sans">
+                                    {res.message}
+                                  </div>
+                                  {res.error_details && (
+                                    <pre className="mt-1 ml-5 overflow-x-auto rounded bg-background/80 p-2 font-mono text-[10px] text-destructive border border-destructive/20 whitespace-pre-wrap">
+                                      {res.error_details}
+                                    </pre>
+                                  )}
+                                </div>
+                                <span
+                                  className={`text-[10px] font-bold uppercase rounded px-2 py-0.5 ${
+                                    isPass
+                                      ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                                      : isWarn
+                                        ? "bg-amber-500/20 text-amber-500"
+                                        : "bg-destructive/20 text-destructive"
+                                  }`}
+                                >
+                                  {res.status}
+                                </span>
+                              </div>
+                            );
+                          })}
                       </div>
                     </div>
                   </div>

@@ -31,7 +31,13 @@ use the editor.
 
 <!-- LOVABLE:END -->
 
-## Project rules
+## Authoritative Architecture & Production Rules
 
-- Desktop-only features (cache file, local chats, storage cap, GitHub PAT) are simulated in browser localStorage via `src/lib/keyboard-store.ts`; why: the web build can't touch the filesystem.
-- Archivist notes sync to the `archive_notes` table (per-user RLS); why: replaces Firestore with Lovable Cloud.
+- **Authoritative Backend:** Python FastAPI (`main.py`) running natively on `127.0.0.1:8501`.
+- **Authoritative Production Frontend:** Single-page application served directly by FastAPI at `/` backed by `index.html`.
+- **Authoritative Desktop Supervisor:** `desktop.py` with PyWebView / system default browser fallback.
+- **Database Engine:** Google Cloud Firestore in production; genuine disk-backed offline Firestore engine (`local_firestore.py` via `data/local_firestore_db.json`) when `STROKE_ALLOW_OFFLINE_DB=1`.
+- **Identity & Authorization:** Strictly keyed by Firebase Auth UID. Email query parameters or headers are never trusted for document or session ownership.
+- **Terminal Execution:** Sandboxed Python backend terminal engine (`terminal_service.py`) enforcing UID session ownership, single-use cryptographic approvals, output buffer bounds, and secret redaction.
+- **Reference Web Client:** The React/TanStack Start client under `src/` is retained for headless developer routing and Vitest test coverage (`npm test`). It does not replace `index.html` as the primary production interface.
+- **Git History Safety:** Never force-push or rewrite published Git history. Preserve all user repositories, workspaces, and local user data.

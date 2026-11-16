@@ -46,6 +46,7 @@ from typing import Dict, List, Any, Optional, Tuple, Set
 from dataclasses import dataclass, field, asdict
 
 import paths_service
+import terminal_service
 
 
 # ------------------------------------------------------------------------------
@@ -123,7 +124,10 @@ class TestDiscoveryEngine:
 
     @classmethod
     def discover_backend_tests(cls, root_dir: Path) -> Dict[str, Any]:
-        test_files = sorted([f for f in root_dir.glob("test_*.py") if f.is_file()])
+        resolved_root = Path(os.path.realpath(str(root_dir)))
+        if not terminal_service.is_allowed_workspace_root(str(resolved_root)):
+            raise PermissionError(f"Backend test discovery target '{resolved_root}' is outside approved workspace roots.")
+        test_files = sorted([f for f in resolved_root.glob("test_*.py") if f.is_file()])
         catalog: Dict[str, Any] = {}
         total_methods = 0
 
@@ -180,7 +184,10 @@ class TestDiscoveryEngine:
 
     @classmethod
     def discover_frontend_tests(cls, root_dir: Path) -> Dict[str, Any]:
-        test_dir = root_dir / "src" / "test"
+        resolved_root = Path(os.path.realpath(str(root_dir)))
+        if not terminal_service.is_allowed_workspace_root(str(resolved_root)):
+            raise PermissionError(f"Frontend test discovery target '{resolved_root}' is outside approved workspace roots.")
+        test_dir = resolved_root / "src" / "test"
         if not test_dir.exists():
             return {"total_files": 0, "total_tests": 0, "files": {}}
 
@@ -230,7 +237,11 @@ class TestExecutionRunner:
         Runs pytest and extracts exact passed, failed, and skipped counts.
         Guarantees that skipped tests are NEVER counted as passing.
         """
-        venv_py = root_dir / "venv" / "bin" / "python3"
+        resolved_root = Path(os.path.realpath(str(root_dir)))
+        if not terminal_service.is_allowed_workspace_root(str(resolved_root)):
+            raise PermissionError(f"Backend pytest execution target '{resolved_root}' is outside approved workspace roots.")
+
+        venv_py = resolved_root / "venv" / "bin" / "python3"
         python_bin = str(venv_py) if venv_py.exists() else sys.executable
 
         cmd = [python_bin, "-m", "pytest", "-q"]
@@ -303,6 +314,10 @@ class TestExecutionRunner:
     @classmethod
     def run_frontend_vitest(cls, root_dir: Path, timeout_seconds: int = 45) -> Dict[str, Any]:
         """Runs Vitest frontend tests and reports exact counts."""
+        resolved_root = Path(os.path.realpath(str(root_dir)))
+        if not terminal_service.is_allowed_workspace_root(str(resolved_root)):
+            raise PermissionError(f"Frontend vitest execution target '{resolved_root}' is outside approved workspace roots.")
+
         env = os.environ.copy()
         node_bin = os.path.expanduser("~/.local/node/bin")
         if os.path.exists(node_bin):
@@ -989,7 +1004,10 @@ class BrokenImportScanner:
 
     @classmethod
     def scan_project_imports(cls, root_dir: Path) -> Tuple[Dict[str, Any], List[DiagnosticIssue]]:
-        py_files = sorted([f for f in root_dir.glob("*.py") if not f.name.startswith(".")])
+        resolved_root = Path(os.path.realpath(str(root_dir)))
+        if not terminal_service.is_allowed_workspace_root(str(resolved_root)):
+            raise PermissionError(f"Broken import scan target '{resolved_root}' is outside approved workspace roots.")
+        py_files = sorted([f for f in resolved_root.glob("*.py") if not f.name.startswith(".")])
         total_imports = 0
         broken_imports = []
         issues: List[DiagnosticIssue] = []
@@ -1213,6 +1231,8 @@ class StrokeBugHunter:
 
     def __init__(self, workspace_path: Optional[str] = None):
         self.workspace_path = Path(workspace_path).resolve() if workspace_path else Path.cwd().resolve()
+        if not terminal_service.is_allowed_workspace_root(str(self.workspace_path)):
+            raise PermissionError(f"Diagnostic workspace path '{self.workspace_path}' is outside approved roots.")
         self.docs_file = self.workspace_path / "docs" / "STROKE_TEST_REPORT.md"
 
     def hunt_bugs(self, run_full_tests: bool = True) -> BugHuntReport:

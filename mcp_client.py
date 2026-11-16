@@ -71,14 +71,23 @@ class SsrfProtector:
     BLOCKED_NETWORKS = [
         ipaddress.ip_network("0.0.0.0/8"),
         ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("100.64.0.0/10"),        # Carrier-grade NAT (RFC 6598)
         ipaddress.ip_network("127.0.0.0/8"),
         ipaddress.ip_network("169.254.0.0/16"),       # Link-local & cloud metadata
         ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.0.0.0/24"),         # IETF Protocol Assignments
+        ipaddress.ip_network("192.0.2.0/24"),         # TEST-NET-1 (RFC 5737)
         ipaddress.ip_network("192.168.0.0/16"),
+        ipaddress.ip_network("198.18.0.0/15"),        # Network benchmark tests (RFC 2544)
+        ipaddress.ip_network("198.51.100.0/24"),      # TEST-NET-2 (RFC 5737)
+        ipaddress.ip_network("203.0.113.0/24"),       # TEST-NET-3 (RFC 5737)
         ipaddress.ip_network("224.0.0.0/4"),          # Multicast
         ipaddress.ip_network("240.0.0.0/4"),          # Reserved
         ipaddress.ip_network("::/128"),
         ipaddress.ip_network("::1/128"),              # IPv6 loopback
+        ipaddress.ip_network("::ffff:0:0/96"),        # IPv4-mapped IPv6
+        ipaddress.ip_network("64:ff9b::/96"),         # IPv4/IPv6 translation (RFC 6052)
+        ipaddress.ip_network("2001:db8::/32"),        # Documentation IPv6
         ipaddress.ip_network("fc00::/7"),             # IPv6 Unique Local
         ipaddress.ip_network("fe80::/10"),            # IPv6 Link-Local
     ]
@@ -90,6 +99,16 @@ class SsrfProtector:
         "metadata",
         "localhost.localdomain"
     }
+
+    REBINDING_DOMAINS = (
+        ".nip.io",
+        ".sslip.io",
+        ".localtest.me",
+        ".vcap.me",
+        ".lvh.me",
+        ".traefik.me",
+        ".127.0.0.1.nip.io"
+    )
 
     @classmethod
     def validate_url(cls, url: str, allow_local: bool = False) -> str:
@@ -117,13 +136,18 @@ class SsrfProtector:
         if hostname_lower in cls.BLOCKED_HOSTNAMES:
             raise McpError(f"Access to cloud metadata hostname '{hostname}' is strictly prohibited.", code=-32602)
 
-        # 3. Detect numeric / decimal / octal / hex IP obfuscation in host
+        # 3. Block known DNS rebinding domains
+        for rebinding in cls.REBINDING_DOMAINS:
+            if hostname_lower == rebinding.lstrip(".") or hostname_lower.endswith(rebinding):
+                raise McpError(f"DNS rebinding domain '{hostname}' is strictly prohibited.", code=-32602)
+
+        # 4. Detect numeric / decimal / octal / hex IP obfuscation in host
         if re.match(r"^(0x[0-9a-f]+|\d+)$", hostname_lower):
             raise McpError("Obfuscated or integer IP addresses are prohibited.", code=-32602)
         if re.match(r"^0\d+", hostname_lower):
             raise McpError("Octal IP addresses are prohibited.", code=-32602)
 
-        # 4. Check for direct localhost naming
+        # 5. Check for direct localhost naming
         is_named_localhost = hostname_lower in ("localhost", "127.0.0.1", "::1")
         if is_named_localhost:
             if not allow_local:
@@ -133,7 +157,7 @@ class SsrfProtector:
                 )
             return url_str
 
-        # 5. DNS Resolution & IP Range Check
+        # 6. DNS Resolution & IP Range Check
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
         try:
             addr_info = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
@@ -154,7 +178,19 @@ class SsrfProtector:
                 is_blocked = any(ip_obj in net for net in cls.BLOCKED_NETWORKS)
 
                 if is_blocked:
-                    if (ip_obj.is_loopback or ip_str == "127.0.0.1") and allow_local:
+                    # Cloud metadata and link-local (169.254.0.0/16, fe80::/10) must NEVER be permitted
+                    is_cloud_metadata = (
+                        (isinstance(ip_obj, ipaddress.IPv4Address) and ip_obj in ipaddress.ip_network("169.254.0.0/16"))
+                        or (isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj in ipaddress.ip_network("fe80::/10"))
+                    )
+                    if is_cloud_metadata:
+                        raise McpError(
+                            f"SSRF Protection: Access to link-local/cloud metadata IP '{ip_str}' is strictly prohibited.",
+                            code=-32602
+                        )
+
+                    # Only genuine loopback (127.0.0.0/8 or ::1) is permitted when allow_local is True
+                    if (ip_obj.is_loopback or ip_str == "127.0.0.1" or ip_str == "::1") and allow_local:
                         continue
                     raise McpError(
                         f"SSRF Protection: Connection to IP '{ip_str}' ({hostname}) blocked. Private/cloud/metadata access prohibited.",
@@ -176,8 +212,9 @@ class McpSecretVault:
     in plaintext JSON configuration files.
     """
 
-    VAULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    KEY_FILE = os.path.join(VAULT_DIR, ".vault_key")
+    VAULT_DIR = str(paths_service.get_app_data_dir() / "credentials")
+    KEY_FILE = os.path.join(VAULT_DIR, ".mcp_vault_key")
+    _LEGACY_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".vault_key")
     _cipher: Optional[Fernet] = None
 
     @classmethod
@@ -186,16 +223,41 @@ class McpSecretVault:
             return cls._cipher
 
         os.makedirs(cls.VAULT_DIR, exist_ok=True)
+        try:
+            os.chmod(cls.VAULT_DIR, 0o700)
+        except Exception:
+            pass
+
+        # 1. Primary stable location
         if os.path.exists(cls.KEY_FILE):
             try:
                 with open(cls.KEY_FILE, "rb") as f:
                     key = f.read().strip()
-                cls._cipher = Fernet(key)
-                return cls._cipher
-            except Exception:
-                pass
+                if key and len(key) >= 32:
+                    cls._cipher = Fernet(key)
+                    return cls._cipher
+            except Exception as e:
+                logger.error(f"[McpSecretVault] Corrupted key file at {cls.KEY_FILE}: {e}")
+                raise RuntimeError(f"MCP Secret Vault key corrupted at {cls.KEY_FILE}. Refusing to overwrite and lose existing secrets: {e}")
 
-        # Generate new key with 0600 mode
+        # 2. Seamless migration from legacy source-directory key file
+        if os.path.exists(cls._LEGACY_KEY_FILE):
+            try:
+                with open(cls._LEGACY_KEY_FILE, "rb") as f:
+                    legacy_key = f.read().strip()
+                if legacy_key and len(legacy_key) >= 32:
+                    # Persist into stable location with 0600 mode
+                    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                    fd = os.open(cls.KEY_FILE, flags, 0o600)
+                    with open(fd, "wb") as f:
+                        f.write(legacy_key)
+                    cls._cipher = Fernet(legacy_key)
+                    logger.info(f"[McpSecretVault] Migrated legacy key from {cls._LEGACY_KEY_FILE} to {cls.KEY_FILE}")
+                    return cls._cipher
+            except Exception as e:
+                logger.warning(f"[McpSecretVault] Legacy key migration failed: {e}")
+
+        # 3. Generate new key with 0600 mode
         new_key = Fernet.generate_key()
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         fd = os.open(cls.KEY_FILE, flags, 0o600)

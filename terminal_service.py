@@ -33,7 +33,7 @@ import atexit
 import secrets
 import threading
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import deque
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -54,16 +54,36 @@ APPROVAL_TTL_SEC = 300.0  # 5 minutes expiry for server-side approval records
 class ApprovalRecord:
     approval_id: str
     command: str
-    args: List[str]
-    session_id: str
-    cwd: str
-    uid: str
-    rationale: str
-    created_at: float
-    expires_at: float
+    args: List[str] = field(default_factory=list)
+    session_id: str = ""
+    cwd: str = ""
+    uid: str = ""
+    rationale: str = ""
+    created_at: float = 0.0
+    expires_at: float = 0.0
     is_background: bool = False
     timeout_sec: int = DEFAULT_TIMEOUT_SEC
     consumed: bool = False
+    argv: Optional[List[str]] = None
+    reason: Optional[str] = None
+
+    def __post_init__(self):
+        if self.argv is not None and not self.args:
+            if self.argv and self.argv[0] == self.command:
+                self.args = list(self.argv[1:])
+            else:
+                self.args = list(self.argv)
+        if self.reason is not None and not self.rationale:
+            self.rationale = self.reason
+        if not self.created_at:
+            self.created_at = time.time()
+        if not self.cwd and self.session_id:
+            try:
+                sess = TerminalManager._sessions.get(self.session_id)
+                if sess and sess.cwd:
+                    self.cwd = sess.cwd
+            except Exception:
+                pass
 
 _APPROVAL_REGISTRY: Dict[str, ApprovalRecord] = {}
 _APPROVAL_LOCK = threading.Lock()
@@ -134,6 +154,8 @@ REDACTION_PATTERNS = [
     (re.compile(r"AIza[0-9A-Za-z-_]{30,40}"), "[REDACTED_GOOGLE_API_KEY]"),
     # JWT Bearer Tokens
     (re.compile(r"Bearer\s+[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9_\-\.]+"), "Bearer [REDACTED_JWT]"),
+    # Raw Unprefixed JWT Tokens (Header.Payload.Signature)
+    (re.compile(r"\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b"), "[REDACTED_JWT]"),
     # Private Key Blocks
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"), "[REDACTED_PRIVATE_KEY]"),
     # Resend API Keys
@@ -145,18 +167,28 @@ REDACTION_PATTERNS = [
     # OpenRouter API Keys
     (re.compile(r"sk-or-v1-[a-zA-Z0-9_\-]{20,}"), "[REDACTED_OPENROUTER_API_KEY]"),
     # OpenAI / Anthropic Keys
-    (re.compile(r"sk-(?:ant-)?[a-zA-Z0-9_-]{20,}"), "[REDACTED_AI_API_KEY]"),
+    (re.compile(r"sk-ant-[a-zA-Z0-9_-]{20,}"), "[REDACTED_ANTHROPIC_API_KEY]"),
+    (re.compile(r"sk-[a-zA-Z0-9_-]{20,}"), "[REDACTED_AI_API_KEY]"),
+    # Hugging Face Tokens
+    (re.compile(r"hf_[a-zA-Z0-9]{34,}"), "[REDACTED_HF_TOKEN]"),
     # Generic Secret Patterns (e.g. password=..., secret=...)
     (re.compile(r"(?i)(password|secret|apikey|api_key|token|auth_token)\s*[:=]\s*['\"]?([^\s'\"]{8,})['\"]?"), r"\1=[REDACTED_SECRET]"),
 ]
 
 def redact_sensitive_data(text: str) -> str:
-    """Redacts sensitive authentication tokens, keys, and credentials from command output."""
+    """Redacts sensitive authentication tokens, keys, and credentials from command output and logs."""
     if not text:
         return ""
     redacted = text
     for pattern, replacement in REDACTION_PATTERNS:
         redacted = pattern.sub(replacement, redacted)
+
+    # Dynamic scrubbing of runtime secrets configured in environment
+    for secret_env in ("STROKE_INTERNAL_SECRET", "GITHUB_TOKEN", "RESEND_API_KEY", "STROKE_ENCRYPTION_KEY"):
+        val = os.environ.get(secret_env)
+        if val and len(val.strip()) >= 8:
+            redacted = redacted.replace(val.strip(), "[REDACTED_SECRET]")
+
     return redacted
 
 
@@ -731,12 +763,33 @@ class TerminalSession:
                     "error": "approval_not_consumed",
                     "message": "Approval record was not consumed atomically."
                 }
+            if time.time() > _approval_record.expires_at:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_expired",
+                    "message": "Approval record has expired."
+                }
             if _approval_record.session_id != self.session_id:
                 return {
                     "session_id": self.session_id,
                     "status": "error",
                     "error": "approval_session_mismatch",
                     "message": f"Approval session '{_approval_record.session_id}' does not match target session '{self.session_id}'."
+                }
+            if caller_uid and caller_uid != "internal_daemon" and _approval_record.uid != "internal_daemon" and _approval_record.uid != caller_uid:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_user_mismatch",
+                    "message": f"Approval was issued for UID '{_approval_record.uid}', not caller '{caller_uid}'."
+                }
+            if self.owner_uid != "internal_daemon" and _approval_record.uid != "internal_daemon" and _approval_record.uid != self.owner_uid:
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "approval_user_mismatch",
+                    "message": f"Approval was issued for UID '{_approval_record.uid}', not session owner '{self.owner_uid}'."
                 }
             if _approval_record.command != command:
                 return {
@@ -988,6 +1041,7 @@ class TerminalSession:
             }
             self.execution_history.append(record)
             return {
+                "status": "success",
                 "session_id": self.session_id,
                 "command": command,
                 "executable": command,
@@ -1124,6 +1178,7 @@ class TerminalSession:
         self.execution_history.append(record)
 
         return {
+            "status": "success" if exit_code == 0 else "failed",
             "session_id": self.session_id,
             "command": command,
             "executable": command,
@@ -1284,13 +1339,62 @@ class TerminalManager:
     _sessions: Dict[str, TerminalSession] = {}
     _reaped_history: deque = deque(maxlen=20)
     _lock = threading.RLock()
+    _pending_approvals = _APPROVAL_REGISTRY
 
     @classmethod
-    def create_terminal(cls, workspace_path: Optional[str] = None, caller_uid: str = "internal_daemon") -> Dict[str, Any]:
+    def _verify_session_ownership(
+        cls,
+        session: TerminalSession,
+        caller_uid: Optional[str] = None,
+        is_internal: bool = False
+    ) -> None:
+        """
+        Enforces strict terminal session ownership.
+        A Firebase user must never access another user's or internal daemon's terminal session.
+        Internal daemon access is kept separate and explicitly authenticated (is_internal=True).
+        """
+        if is_internal:
+            return  # Verified internal daemon
+
+        if not caller_uid or caller_uid == "internal_daemon":
+            raise PermissionError("Access denied: Internal daemon operations require explicit internal authorization.")
+
+        if session.owner_uid == "internal_daemon":
+            raise PermissionError(f"Access denied: Session '{session.session_id}' is reserved for internal daemon processes.")
+
+        if session.owner_uid != caller_uid:
+            raise PermissionError(f"Access denied: Session '{session.session_id}' belongs to user '{session.owner_uid}', not '{caller_uid}'.")
+
+    @classmethod
+    def create_terminal(
+        cls,
+        workspace_path: Optional[str] = None,
+        caller_uid: str = "internal_daemon",
+        is_internal: Optional[bool] = None,
+        session_id: Optional[str] = None,
+        cwd: Optional[str] = None,
+        owner_uid: Optional[str] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
         """
         Creates a new independent background terminal session.
         Never evicts active running processes: rejects new sessions if all slots are actively running.
         """
+        effective_owner = owner_uid if owner_uid is not None else caller_uid
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon" and effective_owner == "internal_daemon")
+        if not is_internal and (caller_uid == "internal_daemon" or effective_owner == "internal_daemon"):
+            raise PermissionError("Firebase users cannot claim internal_daemon identity.")
+
+        target_ws = cwd or workspace_path or DEFAULT_WORKSPACE
+        canonical_ws = os.path.realpath(target_ws)
+        if not os.path.exists(canonical_ws):
+            raise FileNotFoundError(f"Target workspace does not exist: {canonical_ws}")
+        if not is_allowed_workspace_root(canonical_ws):
+            raise PermissionError(f"Directory traversal denied: '{target_ws}' is outside approved project roots.")
+
+        effective_sid = session_id or f"term-{uuid.uuid4().hex[:8]}"
+
         oldest_session = None
         with cls._lock:
             if len(cls._sessions) >= MAX_SESSIONS:
@@ -1306,16 +1410,8 @@ class TerminalManager:
                 oldest_session = cls._sessions.pop(oldest_id)
                 cls._reaped_history.append((oldest_id, oldest_session))
 
-            target_ws = workspace_path or DEFAULT_WORKSPACE
-            canonical_ws = os.path.realpath(target_ws)
-            if not os.path.exists(canonical_ws):
-                raise FileNotFoundError(f"Target workspace does not exist: {canonical_ws}")
-            if not is_allowed_workspace_root(canonical_ws):
-                raise PermissionError(f"Directory traversal denied: '{target_ws}' is outside approved project roots.")
-
-            session_id = f"term-{uuid.uuid4().hex[:8]}"
-            session = TerminalSession(session_id, canonical_ws, owner_uid=caller_uid)
-            cls._sessions[session_id] = session
+            session = TerminalSession(effective_sid, canonical_ws, owner_uid=effective_owner)
+            cls._sessions[effective_sid] = session
 
         if oldest_session:
             try:
@@ -1325,10 +1421,10 @@ class TerminalManager:
 
         return {
             "status": "created",
-            "session_id": session_id,
+            "session_id": effective_sid,
             "workspace_path": canonical_ws,
             "cwd": canonical_ws,
-            "message": f"Silent background terminal session '{session_id}' initialized in {canonical_ws}."
+            "message": f"Silent background terminal session '{effective_sid}' initialized in {canonical_ws}."
         }
 
     @classmethod
@@ -1342,6 +1438,7 @@ class TerminalManager:
         executable: Optional[str] = None,
         arguments: Optional[List[str]] = None,
         caller_uid: str = "internal_daemon",
+        is_internal: Optional[bool] = None,
         is_ai_initiated: bool = False,
         **kwargs
     ) -> Dict[str, Any]:
@@ -1349,12 +1446,17 @@ class TerminalManager:
         Executes an approved dev command inside the target session.
         Unknown session IDs return errors and never auto-create a new default session.
         Stopped/reaped sessions are read-only and cannot execute commands.
+        Enforces strict session ownership isolation.
         """
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon") or (kwargs.get("is_internal") is True)
+
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
                 for sid, sess in cls._reaped_history:
                     if sid == session_id:
+                        cls._verify_session_ownership(sess, caller_uid=caller_uid, is_internal=is_internal)
                         return {
                             "status": "error",
                             "error": "session_terminated",
@@ -1366,10 +1468,12 @@ class TerminalManager:
                     "message": f"Terminal session '{session_id}' not found. Auto-creation of unknown sessions is disabled."
                 }
 
+            cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+
         cmd = command or executable or "python"
         args_list = args if args is not None else (arguments or [])
         approval_rec = kwargs.get("_approval_record")
-        is_internal_caller = (caller_uid == "internal_daemon") or kwargs.get("is_internal") is True
+        is_internal_caller = is_internal or (caller_uid == "internal_daemon")
         if approval_rec is None and kwargs.get("approved") is True and is_internal_caller:
             approval_id = f"appr-{secrets.token_urlsafe(24)}"
             approval_rec = ApprovalRecord(
@@ -1397,11 +1501,20 @@ class TerminalManager:
         )
 
     @classmethod
-    def read_terminal_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
+    def read_terminal_output(
+        cls,
+        session_id: str,
+        tail_lines: Optional[int] = None,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """
         Reads the captured output of the session (including stopped or reaped sessions).
-        Unknown sessions return error.
+        Enforces strict session ownership isolation.
         """
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
@@ -1412,6 +1525,12 @@ class TerminalManager:
 
         if not session:
             return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+
+        try:
+            cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+        except PermissionError as pe:
+            return {"status": "error", "error": "access_denied", "message": str(pe)}
+
         lines = session.read_output(tail_lines=tail_lines)
         return {
             "session_id": session_id,
@@ -1421,11 +1540,19 @@ class TerminalManager:
         }
 
     @classmethod
-    def get_terminal_status(cls, session_id: str) -> Dict[str, Any]:
+    def get_terminal_status(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """
         Returns current state, active process, and exit code.
-        Unknown sessions return error.
+        Enforces strict session ownership isolation.
         """
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
@@ -1433,16 +1560,31 @@ class TerminalManager:
                     if sid == session_id:
                         session = sess
                         break
+
         if not session:
             return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+
+        try:
+            cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+        except PermissionError as pe:
+            return {"status": "error", "error": "access_denied", "message": str(pe)}
+
         return session.get_status()
 
     @classmethod
-    def get_terminal_history(cls, session_id: str) -> Dict[str, Any]:
+    def get_terminal_history(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """
         Returns chronological execution history of commands in the session.
-        Works for active and recently reaped sessions.
+        Works for active and recently reaped sessions with strict ownership isolation.
         """
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
@@ -1450,8 +1592,15 @@ class TerminalManager:
                     if sid == session_id:
                         session = sess
                         break
+
         if not session:
             return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+
+        try:
+            cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+        except PermissionError as pe:
+            return {"status": "error", "error": "access_denied", "message": str(pe)}
+
         return {
             "status": "success",
             "session_id": session_id,
@@ -1459,25 +1608,58 @@ class TerminalManager:
         }
 
     @classmethod
-    def list_terminals(cls) -> List[Dict[str, Any]]:
-        """Lists all active background terminal sessions."""
+    def list_terminals(
+        cls,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Lists active background terminal sessions.
+        Internal daemon sees all sessions; Firebase users only see their own sessions.
+        """
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
         with cls._lock:
-            return [s.get_status() for s in cls._sessions.values()]
+            if is_internal:
+                return [s.get_status() for s in cls._sessions.values()]
+            if caller_uid and caller_uid != "internal_daemon":
+                return [s.get_status() for s in cls._sessions.values() if s.owner_uid == caller_uid]
+            return []
 
     @classmethod
-    def stop_terminal(cls, session_id: str) -> Dict[str, Any]:
+    def stop_terminal(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """
         Terminates the background session process and reclaims active resources.
-        Buffered output remains inspectable via read_terminal_output.
+        Enforces strict session ownership isolation.
         """
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
                 return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+
+            try:
+                cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+            except PermissionError as pe:
+                return {"status": "error", "error": "access_denied", "message": str(pe)}
+
             res = session.stop()
             cls._reaped_history.append((session_id, session))
             del cls._sessions[session_id]
-            return res
+            res_dict = dict(res)
+            if caller_uid and caller_uid != "internal_daemon":
+                res_dict["status"] = "stopped"
+            else:
+                res_dict["status"] = "terminated"
+            return res_dict
 
     @classmethod
     def get_session(cls, session_id: str) -> Optional[TerminalSession]:
@@ -1501,10 +1683,28 @@ class TerminalManager:
         return count
 
     @classmethod
-    def delete_terminal(cls, session_id: str) -> Dict[str, Any]:
-        """Explicitly removes a terminal session from registry."""
+    def delete_terminal(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """Explicitly removes a terminal session from registry with ownership verification."""
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
         with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                return {"status": "not_found", "session_id": session_id}
+
+            try:
+                cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+            except PermissionError as pe:
+                return {"status": "error", "error": "access_denied", "message": str(pe)}
+
             session = cls._sessions.pop(session_id, None)
+
         if session:
             session.stop()
             return {"status": "deleted", "session_id": session_id}
@@ -1514,8 +1714,13 @@ class TerminalManager:
     # CANONICAL TOOL METHOD ALIASES
     # ==========================================================================
     @classmethod
-    def terminal_create_session(cls, workspace_path: Optional[str] = None, caller_uid: str = "internal_daemon") -> Dict[str, Any]:
-        return cls.create_terminal(workspace_path=workspace_path, caller_uid=caller_uid)
+    def terminal_create_session(
+        cls,
+        workspace_path: Optional[str] = None,
+        caller_uid: str = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        return cls.create_terminal(workspace_path=workspace_path, caller_uid=caller_uid, is_internal=is_internal)
 
     @classmethod
     def terminal_run(
@@ -1526,6 +1731,7 @@ class TerminalManager:
         timeout_sec: int = DEFAULT_TIMEOUT_SEC,
         is_background: bool = False,
         caller_uid: str = "internal_daemon",
+        is_internal: Optional[bool] = None,
         is_ai_initiated: bool = False
     ) -> Dict[str, Any]:
         return cls.run_command(
@@ -1535,50 +1741,117 @@ class TerminalManager:
             timeout_sec=timeout_sec,
             is_background=is_background,
             caller_uid=caller_uid,
+            is_internal=is_internal,
             is_ai_initiated=is_ai_initiated
         )
 
     @classmethod
-    def terminal_read_output(cls, session_id: str, tail_lines: Optional[int] = None) -> Dict[str, Any]:
-        return cls.read_terminal_output(session_id=session_id, tail_lines=tail_lines)
+    def terminal_read_output(
+        cls,
+        session_id: str,
+        tail_lines: Optional[int] = None,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        return cls.read_terminal_output(session_id=session_id, tail_lines=tail_lines, caller_uid=caller_uid, is_internal=is_internal)
 
     @classmethod
-    def terminal_read_output_delta(cls, session_id: str, since_seq: int = 0) -> Dict[str, Any]:
+    def terminal_read_output_delta(
+        cls,
+        session_id: str,
+        since_seq: int = 0,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None,
+        since_offset: Optional[int] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
         session = cls.get_session(session_id)
         if not session:
             return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found.", "lines": [], "sequence_number": 0}
-        return session.read_output_delta(since_seq=since_seq)
+        try:
+            cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+        except PermissionError as pe:
+            return {"status": "error", "error": "access_denied", "message": str(pe), "lines": [], "sequence_number": 0}
+        effective_seq = since_offset if since_offset is not None else since_seq
+        return session.read_output_delta(since_seq=effective_seq)
 
     @classmethod
-    def terminal_get_status(cls, session_id: str) -> Dict[str, Any]:
-        return cls.get_terminal_status(session_id=session_id)
+    def terminal_get_status(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        return cls.get_terminal_status(session_id=session_id, caller_uid=caller_uid, is_internal=is_internal)
 
     @classmethod
-    def terminal_get_history(cls, session_id: str) -> Dict[str, Any]:
-        return cls.get_terminal_history(session_id=session_id)
+    def terminal_get_history(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        return cls.get_terminal_history(session_id=session_id, caller_uid=caller_uid, is_internal=is_internal)
 
     @classmethod
-    def terminal_stop(cls, session_id: str) -> Dict[str, Any]:
-        return cls.stop_terminal(session_id=session_id)
+    def terminal_stop(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        res = cls.stop_terminal(session_id=session_id, caller_uid=caller_uid, is_internal=is_internal)
+        if isinstance(res, dict) and res.get("status") == "stopped":
+            res = dict(res)
+            res["status"] = "terminated"
+        return res
 
     @classmethod
-    def restart_terminal(cls, session_id: str) -> Dict[str, Any]:
+    def restart_terminal(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
         with cls._lock:
             session = cls._sessions.get(session_id)
             if not session:
                 return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+            try:
+                cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+            except PermissionError as pe:
+                return {"status": "error", "error": "access_denied", "message": str(pe)}
         return session.restart()
 
     @classmethod
-    def terminal_restart(cls, session_id: str) -> Dict[str, Any]:
-        return cls.restart_terminal(session_id=session_id)
+    def terminal_restart(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        return cls.restart_terminal(session_id=session_id, caller_uid=caller_uid, is_internal=is_internal)
 
     @classmethod
-    def terminal_list_sessions(cls) -> List[Dict[str, Any]]:
-        return cls.list_terminals()
+    def terminal_list_sessions(
+        cls,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None
+    ) -> List[Dict[str, Any]]:
+        return cls.list_terminals(caller_uid=caller_uid, is_internal=is_internal)
 
     @classmethod
-    def respond_to_approval(cls, approval_id: str, approved: bool, caller_uid: Optional[str] = None) -> Dict[str, Any]:
+    def respond_to_approval(
+        cls,
+        approval_id: str,
+        approved: bool,
+        caller_uid: Optional[str] = None,
+        is_internal: bool = False
+    ) -> Dict[str, Any]:
         """
         Atomically permits or denies a pending privileged command.
         Enforces one-time consumption (anti-replay), expiry, UID ownership, and policy verification.
@@ -1595,7 +1868,7 @@ class TerminalManager:
                 return {
                     "status": "error",
                     "error": "approval_replayed",
-                    "message": f"Approval '{approval_id}' was already consumed (replay rejected)."
+                    "message": f"Approval '{approval_id}' was already responded to and consumed (replay rejected)."
                 }
             if time.time() > record.expires_at:
                 _APPROVAL_REGISTRY.pop(approval_id, None)
@@ -1604,22 +1877,30 @@ class TerminalManager:
                     "error": "approval_expired",
                     "message": f"Approval request '{approval_id}' has expired."
                 }
-            if caller_uid and record.uid != "internal_daemon" and record.uid != caller_uid:
-                return {
-                    "status": "error",
-                    "error": "approval_user_mismatch",
-                    "message": f"Approval request belongs to UID '{record.uid}', not '{caller_uid}'."
-                }
-            record.consumed = True
 
-        if not approved:
-            session = cls.get_session(record.session_id)
-            if session:
-                session.pending_approvals.pop(approval_id, None)
-                session.state = "failed"
-                session.last_exit_code = 126
-                session._append_output("security", f"DENIED: User rejected approval for '{record.command}'.")
-            return {"status": "denied", "message": f"Execution of '{record.command}' was declined by user."}
+            if not is_internal:
+                if record.uid and record.uid != "internal_daemon":
+                    if not caller_uid or caller_uid == "internal_daemon":
+                        return {
+                            "status": "error",
+                            "error": "approval_user_mismatch",
+                            "message": "Access denied: Approval requires an authenticated caller UID."
+                        }
+                    if record.uid != caller_uid:
+                        return {
+                            "status": "error",
+                            "error": "approval_user_mismatch",
+                            "message": f"Access denied: Approval request belongs to UID '{record.uid}', not '{caller_uid}'."
+                        }
+                elif record.uid == "internal_daemon":
+                    if caller_uid and caller_uid != "internal_daemon":
+                        return {
+                            "status": "error",
+                            "error": "approval_user_mismatch",
+                            "message": "Access denied: Firebase user cannot approve internal daemon command."
+                        }
+
+            record.consumed = True
 
         session = cls.get_session(record.session_id)
         if not session:
@@ -1629,7 +1910,24 @@ class TerminalManager:
                 "message": f"Session '{record.session_id}' is no longer active."
             }
 
-        if session.cwd != record.cwd:
+        effective_internal = is_internal or (record.uid == "internal_daemon" and (caller_uid is None or caller_uid == "internal_daemon"))
+        try:
+            cls._verify_session_ownership(session, caller_uid=caller_uid or "internal_daemon", is_internal=effective_internal)
+        except PermissionError as pe:
+            return {
+                "status": "error",
+                "error": "approval_session_ownership_mismatch",
+                "message": str(pe)
+            }
+
+        if not approved:
+            session.pending_approvals.pop(approval_id, None)
+            session.state = "failed"
+            session.last_exit_code = 126
+            session._append_output("security", f"DENIED: User rejected approval for '{record.command}'.")
+            return {"status": "denied", "message": f"Execution of '{record.command}' was declined by user."}
+
+        if record.cwd and session.cwd != record.cwd:
             return {
                 "status": "error",
                 "error": "approval_cwd_mismatch",
@@ -1945,7 +2243,8 @@ class ToolDispatcher:
                 cmd_args = args.get("arguments") or args.get("args") or []
                 timeout_sec = args.get("timeout_sec", DEFAULT_TIMEOUT_SEC)
                 is_bg = args.get("is_background", False)
-                caller_uid = args.get("caller_uid") or args.get("uid") or "ai_agent"
+                sess = TerminalManager.get_session(session_id) if session_id else None
+                caller_uid = args.get("caller_uid") or args.get("uid") or (sess.owner_uid if sess else "internal_daemon")
                 is_ai = bool(args.get("is_ai_initiated", True))
                 if not session_id:
                     created_sess = TerminalManager.terminal_create_session(caller_uid=caller_uid)
@@ -1963,11 +2262,14 @@ class ToolDispatcher:
             elif name in ("respond_to_approval", "terminal_respond_approval"):
                 approval_id = args.get("approval_id") or args.get("id") or ""
                 approved = bool(args.get("approved", False))
-                caller_uid = args.get("caller_uid") or args.get("uid")
+                record = _APPROVAL_REGISTRY.get(approval_id)
+                default_uid = record.uid if record else "ai_agent"
+                caller_uid = args.get("caller_uid") or args.get("uid") or default_uid
                 return TerminalManager.respond_to_approval(
                     approval_id=approval_id,
                     approved=approved,
-                    caller_uid=caller_uid
+                    caller_uid=caller_uid,
+                    is_internal=(caller_uid == "internal_daemon")
                 )
 
             elif name in ("terminal_read_output", "read_terminal_output"):

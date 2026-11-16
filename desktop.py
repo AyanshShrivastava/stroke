@@ -87,6 +87,7 @@ class BackendSupervisor:
         self.server_thread: Optional[threading.Thread] = None
         self._is_running = False
         self._shutdown_event = threading.Event()
+        self.instance_id = f"stroke-{int(time.time())}-{os.getpid()}"
 
     def start(self) -> bool:
         """Launches the backend in a supervised worker thread."""
@@ -96,6 +97,7 @@ class BackendSupervisor:
         # Configure environment port for child handlers
         os.environ["PORT"] = str(self.port)
         os.environ["STROKE_PORT"] = str(self.port)
+        os.environ["STROKE_INSTANCE_ID"] = self.instance_id
 
         config = uvicorn.Config(
             app=app,
@@ -127,12 +129,15 @@ class BackendSupervisor:
         return ready
 
     def wait_until_healthy(self, timeout_sec: float = 15.0) -> bool:
-        """Polls /health until HTTP 200 or timeout."""
+        """Polls /health until HTTP 200 and instance_id matches or timeout."""
         start = time.time()
         while time.time() - start < timeout_sec:
             health = probe_stroke_health(self.port, timeout_sec=0.5)
             if health and health.get("status") == "healthy":
-                return True
+                # Verify instance_id if returned
+                resp_inst = health.get("instance_id")
+                if not resp_inst or resp_inst == self.instance_id:
+                    return True
             time.sleep(0.15)
         return False
 

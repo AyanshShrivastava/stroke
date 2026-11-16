@@ -54,6 +54,13 @@ MODELS_CATALOG: Dict[str, Dict[str, Any]] = {
         "size_bytes": 2118123520,
         "size_mb": 2020.0,
         "description": "Meta Llama 3.2 3B Instruct (Quantized Q4_K_M, Deep Engineering)"
+    },
+    "deepseek-coder-6.7b": {
+        "filename": "deepseek-coder-6.7b-instruct.Q4_K_M.gguf",
+        "url": "https://huggingface.co/TheBloke/deepseek-coder-6.7B-instruct-GGUF/resolve/main/deepseek-coder-6.7b-instruct.Q4_K_M.gguf",
+        "size_bytes": 4080000000,
+        "size_mb": 3890.0,
+        "description": "DeepSeek Coder 6.7B Instruct (Q4_K_M, Advanced Luau & Python Systems)"
     }
 }
 
@@ -274,13 +281,27 @@ class ModelDownloadSession:
 _DOWNLOAD_SESSIONS: Dict[str, ModelDownloadSession] = {}
 
 
+def validate_model_key(key: str) -> str:
+    """Strictly validates that key corresponds to an approved model in MODELS_CATALOG."""
+    if not key or not isinstance(key, str):
+        raise ValueError("Model identifier must be a non-empty string.")
+    clean = key.lower().strip()
+    if clean in MODELS_CATALOG:
+        return clean
+    mapped = clean.replace("-", "").replace(".", "")
+    for k in MODELS_CATALOG:
+        if k.replace("-", "").replace(".", "") == mapped:
+            return k
+    raise ValueError(f"Unknown or unsupported model identifier: '{key}'. Valid catalog models: {sorted(list(MODELS_CATALOG.keys()))}")
+
+
 def normalize_model_key(key: str) -> str:
     clean = key.lower().strip()
     if clean in MODELS_CATALOG:
         return clean
-    mapped = clean.replace("-", "")
+    mapped = clean.replace("-", "").replace(".", "")
     for k in MODELS_CATALOG:
-        if k.replace("-", "") == mapped:
+        if k.replace("-", "").replace(".", "") == mapped:
             return k
     return DEFAULT_MODEL_KEY
 
@@ -320,7 +341,8 @@ def _compute_file_sha256(path: Path) -> str:
 
 def is_model_installed(model_key: str = DEFAULT_MODEL_KEY) -> bool:
     """Checks whether a verified model exists in Stroke's user-level models directory."""
-    session = get_model_download_session(model_key)
+    canonical = validate_model_key(model_key)
+    session = get_model_download_session(canonical)
     return session.is_installed()
 
 
@@ -345,30 +367,35 @@ def get_installed_models() -> List[Dict[str, Any]]:
 
 
 def start_model_download(model_key: str = DEFAULT_MODEL_KEY) -> Dict[str, Any]:
-    """Starts downloading model in background."""
-    session = get_model_download_session(model_key)
+    """Starts downloading model in background after catalog validation."""
+    canonical = validate_model_key(model_key)
+    session = get_model_download_session(canonical)
     session.start()
     return session.get_status()
 
 
 def pause_model_download(model_key: str = DEFAULT_MODEL_KEY) -> Dict[str, Any]:
-    session = get_model_download_session(model_key)
+    canonical = validate_model_key(model_key)
+    session = get_model_download_session(canonical)
     session.pause()
     return session.get_status()
 
 
 def resume_model_download(model_key: str = DEFAULT_MODEL_KEY) -> Dict[str, Any]:
-    session = get_model_download_session(model_key)
+    canonical = validate_model_key(model_key)
+    session = get_model_download_session(canonical)
     session.resume()
     return session.get_status()
 
 
 def cancel_model_download(model_key: str = DEFAULT_MODEL_KEY) -> Dict[str, Any]:
-    session = get_model_download_session(model_key)
+    canonical = validate_model_key(model_key)
+    session = get_model_download_session(canonical)
     session.cancel()
     return session.get_status()
 
 
 def get_download_status(model_key: str = DEFAULT_MODEL_KEY) -> Dict[str, Any]:
-    session = get_model_download_session(model_key)
+    canonical = validate_model_key(model_key)
+    session = get_model_download_session(canonical)
     return session.get_status()

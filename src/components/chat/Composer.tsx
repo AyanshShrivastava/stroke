@@ -11,11 +11,7 @@ import {
   Check,
   Sparkles,
 } from "lucide-react";
-import {
-  AVAILABLE_MODELS,
-  REASONING_LEVELS,
-  type Attachment,
-} from "@/lib/keyboard-store";
+import { AVAILABLE_MODELS, REASONING_LEVELS, type Attachment } from "@/lib/keyboard-store";
 
 interface ComposerProps {
   onSend: (text: string, attachments: Attachment[]) => void;
@@ -48,18 +44,14 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const menuContainerRef = useRef<HTMLDivElement>(null);
 
-  const activeModel =
-    AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
+  const activeModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
   const activeReasoning =
     REASONING_LEVELS.find((r) => r.id === reasoningLevel) || REASONING_LEVELS[1];
 
   // Close menus on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (
-        menuContainerRef.current &&
-        !menuContainerRef.current.contains(event.target as Node)
-      ) {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(event.target as Node)) {
         setShowModelMenu(false);
         setShowReasoningMenu(false);
       }
@@ -152,7 +144,9 @@ export function Composer({
                       {model.description}
                     </p>
                   </div>
-                  {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5 mt-0.5" />}
+                  {isSelected && (
+                    <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5 mt-0.5" />
+                  )}
                 </button>
               );
             })}
@@ -185,11 +179,11 @@ export function Composer({
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-xs">{level.label}</div>
-                    <p className="text-[10px] text-muted-foreground leading-tight">
-                      {level.desc}
-                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{level.desc}</p>
                   </div>
-                  {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5 mt-0.5" />}
+                  {isSelected && (
+                    <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1.5 mt-0.5" />
+                  )}
                 </button>
               );
             })}

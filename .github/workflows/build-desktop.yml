@@ -21,7 +21,23 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Frontend Dependencies
+        run: |
+          npm ci
+
+      - name: Run Frontend Lint & Test Suite
+        run: |
+          npm run lint
+          npm run test
+          npm run build
+
+      - name: Install Python Dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt pytest pyinstaller pywebview
@@ -40,13 +56,13 @@ jobs:
       - name: Create DMG / Archive
         run: |
           cd dist
-          zip -r Stroke-macOS-Universal.zip Stroke.app
+          zip -r Stroke-macOS-arm64.zip Stroke.app
 
       - name: Upload macOS Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Stroke-macOS
-          path: dist/Stroke-macOS-Universal.zip
+          path: dist/Stroke-macOS-arm64.zip
 
   build-windows:
     runs-on: windows-latest

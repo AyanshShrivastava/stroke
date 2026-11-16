@@ -83,12 +83,13 @@ export function TerminalPanel({ isOpen, onClose, defaultWorkspace }: TerminalPan
             ]);
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (active) {
+          const errMsg = err instanceof Error ? err.message : String(err);
           setOutputLines([
             {
               seq: 0,
-              text: `Error initializing terminal: ${err.message || String(err)}`,
+              text: `Error initializing terminal: ${errMsg}`,
               stream: "stderr",
             },
           ]);
@@ -204,12 +205,13 @@ export function TerminalPanel({ isOpen, onClose, defaultWorkspace }: TerminalPan
           },
         ]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       setOutputLines((prev) => [
         ...prev,
         {
           seq: nextSeqRef.current++,
-          text: `Execution failed: ${err.message || String(err)}`,
+          text: `Execution failed: ${errMsg}`,
           stream: "stderr",
         },
       ]);
@@ -370,7 +372,11 @@ export function TerminalPanel({ isOpen, onClose, defaultWorkspace }: TerminalPan
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title={isExpanded ? "Collapse height" : "Expand height"}
           >
-            {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            {isExpanded ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
           </button>
 
           <button
@@ -390,7 +396,9 @@ export function TerminalPanel({ isOpen, onClose, defaultWorkspace }: TerminalPan
           <div className="flex items-center gap-1.5 truncate">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">
-              Approve command execution: <code className="font-mono font-bold text-foreground">{pendingApproval.command}</code>?
+              Approve command execution:{" "}
+              <code className="font-mono font-bold text-foreground">{pendingApproval.command}</code>
+              ?
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -475,7 +483,9 @@ export function TerminalPanel({ isOpen, onClose, defaultWorkspace }: TerminalPan
               onChange={(e) => setCommandInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isRunning || isInitializing}
-              placeholder={isRunning ? "Command is executing..." : "Type command and press Enter..."}
+              placeholder={
+                isRunning ? "Command is executing..." : "Type command and press Enter..."
+              }
               className="w-full bg-transparent font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
             />
             <button

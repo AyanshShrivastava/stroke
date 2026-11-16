@@ -309,6 +309,30 @@ class CredentialsVault:
 
         return True
 
+    def delete_all_user_credentials(self, user_id: str) -> bool:
+        """Purges all stored BYOK provider credentials for a specific user ID."""
+        if not user_id:
+            return False
+
+        if self._keyring_available:
+            try:
+                import keyring
+                for provider in SUPPORTED_PROVIDERS:
+                    account_key = f"{user_id}:{provider}"
+                    try:
+                        keyring.delete_password(SERVICE_NAME, account_key)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        vault_data = self._read_encrypted_vault_file()
+        if user_id in vault_data:
+            del vault_data[user_id]
+            self._write_encrypted_vault_file(vault_data)
+
+        return True
+
     def get_provider_status(self, provider: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Returns a completely safe status digest suitable for frontend display.

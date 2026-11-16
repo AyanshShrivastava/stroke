@@ -66,7 +66,10 @@ function parseStepDisplay(step: ExecutionStep, idx: number) {
     fileMatch
   ) {
     const fileName = fileMatch ? fileMatch[1].split("/").pop() : "project files";
-    const lineRange = fileMatch && fileMatch[2] ? `#L${fileMatch[2]}${fileMatch[3] ? `-${fileMatch[3]}` : ""}` : null;
+    const lineRange =
+      fileMatch && fileMatch[2]
+        ? `#L${fileMatch[2]}${fileMatch[3] ? `-${fileMatch[3]}` : ""}`
+        : null;
     return {
       kind: "file" as const,
       label: `Analyzed ${fileName}`,
@@ -90,7 +93,12 @@ function parseStepDisplay(step: ExecutionStep, idx: number) {
   }
 
   // 4. Command / Tool execution step
-  if (lower.includes("run") || lower.includes("check") || lower.includes("command") || lower.includes("terminal")) {
+  if (
+    lower.includes("run") ||
+    lower.includes("check") ||
+    lower.includes("command") ||
+    lower.includes("terminal")
+  ) {
     return {
       kind: "command" as const,
       label: name || detail.slice(0, 50),
@@ -161,9 +169,7 @@ export function ActivityFeed({
         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
           <Loader2 className="h-3 w-3 animate-spin text-primary" />
         </div>
-        <span className="font-mono text-[12px] font-medium text-foreground">
-          Thinking…
-        </span>
+        <span className="font-mono text-[12px] font-medium text-foreground">Thinking…</span>
         <span className="font-mono text-[11px] text-muted-foreground">
           {liveElapsedSeconds.toFixed(1)}s
         </span>

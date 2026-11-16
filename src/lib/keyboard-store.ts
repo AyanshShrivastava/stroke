@@ -243,7 +243,8 @@ export const REASONING_LEVELS = [
     label: "Peak",
     detail: "Multi-Agent Orchestrator (20 Turns / 35 Calls)",
     desc: "Full parallel multi-agent system & exhaustive verification",
-    description: "Full parallel orchestrator (Researcher, Planner, Dev, Tester, Reviewer, Debugger) with sandboxed workspaces.",
+    description:
+      "Full parallel orchestrator (Researcher, Planner, Dev, Tester, Reviewer, Debugger) with sandboxed workspaces.",
     planningDepth: "multi_agent_strategic",
     agentDelegation: "full_parallel_orchestrator",
     maxConcurrency: 5,

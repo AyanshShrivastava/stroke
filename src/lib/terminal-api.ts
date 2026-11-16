@@ -128,11 +128,11 @@ export async function readTerminalOutputDelta(
 
   const data = await res.json().catch(() => ({ lines: [], next_seq: sinceSeq, is_running: false }));
   return {
-    lines: (data.lines || []).map((l: any) => ({
-      seq: l.seq ?? 0,
-      text: l.text ?? "",
+    lines: (data.lines || []).map((l: Record<string, unknown>) => ({
+      seq: typeof l.seq === "number" ? l.seq : 0,
+      text: typeof l.text === "string" ? l.text : "",
       stream: l.stream === "stderr" ? "stderr" : "stdout",
-      timestamp: l.timestamp,
+      timestamp: typeof l.timestamp === "number" ? l.timestamp : undefined,
     })),
     next_seq: data.next_seq ?? sinceSeq,
     is_running: Boolean(data.is_running),

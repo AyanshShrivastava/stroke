@@ -177,7 +177,7 @@ def initialize_firestore_client() -> Any:
             firebase_admin.initialize_app(credentials.ApplicationDefault(), {"projectId": project_id})
         return firestore.client()
     except Exception as e:
-        if os.getenv("STROKE_ALLOW_OFFLINE_DB", "0") == "1":
+        if os.getenv("STROKE_ALLOW_OFFLINE_DB", "1") == "1":
             print(f"[STROKE DB NOTICE] Using genuine local disk-backed Firestore storage engine (STROKE_ALLOW_OFFLINE_DB=1): {e}", flush=True)
             return LocalFirestoreClient(storage_path=str(paths_service.get_local_firestore_db_path()))
         raise RuntimeError(
@@ -208,16 +208,27 @@ app = FastAPI(
 class SecurityHeaderMiddleware(BaseHTTPMiddleware):
     """
     Protects local loopback server against:
-    1. DNS Rebinding Attacks: Validates Host header against allowed loopback hosts.
-    2. Cross-Site Request Forgery (CSRF): Validates Origin/Referer on state-changing requests.
+    1. DNS Rebinding Attacks: Strictly validates Host header against allowed loopback hosts.
+    2. Cross-Site Request Forgery (CSRF): Strictly validates Origin/Referer against allowed origins.
+    3. Clickjacking and MIME Sniffing: Attaches standard defense-in-depth security headers.
     """
     ALLOWED_HOSTS = {
         "localhost",
         f"localhost:{APP_PORT}",
+        "localhost:8000",
+        "localhost:8080",
+        "localhost:3000",
+        "localhost:5173",
         "127.0.0.1",
         f"127.0.0.1:{APP_PORT}",
+        "127.0.0.1:8000",
+        "127.0.0.1:8080",
+        "127.0.0.1:3000",
+        "127.0.0.1:5173",
         "[::1]",
         f"[::1]:{APP_PORT}",
+        "[::1]:8000",
+        "[::1]:8080",
         "testclient",
         "testserver",
     }
@@ -225,6 +236,10 @@ class SecurityHeaderMiddleware(BaseHTTPMiddleware):
     ALLOWED_ORIGINS = {
         f"http://localhost:{APP_PORT}",
         f"http://127.0.0.1:{APP_PORT}",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:5173",
@@ -248,42 +263,89 @@ class SecurityHeaderMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # 1. Host Header Validation (DNS Rebinding Protection)
-        host = request.headers.get("host", "").split(",")[0].strip().lower()
-        if host and host not in self.ALLOWED_HOSTS:
-            base_host = host.split(":")[0]
-            if base_host not in {"localhost", "127.0.0.1", "[::1]"}:
+        raw_host = request.headers.get("host")
+        if raw_host is None or not raw_host.strip():
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Host header is required."}
+            )
+
+        host = raw_host.split(",")[0].strip().lower()
+        if host not in self.ALLOWED_HOSTS:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": f"Invalid Host header: DNS rebinding protection rejected host '{host}'"}
+            )
+
+        # 2. Origin & CSRF Validation
+        origin = request.headers.get("origin")
+        if origin:
+            clean_origin = origin.rstrip("/")
+            if clean_origin not in self.ALLOWED_ORIGINS:
                 return JSONResponse(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    content={"detail": f"Invalid Host header: DNS rebinding protection rejected host '{host}'"}
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": f"Origin not allowed: Cross-origin request rejected: Untrusted origin '{origin}'"}
                 )
+        elif request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            referer = request.headers.get("referer")
+            if referer:
+                ref_parts = urllib.parse.urlparse(referer)
+                ref_origin = f"{ref_parts.scheme}://{ref_parts.netloc}".rstrip("/")
+                if ref_origin not in self.ALLOWED_ORIGINS and ref_parts.hostname not in ("testclient", "testserver"):
+                    return JSONResponse(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        content={"detail": f"Cross-origin request rejected: Untrusted referer '{referer}'"}
+                    )
 
-        # 2. Origin & CSRF Validation for Browser State-Changing Requests
-        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
-            origin = request.headers.get("origin")
-            if origin:
-                clean_origin = origin.rstrip("/")
-                if clean_origin not in self.ALLOWED_ORIGINS:
-                    origin_parts = urllib.parse.urlparse(clean_origin)
-                    if origin_parts.hostname in ("localhost", "127.0.0.1") and origin_parts.scheme in ("http", "https"):
-                        pass
-                    else:
-                        return JSONResponse(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            content={"detail": f"Cross-origin request rejected: Untrusted origin '{origin}'"}
-                        )
-            else:
-                referer = request.headers.get("referer")
-                if referer:
-                    ref_parts = urllib.parse.urlparse(referer)
-                    ref_origin = f"{ref_parts.scheme}://{ref_parts.netloc}".rstrip("/")
-                    if ref_origin not in self.ALLOWED_ORIGINS and ref_parts.hostname not in ("localhost", "127.0.0.1", "testclient"):
-                        return JSONResponse(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            content={"detail": f"Cross-origin request rejected: Untrusted referer '{referer}'"}
-                        )
+        response = await call_next(request)
 
-        return await call_next(request)
+        if origin and origin.rstrip("/") in self.ALLOWED_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
 
+        # 3. Defense-in-Depth Security Response Headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+        return response
+
+
+class ApiRouteNormalizerMiddleware:
+    """
+    Normalizes /api/* requests so frontend and API clients can use either
+    /api/<endpoint> or /<endpoint> interchangeably without route mismatch.
+    Only normalizes if the route is NOT already registered under /api/...
+    """
+    def __init__(self, app_instance):
+        self.app = app_instance
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path.startswith("/api/") and path != "/api/":
+                from starlette.routing import Match
+                # Check if an existing route directly matches the /api/... path
+                has_api_match = False
+                for r in app.routes:
+                    match, _ = r.matches(scope)
+                    if match != Match.NONE:
+                        has_api_match = True
+                        break
+                # Only rewrite if there is NO route under /api/ but a stripped route exists
+                if not has_api_match:
+                    alt_scope = dict(scope)
+                    alt_scope["path"] = path[4:]
+                    for r in app.routes:
+                        match, _ = r.matches(alt_scope)
+                        if match != Match.NONE:
+                            scope["path"] = path[4:]
+                            break
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(ApiRouteNormalizerMiddleware)
 app.add_middleware(SecurityHeaderMiddleware)
 
 # Explicit Cross-Origin Resource Sharing (CORS) Configuration (Replaced Wildcard *)
@@ -805,34 +867,132 @@ async def logout_endpoint(user: Optional[AuthenticatedUser] = Depends(get_option
 async def delete_account_endpoint(user: AuthenticatedUser = Depends(get_current_user)):
     """
     DELETE /auth/account
-    Deletes user-associated backend records (chats, cache, profile) from Firestore and local stores.
+    Purges user-associated backend records (chats, cache, memory, records, subcollections)
+    from Firestore and local stores, as well as BYOK credentials.
+    Does not delete project source files, personal workspaces or unrelated backups.
     """
     user_email = user.email
     uid = user.uid
 
-    if user_email:
+    errors = []
+    purged_subcollections = []
+    KNOWN_SUBCOLLECTIONS = ["records", "memory", "feed_state", "chats", "projects", "settings", "integrations"]
+
+    # 1. Recursively delete Firestore subcollections for UID
+    try:
+        user_doc_ref = db.collection("users").document(uid)
+        for sub_name in KNOWN_SUBCOLLECTIONS:
+            try:
+                sub_coll = user_doc_ref.collection(sub_name)
+                # Stream up to 500 documents per batch
+                docs = list(sub_coll.limit(500).stream())
+                while docs:
+                    batch = db.batch()
+                    for d in docs:
+                        d_ref = getattr(d, "reference", None) or sub_coll.document(d.id)
+                        batch.delete(d_ref)
+                    batch.commit()
+                    docs = list(sub_coll.limit(500).stream())
+                purged_subcollections.append(sub_name)
+            except Exception as sub_err:
+                errors.append(f"Subcollection '{sub_name}' delete error: {sub_err}")
+
+        # Delete root UID document
+        user_doc_ref.delete()
+    except Exception as doc_err:
+        errors.append(f"Root user document delete error: {doc_err}")
+
+    # 2. Legacy email document cleanup if distinct
+    if user_email and user_email != uid:
         try:
-            db.collection("users").document(user_email).delete()
+            legacy_ref = db.collection("users").document(user_email)
+            for sub_name in KNOWN_SUBCOLLECTIONS:
+                try:
+                    sub_coll = legacy_ref.collection(sub_name)
+                    docs = list(sub_coll.limit(500).stream())
+                    while docs:
+                        batch = db.batch()
+                        for d in docs:
+                            d_ref = getattr(d, "reference", None) or sub_coll.document(d.id)
+                            batch.delete(d_ref)
+                        batch.commit()
+                        docs = list(sub_coll.limit(500).stream())
+                except Exception:
+                    pass
+            legacy_ref.delete()
         except Exception:
             pass
-        if user_email in _LOCAL_CHAT_SESSIONS:
-            _LOCAL_CHAT_SESSIONS.pop(user_email, None)
-            _save_local_chat_sessions(_LOCAL_CHAT_SESSIONS)
 
-    try:
-        db.collection("users").document(uid).delete()
-    except Exception:
-        pass
+    # 3. Local in-memory and persistent chat sessions
     if uid in _LOCAL_CHAT_SESSIONS:
         _LOCAL_CHAT_SESSIONS.pop(uid, None)
-        _save_local_chat_sessions(_LOCAL_CHAT_SESSIONS)
+    if user_email and user_email in _LOCAL_CHAT_SESSIONS:
+        _LOCAL_CHAT_SESSIONS.pop(user_email, None)
+    _save_local_chat_sessions(_LOCAL_CHAT_SESSIONS)
+
+    # 4. Local disk user memory file
+    try:
+        local_mem_dir = Path("data") / "local_user_memory"
+        for candidate_key in (uid, user_email):
+            if candidate_key:
+                mem_file = local_mem_dir / f"{candidate_key}.json"
+                if mem_file.exists():
+                    mem_file.unlink()
+    except Exception as mem_err:
+        errors.append(f"Local memory file cleanup error: {mem_err}")
+
+    # 5. BYOK Credentials Vault cleanup for UID
+    try:
+        credentials_vault_service.vault.delete_all_user_credentials(uid)
+        if user_email and user_email != uid:
+            credentials_vault_service.vault.delete_all_user_credentials(user_email)
+    except Exception as vault_err:
+        errors.append(f"Credentials vault cleanup error: {vault_err}")
+
+    # 6. Active terminal sessions owned by this user
+    try:
+        user_terms = TerminalManager.list_terminals(caller_uid=uid, is_internal=False)
+        for term in user_terms:
+            TerminalManager.stop_terminal(term["session_id"], caller_uid=uid, is_internal=False)
+    except Exception:
+        pass
+
+    if errors:
+        print(f"[AUTH AUDIT] Partial deletion for UID {uid}: {errors}", flush=True)
+        return JSONResponse(
+            status_code=207,
+            content={
+                "status": "partial_success",
+                "uid": uid,
+                "email": user_email,
+                "purged_subcollections": purged_subcollections,
+                "errors": errors,
+                "firebase_auth_deleted": False,
+                "message": "Some user resources could not be fully deleted."
+            }
+        )
 
     print(f"[AUTH AUDIT] Purged backend user data for UID: {uid} ({user_email})", flush=True)
 
     return {
         "status": "success",
-        "message": f"Backend data for user {uid} ({user_email or 'unnamed'}) purged successfully."
+        "uid": uid,
+        "email": user_email or "unnamed",
+        "purged_subcollections": purged_subcollections,
+        "firebase_auth_deleted": False,
+        "message": f"Backend data for user {uid} ({user_email or 'unnamed'}) purged successfully. Firebase Authentication account must be deleted via Firebase Client SDK or Console."
     }
+
+
+def _get_stored_firebase_config() -> Dict[str, Any]:
+    try:
+        config_file = paths_service.get_app_data_dir() / "firebase_client_config.json"
+        if config_file.exists():
+            with open(config_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
 
 
 @app.get("/auth/config", tags=["Authentication"])
@@ -842,12 +1002,82 @@ async def get_auth_config():
     Returns public client Firebase configuration parameters.
     No private secrets or service account keys are ever exposed.
     """
-    project_id = get_firebase_project_id()
+    stored = _get_stored_firebase_config()
+    project_id = stored.get("projectId") or get_firebase_project_id()
+    api_key = (
+        stored.get("apiKey")
+        or os.getenv("FIREBASE_API_KEY")
+        or os.getenv("FIREBASE_WEB_API_KEY")
+        or os.getenv("VITE_FIREBASE_API_KEY")
+        or os.getenv("NEXT_PUBLIC_FIREBASE_API_KEY")
+        or ""
+    )
+    app_id = (
+        stored.get("appId")
+        or os.getenv("FIREBASE_APP_ID")
+        or os.getenv("VITE_FIREBASE_APP_ID")
+        or ""
+    )
+    storage_bucket = (
+        stored.get("storageBucket")
+        or os.getenv("FIREBASE_STORAGE_BUCKET")
+        or os.getenv("VITE_FIREBASE_STORAGE_BUCKET")
+        or f"{project_id}.firebasestorage.app"
+    )
+    emulator_host = (
+        stored.get("emulatorHost")
+        or os.getenv("FIREBASE_AUTH_EMULATOR_HOST")
+        or None
+    )
     return {
         "status": "success",
         "projectId": project_id,
         "authDomain": f"{project_id}.firebaseapp.com",
-        "emulatorHost": os.getenv("FIREBASE_AUTH_EMULATOR_HOST")
+        "apiKey": api_key,
+        "appId": app_id,
+        "storageBucket": storage_bucket,
+        "emulatorHost": emulator_host,
+        "isConfigured": bool(api_key or emulator_host)
+    }
+
+
+class SaveAuthConfigPayload(BaseModel):
+    apiKey: Optional[str] = None
+    projectId: Optional[str] = None
+    appId: Optional[str] = None
+    storageBucket: Optional[str] = None
+    emulatorHost: Optional[str] = None
+
+
+@app.post("/auth/config", tags=["Authentication"])
+async def save_auth_config(payload: SaveAuthConfigPayload):
+    """
+    POST /auth/config
+    Persists user-configured client Firebase settings to user app data.
+    """
+    stored = _get_stored_firebase_config()
+    if payload.apiKey is not None:
+        stored["apiKey"] = payload.apiKey.strip()
+    if payload.projectId is not None:
+        stored["projectId"] = payload.projectId.strip()
+    if payload.appId is not None:
+        stored["appId"] = payload.appId.strip()
+    if payload.storageBucket is not None:
+        stored["storageBucket"] = payload.storageBucket.strip()
+    if payload.emulatorHost is not None:
+        stored["emulatorHost"] = payload.emulatorHost.strip()
+
+    config_file = paths_service.get_app_data_dir() / "firebase_client_config.json"
+    try:
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(stored, f, indent=2)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to persist Firebase configuration: {exc}")
+
+    return {
+        "status": "success",
+        "message": "Firebase configuration saved successfully.",
+        "config": stored
     }
 
 
@@ -917,7 +1147,13 @@ async def github_connect(
     random_entropy = secrets.token_urlsafe(32)
     state = f"STRK_{uid}_{random_entropy}"
 
-    initiating_origin = request.headers.get("origin") or FRONTEND_APP_URL
+    raw_origin = request.headers.get("origin")
+    initiating_origin = FRONTEND_APP_URL
+    if raw_origin:
+        clean_raw = raw_origin.rstrip("/")
+        if clean_raw in SecurityHeaderMiddleware.ALLOWED_ORIGINS:
+            initiating_origin = clean_raw
+
     _OAUTH_STATE_REGISTRY[state] = {
         "uid": uid,
         "email": user.email,
@@ -934,6 +1170,24 @@ async def github_connect(
     }
     github_authorize_url = f"https://github.com/login/oauth/authorize?{urllib.parse.urlencode(oauth_params)}"
     return RedirectResponse(url=github_authorize_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+class GithubConnectPostPayload(BaseModel):
+    initiating_origin: Optional[str] = None
+
+
+@app.post("/auth/github-connect", tags=["GitHub OAuth"])
+async def github_connect_post(
+    request: Request,
+    payload: Optional[GithubConnectPostPayload] = None,
+    user: Optional[AuthenticatedUser] = Depends(get_optional_user)
+):
+    target_origin = (payload.initiating_origin if payload else None) or request.headers.get("origin") or FRONTEND_APP_URL
+    if target_origin:
+        clean = target_origin.rstrip("/")
+        if clean not in SecurityHeaderMiddleware.ALLOWED_ORIGINS:
+            raise HTTPException(status_code=403, detail=f"Origin '{target_origin}' not allowed for OAuth connection.")
+    return {"status": "success", "initiating_origin": target_origin}
 
 
 @app.get("/auth/github/callback", tags=["GitHub OAuth"])
@@ -1913,7 +2167,10 @@ async def chat_with_notes_ai(payload: NotesAiRequest, user: AuthenticatedUser = 
         else:
             generated_note = resp.content
     except Exception as exc:
-        generated_note = f"### [STROKE NOTES AI // COPILOT]\n\nGenerated note via {chosen_provider.upper()}: {exc}. Please verify your API key in Settings -> Models."
+        raise HTTPException(
+            status_code=502,
+            detail=f"Notes Copilot inference failed via {chosen_provider.upper()}: {exc}. Please verify your API key in Settings -> Models."
+        )
 
     return {
         "status": "success",
@@ -2019,6 +2276,7 @@ async def get_system_health():
         "version": "1.0.0-matrix",
         "uptime_seconds": round(time.time() - SERVER_START_TIME, 2),
         "pid": os.getpid(),
+        "instance_id": os.environ.get("STROKE_INSTANCE_ID", ""),
         "active_terminals": len(TerminalManager.list_terminals())
     }
 
@@ -2032,10 +2290,10 @@ async def get_download_info():
         "release_tag": "v1.0.0",
         "platforms": {
             "macos": {
-                "name": "macOS Universal",
-                "arch": "Apple Silicon (M1/M2/M3/M4) & Intel x86_64",
+                "name": "macOS Native",
+                "arch": "Apple Silicon (M1/M2/M3/M4) / Intel x86_64",
                 "format": "Self-Contained Executable Bundle (.zip / .dmg)",
-                "filename": "Stroke-v1.0.0-macOS.zip",
+                "filename": "Stroke-v1.0.0-macOS-arm64.zip",
                 "endpoint": "/download/macos",
                 "size_display": "~1.5 MB (Portable) / ~45 MB (Compiled)",
                 "recommended": True
@@ -2043,8 +2301,8 @@ async def get_download_info():
             "windows": {
                 "name": "Windows 10/11",
                 "arch": "64-bit (x64 / AMD64)",
-                "format": "Self-Contained Executable Bundle (.zip / .exe)",
-                "filename": "Stroke-v1.0.0-Windows.zip",
+                "format": "Portable Self-Contained Executable Bundle (.zip)",
+                "filename": "Stroke-v1.0.0-Windows-x64.zip",
                 "endpoint": "/download/windows",
                 "size_display": "~1.5 MB (Portable) / ~48 MB (Compiled)",
                 "recommended": False
@@ -2428,7 +2686,7 @@ async def get_ai_status(user: AuthenticatedUser = Depends(get_current_user)):
 
 
 @app.get("/ai/models", tags=["Neural AI & Search"])
-async def get_registered_models(user: AuthenticatedUser = Depends(get_current_user)):
+async def get_registered_models(user: Optional[AuthenticatedUser] = Depends(get_optional_user)):
     """
     GET /ai/models
     Returns the authoritative registry of supported models, context limits, and capabilities.
@@ -3358,7 +3616,7 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
                 parameters=inf_params,
                 model_id=target_model,
                 provider_id=target_provider,
-                user_id=user_email,
+                user_id=uid,
                 allow_fallback=active_cfg.get("allow_fallback", True)
             )
         except ai_provider_service.ProviderAuthenticationError as auth_err:
@@ -3442,7 +3700,7 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
                         parameters=inf_params,
                         model_id=target_model,
                         provider_id=target_provider,
-                        user_id=user_email,
+                        user_id=uid,
                         allow_fallback=active_cfg.get("allow_fallback", True)
                     )
                     finish_reason = cont_resp.finish_reason
@@ -3576,7 +3834,7 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
                     parameters=repair_params,
                     model_id=t_model,
                     provider_id=t_provider,
-                    user_id=user_email
+                    user_id=uid
                 )
                 content = repair_resp.content
                 if is_response_incomplete(content, repair_resp.finish_reason):
@@ -3588,7 +3846,7 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
                         parameters=repair_params,
                         model_id=t_model,
                         provider_id=t_provider,
-                        user_id=user_email
+                        user_id=uid
                     )
                     content = stitch_continuations(content, c_resp.content)
                 return content
@@ -3813,7 +4071,7 @@ async def chat_with_neural_ai_stream(payload: AiChatRequest, user: Authenticated
                 parameters=inf_params,
                 model_id=target_model,
                 provider_id=target_provider,
-                user_id=user_email,
+                user_id=uid,
                 allow_fallback=active_cfg.get("allow_fallback", True)
             ):
                 if chunk.delta_thinking:
@@ -4120,7 +4378,7 @@ async def verify_code_endpoint(payload: VerifyCodePayload, user: AuthenticatedUs
 async def verify_terminal_access(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
-):
+) -> Dict[str, Any]:
     """
     Enforces background terminal, filesystem, and model service authorization policy.
     Zero Trust Loopback: Loopback IP alone is NOT authentication.
@@ -4128,12 +4386,66 @@ async def verify_terminal_access(
       1. Valid X-Internal-Token / X-Stroke-Token matching STROKE_INTERNAL_SECRET (for internal agent daemon), OR
       2. Valid verified Firebase ID token via Authorization: Bearer <token>.
     """
+    # Early path & parameter security validation for diagnostics, filesystem, and model endpoints
+    req_path = request.url.path
+    if req_path.startswith("/diagnostics/") or req_path.startswith("/fs/"):
+        target_candidate = (
+            request.query_params.get("workspace_path")
+            or request.query_params.get("path")
+            or request.query_params.get("dir")
+            or request.query_params.get("dir_path")
+            or request.query_params.get("file_path")
+        )
+        if not target_candidate and request.method in ("POST", "PUT", "PATCH"):
+            try:
+                body_bytes = await request.body()
+                if body_bytes:
+                    import json
+                    b_json = json.loads(body_bytes)
+                    target_candidate = (
+                        b_json.get("workspace_path")
+                        or b_json.get("path")
+                        or b_json.get("dir")
+                        or b_json.get("dir_path")
+                        or b_json.get("file_path")
+                    )
+            except Exception:
+                pass
+
+        if target_candidate:
+            import workspace_service
+            if ".." in str(target_candidate):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace traversal forbidden.")
+            try:
+                workspace_service.validate_path_access(str(target_candidate))
+            except (workspace_service.WorkspaceSecurityError, PermissionError) as pe:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+
+    elif req_path == "/models/download":
+        try:
+            body_bytes = await request.body()
+            if body_bytes:
+                import json
+                b_json = json.loads(body_bytes)
+                m_key = b_json.get("model_key")
+                if m_key is not None:
+                    import model_download_service
+                    model_download_service.validate_model_key(m_key)
+        except ValueError as ve:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
     internal_token = request.headers.get("X-Internal-Token") or request.headers.get("X-Stroke-Token")
     expected_token = os.environ.get("STROKE_INTERNAL_SECRET")
 
     # 1. Internal daemon token check
-    if expected_token and internal_token == expected_token:
-        return {"auth": "internal_token"}
+    if expected_token and internal_token:
+        import hmac
+        if hmac.compare_digest(internal_token.strip(), expected_token.strip()):
+            return {"auth": "internal_token", "is_internal": True, "uid": "internal_daemon"}
 
     # 2. Firebase Bearer token check
     token = None
@@ -4147,7 +4459,7 @@ async def verify_terminal_access(
     if token:
         try:
             claims = auth_service.verify_firebase_id_token(token)
-            return {"auth": "firebase", "user": claims}
+            return {"auth": "firebase", "is_internal": False, "uid": claims.get("uid"), "user": claims}
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -4162,6 +4474,12 @@ async def verify_terminal_access(
     )
 
 
+def _extract_caller_uid_and_internal(access: Dict[str, Any]):
+    caller_uid = access.get("uid") or (access.get("user") or {}).get("uid") or "internal_daemon"
+    is_internal = bool(access.get("is_internal") or access.get("auth") in ("internal", "internal_token"))
+    return caller_uid, is_internal
+
+
 @app.post("/terminal/create", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def create_terminal_endpoint(
     payload: Optional[CreateTerminalPayload] = None,
@@ -4172,9 +4490,11 @@ async def create_terminal_endpoint(
     Creates a new silent, background terminal session for Stroke AI Agent.
     """
     ws = payload.workspace_path if payload else None
-    caller_uid = access.get("user", {}).get("uid", "internal_daemon") if access.get("auth") == "firebase" else "internal_daemon"
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    if not is_internal and caller_uid == "internal_daemon":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Firebase user cannot claim internal_daemon identity.")
     try:
-        return TerminalManager.create_terminal(ws, caller_uid=caller_uid)
+        return TerminalManager.create_terminal(ws, caller_uid=caller_uid, is_internal=is_internal)
     except PermissionError as pe:
         raise HTTPException(status_code=403, detail=str(pe))
     except RuntimeError as re:
@@ -4194,8 +4514,7 @@ async def run_command_endpoint(
     """
     cmd = payload.command or payload.executable or "python"
     args = payload.args if payload.args else (payload.arguments or [])
-    caller_uid = access.get("user", {}).get("uid", "internal_daemon") if access.get("auth") == "firebase" else "internal_daemon"
-    is_internal = access.get("auth") == "internal" or caller_uid == "internal_daemon"
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
     approved_flag = bool(payload.approved) if is_internal else False
     try:
         res = TerminalManager.run_command(
@@ -4209,74 +4528,114 @@ async def run_command_endpoint(
             is_internal=is_internal
         )
         if res.get("status") == "error":
-            if res.get("error") == "session_not_found":
-                raise HTTPException(status_code=404, detail=res.get("message"))
+            if res.get("error") == "access_denied":
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+            elif res.get("error") == "session_not_found":
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
             elif res.get("error") == "session_terminated":
-                raise HTTPException(status_code=400, detail=res.get("message"))
-            raise HTTPException(status_code=400, detail=res.get("message"))
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
         return res
     except HTTPException:
         raise
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/terminal/{session_id}/output", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
-async def read_terminal_output_endpoint(session_id: str, tail: Optional[int] = Query(None, description="Tail lines count")):
+async def read_terminal_output_endpoint(
+    session_id: str,
+    tail: Optional[int] = Query(None, description="Tail lines count"),
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
     """
     GET /terminal/{session_id}/output
     Retrieves captured output lines from the session's bounded ring buffer.
     """
-    res = TerminalManager.read_terminal_output(session_id, tail_lines=tail)
-    if res.get("status") == "error" and res.get("error") == "session_not_found":
-        raise HTTPException(status_code=404, detail=res.get("message"))
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.read_terminal_output(session_id, tail_lines=tail, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
     return res
 
 
 @app.get("/terminal/{session_id}/status", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
-async def get_terminal_status_endpoint(session_id: str):
+async def get_terminal_status_endpoint(
+    session_id: str,
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
     """
     GET /terminal/{session_id}/status
     Retrieves execution state, working directory, and metadata for a session.
     """
-    res = TerminalManager.get_terminal_status(session_id)
-    if res.get("status") == "error" and res.get("error") == "session_not_found":
-        raise HTTPException(status_code=404, detail=res.get("message"))
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.get_terminal_status(session_id, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
     return res
 
 
 @app.get("/terminal/list", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
-async def list_terminals_endpoint():
+async def list_terminals_endpoint(
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
     """
     GET /terminal/list
-    Lists active background terminal sessions.
+    Lists active background terminal sessions belonging to caller.
     """
-    return {"terminals": TerminalManager.list_terminals()}
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    return {"terminals": TerminalManager.list_terminals(caller_uid=caller_uid, is_internal=is_internal)}
 
 
 @app.post("/terminal/{session_id}/stop", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
-async def stop_terminal_endpoint(session_id: str):
+async def stop_terminal_endpoint(
+    session_id: str,
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
     """
     POST /terminal/{session_id}/stop
     Terminates any active child process and reaps the session.
     """
-    res = TerminalManager.stop_terminal(session_id)
-    if res.get("status") == "error" and res.get("error") == "session_not_found":
-        raise HTTPException(status_code=404, detail=res.get("message"))
-    return res
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.stop_terminal(session_id, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
+    res_dict = dict(res)
+    res_dict["status"] = "terminated"
+    return res_dict
 
 
 @app.post("/terminal/{session_id}/restart", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
-async def restart_terminal_endpoint(session_id: str):
+async def restart_terminal_endpoint(
+    session_id: str,
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
     """
     POST /terminal/{session_id}/restart
     Restarts the last command executed in the session.
     """
-    res = TerminalManager.restart_terminal(session_id)
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.restart_terminal(session_id, caller_uid=caller_uid, is_internal=is_internal)
     if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
         if res.get("error") == "session_not_found":
-            raise HTTPException(status_code=404, detail=res.get("message"))
-        raise HTTPException(status_code=400, detail=res.get("message"))
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
     return res
 
 
@@ -4289,10 +4648,12 @@ async def respond_approval_endpoint(
     POST /terminal/approval/respond
     Grants or denies approval for an unlisted or potentially sensitive command.
     """
-    caller_uid = access.get("user", {}).get("uid", "internal_daemon") if access.get("auth") == "firebase" else "internal_daemon"
-    res = TerminalManager.respond_to_approval(payload.approval_id, payload.approved, caller_uid=caller_uid)
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.respond_to_approval(payload.approval_id, payload.approved, caller_uid=caller_uid, is_internal=is_internal)
     if res.get("status") == "error":
-        raise HTTPException(status_code=400, detail=res.get("message"))
+        if res.get("error") in ("approval_user_mismatch", "approval_session_ownership_mismatch"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
     return res
 
 
@@ -4308,52 +4669,74 @@ async def terminal_tools_schema_endpoint():
 @app.get("/terminal/output/delta", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def get_terminal_output_delta(
     session_id: str = Query(..., description="Unique terminal session ID"),
-    since_seq: int = Query(0, description="Sequence number of last seen output line")
+    since_seq: int = Query(0, description="Sequence number of last seen output line"),
+    access: Dict[str, Any] = Depends(verify_terminal_access)
 ):
     """
     GET /terminal/output/delta
     Returns incremental output lines appended since sequence number for real-time UI streaming.
     """
-    return TerminalManager.terminal_read_output_delta(session_id=session_id, since_seq=since_seq)
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.terminal_read_output_delta(session_id=session_id, since_seq=since_seq, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
+    return res
 
 
 @app.get("/terminal/{session_id}/history", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
-async def get_terminal_history_endpoint(session_id: str):
+async def get_terminal_history_endpoint(
+    session_id: str,
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
     """
     GET /terminal/{session_id}/history
     Retrieves chronological command execution history records for this session.
     """
-    res = TerminalManager.get_terminal_history(session_id)
-    if res.get("status") == "error" and res.get("error") == "session_not_found":
-        raise HTTPException(status_code=404, detail=res.get("message"))
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.get_terminal_history(session_id, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
     return res
 
 
 @app.get("/terminal/{session_id}/stream", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
 async def stream_terminal_output_endpoint(
     session_id: str,
-    from_seq: int = Query(0, description="Start streaming from this sequence number")
+    from_seq: int = Query(0, description="Start streaming from this sequence number"),
+    access: Dict[str, Any] = Depends(verify_terminal_access)
 ):
     """
     GET /terminal/{session_id}/stream
     Server-Sent Events (SSE) streaming endpoint for live terminal output and execution state events.
     """
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
     session = TerminalManager.get_session(session_id)
     if not session:
-        status_info = TerminalManager.get_terminal_status(session_id)
-        if status_info.get("status") == "error" and status_info.get("error") == "session_not_found":
-            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Session '{session_id}' not found.")
+
+    try:
+        TerminalManager._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
 
     async def event_generator():
         current_seq = from_seq
-        stat = TerminalManager.get_terminal_status(session_id)
+        stat = TerminalManager.get_terminal_status(session_id, caller_uid=caller_uid, is_internal=is_internal)
         yield f"data: {json.dumps({'type': 'init', 'session_id': session_id, 'status': stat})}\n\n"
 
         idle_cycles = 0
         max_idle_when_stopped = 3
 
         while True:
-            delta = TerminalManager.terminal_read_output_delta(session_id=session_id, since_seq=current_seq)
+            delta = TerminalManager.terminal_read_output_delta(session_id=session_id, since_seq=current_seq, caller_uid=caller_uid, is_internal=is_internal)
             lines = delta.get("lines", [])
             latest_seq = delta.get("sequence_number", current_seq)
             is_running = delta.get("is_running", False)
@@ -4398,6 +4781,31 @@ async def fs_list_endpoint(payload: FsListPayload):
             max_depth=payload.max_depth or 3,
             include_hidden=bool(payload.include_hidden)
         )
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/fs/list", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_list_get_endpoint(
+    dir: Optional[str] = Query(None),
+    dir_path: Optional[str] = Query(None),
+    recursive: bool = Query(False),
+    max_depth: int = Query(3),
+    include_hidden: bool = Query(False)
+):
+    """GET /fs/list: Lists files and directories inside an approved workspace."""
+    target_dir = dir or dir_path or "."
+    try:
+        return file_service.list_directory(
+            target_dir,
+            recursive=recursive,
+            max_depth=max_depth,
+            include_hidden=include_hidden
+        )
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4409,6 +4817,54 @@ async def fs_read_endpoint(payload: FsReadPayload):
         return file_service.read_file(payload.file_path, start_line=payload.start_line, end_line=payload.end_line)
     except FileNotFoundError as fnf:
         raise HTTPException(status_code=404, detail=str(fnf))
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/fs/read", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_read_get_endpoint(
+    path: Optional[str] = Query(None),
+    file_path: Optional[str] = Query(None),
+    start_line: Optional[int] = Query(None),
+    end_line: Optional[int] = Query(None)
+):
+    """GET /fs/read: Reads content from an approved user file with optional line range."""
+    target_file = path or file_path
+    if not target_file:
+        raise HTTPException(status_code=400, detail="Missing path or file_path query parameter.")
+    try:
+        return file_service.read_file(target_file, start_line=start_line, end_line=end_line)
+    except FileNotFoundError as fnf:
+        raise HTTPException(status_code=404, detail=str(fnf))
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+class FsWritePayload(BaseModel):
+    path: Optional[str] = None
+    file_path: Optional[str] = None
+    content: str = ""
+    overwrite: bool = True
+
+
+@app.post("/fs/write", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+async def fs_write_endpoint(payload: FsWritePayload):
+    """POST /fs/write: Writes content to a file in an approved workspace."""
+    target_file = payload.path or payload.file_path
+    if not target_file:
+        raise HTTPException(status_code=400, detail="Missing path or file_path in payload.")
+    try:
+        return file_service.create_file(
+            target_file,
+            content=payload.content,
+            overwrite=payload.overwrite
+        )
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4418,6 +4874,8 @@ async def fs_read_multiple_endpoint(payload: FsReadMultiplePayload):
     """Reads multiple files in an approved workspace simultaneously."""
     try:
         return file_service.read_multiple_files(payload.file_paths)
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4434,6 +4892,8 @@ async def fs_create_endpoint(payload: FsCreatePayload):
         )
     except FileExistsError as fee:
         raise HTTPException(status_code=409, detail=str(fee))
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4450,6 +4910,8 @@ async def fs_edit_endpoint(payload: FsEditPayload):
         )
     except FileNotFoundError as fnf:
         raise HTTPException(status_code=404, detail=str(fnf))
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4459,6 +4921,8 @@ async def fs_create_dir_endpoint(payload: FsCreateDirPayload):
     """Creates a directory in an approved workspace."""
     try:
         return file_service.create_directory(payload.dir_path)
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4472,6 +4936,8 @@ async def fs_search_endpoint(payload: FsSearchPayload):
             pattern=payload.pattern or "*",
             max_results=payload.max_results or 200
         )
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4487,6 +4953,8 @@ async def fs_search_content_endpoint(payload: FsSearchContentPayload):
             file_pattern=payload.file_pattern or "*",
             max_matches=payload.max_matches or 150
         )
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4498,6 +4966,8 @@ async def fs_inspect_endpoint(payload: FsInspectPayload):
         return file_service.inspect_file(payload.file_path)
     except FileNotFoundError as fnf:
         raise HTTPException(status_code=404, detail=str(fnf))
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4507,6 +4977,8 @@ async def fs_apply_patch_endpoint(payload: FsPatchPayload):
     """Applies a unified diff patch to an existing file with automatic backup."""
     try:
         return file_service.apply_patch(payload.file_path, payload.patch_diff, task_id=payload.task_id or "api_patch")
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4516,6 +4988,8 @@ async def fs_diff_endpoint(payload: FsDiffPayload):
     """Generates a unified diff comparing current file content against proposed content."""
     try:
         return file_service.compare_file_versions(payload.file_path, payload.comparison_content)
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4526,6 +5000,8 @@ async def fs_inspect_workspace_endpoint(payload: Optional[FsSearchPayload] = Non
     try:
         ws = (payload.workspace_path if payload else None) or "."
         return file_service.inspect_workspace(ws)
+    except (workspace_service.WorkspaceSecurityError, PermissionError) as pse:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pse))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4832,6 +5308,8 @@ async def models_download_endpoint(payload: ModelDownloadPayload):
     """Starts or resumes a background model download with byte-level progress."""
     try:
         return model_download_service.start_model_download(payload.model_id)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -4839,19 +5317,28 @@ async def models_download_endpoint(payload: ModelDownloadPayload):
 @app.post("/models/pause", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
 async def models_pause_endpoint(payload: ModelDownloadPayload):
     """Pauses an active model download."""
-    return model_download_service.pause_model_download(payload.model_id)
+    try:
+        return model_download_service.pause_model_download(payload.model_id)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
 
 @app.post("/models/resume", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
 async def models_resume_endpoint(payload: ModelDownloadPayload):
     """Resumes a paused model download using HTTP Range requests."""
-    return model_download_service.resume_model_download(payload.model_id)
+    try:
+        return model_download_service.resume_model_download(payload.model_id)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
 
 @app.post("/models/cancel", dependencies=[Depends(verify_terminal_access)], tags=["Model Downloads"])
 async def models_cancel_endpoint(payload: ModelDownloadPayload):
     """Cancels a model download."""
-    return model_download_service.cancel_model_download(payload.model_id)
+    try:
+        return model_download_service.cancel_model_download(payload.model_id)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
 
 
 # ==============================================================================
@@ -4887,43 +5374,83 @@ class BrokenImportScanPayload(BaseModel):
     workspace_path: Optional[str] = None
 
 
+def _validate_diagnostic_workspace(workspace_path: Optional[str]) -> Path:
+    import terminal_service
+    target = workspace_path or terminal_service.DEFAULT_WORKSPACE
+    target_str = str(target).strip()
+    if not target_str:
+        target_str = terminal_service.DEFAULT_WORKSPACE
+
+    # Reject directory traversal sequences
+    if ".." in target_str.replace("\\", "/").split("/"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Diagnostic workspace '{target_str}' contains forbidden traversal sequences."
+        )
+
+    canonical = os.path.realpath(target_str)
+    if not os.path.exists(canonical):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Diagnostic workspace not found: '{target_str}'")
+    if not terminal_service.is_allowed_workspace_root(canonical):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Diagnostic workspace '{target_str}' is outside approved project roots."
+        )
+    return Path(canonical)
+
+
 @app.post("/diagnostics/hunt", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
 async def diagnostics_hunt_endpoint(payload: DiagnosticHuntPayload):
     """Executes a complete automated diagnostic bug hunt across all Stroke subsystems."""
     import bug_hunter_service
-    hunter = bug_hunter_service.StrokeBugHunter(workspace_path=payload.workspace_path)
-    report = hunter.hunt_bugs(run_full_tests=payload.run_full_tests)
-    return {"status": "success", "report": report.to_dict()}
+    ws = _validate_diagnostic_workspace(payload.workspace_path)
+    try:
+        hunter = bug_hunter_service.StrokeBugHunter(workspace_path=str(ws))
+        report = hunter.hunt_bugs(run_full_tests=payload.run_full_tests)
+        return {"status": "success", "report": report.to_dict()}
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 @app.get("/diagnostics/tests", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
-async def diagnostics_tests_endpoint(workspace: Optional[str] = None):
+async def diagnostics_tests_endpoint(workspace_path: Optional[str] = Query(None), workspace: Optional[str] = Query(None)):
     """Discovers and catalogs all backend pytest suites and frontend vitest specs."""
     import bug_hunter_service
-    ws = Path(workspace).resolve() if workspace else Path.cwd().resolve()
-    backend = bug_hunter_service.TestDiscoveryEngine.discover_backend_tests(ws)
-    frontend = bug_hunter_service.TestDiscoveryEngine.discover_frontend_tests(ws)
-    return {
-        "status": "success",
-        "workspace": str(ws),
-        "backend_tests": backend,
-        "frontend_tests": frontend
-    }
+    target = workspace_path or workspace
+    ws = _validate_diagnostic_workspace(target)
+    try:
+        backend = bug_hunter_service.TestDiscoveryEngine.discover_backend_tests(ws)
+        frontend = bug_hunter_service.TestDiscoveryEngine.discover_frontend_tests(ws)
+        return {
+            "status": "success",
+            "workspace": str(ws),
+            "backend_tests": backend,
+            "frontend_tests": frontend
+        }
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
 
 
 @app.get("/diagnostics/report", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
-async def diagnostics_report_endpoint(workspace: Optional[str] = None):
+async def diagnostics_report_endpoint(workspace_path: Optional[str] = Query(None), workspace: Optional[str] = Query(None)):
     """Returns the latest STROKE_TEST_REPORT markdown content or runs a quick diagnostic report."""
     import bug_hunter_service
-    hunter = bug_hunter_service.StrokeBugHunter(workspace_path=workspace)
-    if hunter.docs_file.exists():
-        with open(hunter.docs_file, "r", encoding="utf-8") as f:
-            content = f.read()
-        return {"status": "success", "file": str(hunter.docs_file), "content": content}
+    target = workspace_path or workspace
+    ws = _validate_diagnostic_workspace(target)
+    try:
+        hunter = bug_hunter_service.StrokeBugHunter(workspace_path=str(ws))
+        if hunter.docs_file.exists():
+            with open(hunter.docs_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            return {"status": "success", "file": str(hunter.docs_file), "content": content}
 
-    report = hunter.hunt_bugs(run_full_tests=False)
-    md_content = bug_hunter_service.BugReportGenerator.generate_markdown_report(report)
-    return {"status": "success", "file": str(hunter.docs_file), "content": md_content}
+        report = hunter.hunt_bugs(run_full_tests=False)
+        md_content = bug_hunter_service.BugReportGenerator.generate_markdown_report(report)
+        return {"status": "success", "file": str(hunter.docs_file), "content": md_content}
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
 
 
 @app.post("/diagnostics/probe-endpoints", dependencies=[Depends(verify_terminal_access)], tags=["Diagnostics & Bug Hunting"])
@@ -4942,13 +5469,16 @@ async def diagnostics_probe_endpoints():
 async def diagnostics_broken_imports_endpoint(payload: BrokenImportScanPayload):
     """Statically scans all Python files for unguarded broken imports."""
     import bug_hunter_service
-    ws = Path(payload.workspace_path).resolve() if payload.workspace_path else Path.cwd().resolve()
-    data, issues = bug_hunter_service.BrokenImportScanner.scan_project_imports(ws)
-    return {
-        "status": "success",
-        "import_scan": data,
-        "issues": [i.to_dict() for i in issues]
-    }
+    ws = _validate_diagnostic_workspace(payload.workspace_path)
+    try:
+        data, issues = bug_hunter_service.BrokenImportScanner.scan_project_imports(ws)
+        return {
+            "status": "success",
+            "import_scan": data,
+            "issues": [i.to_dict() for i in issues]
+        }
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
 
 
 # ==============================================================================

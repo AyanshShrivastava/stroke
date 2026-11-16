@@ -86,7 +86,7 @@ class LocalDocumentReference:
 
     def get(self) -> LocalDocumentSnapshot:
         data = self.client._get_doc_data(self.path)
-        return LocalDocumentSnapshot(self.id, data)
+        return LocalDocumentSnapshot(self.id, data, reference=self)
 
     def set(self, data: Dict[str, Any], merge: bool = False):
         self.client._set_doc_data(self.path, data, merge=merge)
@@ -145,7 +145,14 @@ class LocalFirestoreClient:
                 try:
                     with open(self.storage_path, "r", encoding="utf-8") as f:
                         return json.load(f)
-                except Exception:
+                except Exception as exc:
+                    backup_path = f"{self.storage_path}.corrupted.{int(datetime.now(timezone.utc).timestamp())}.bak"
+                    try:
+                        import shutil
+                        shutil.copy2(self.storage_path, backup_path)
+                        print(f"[LOCAL FIRESTORE CRITICAL] Corrupted database JSON detected: {exc}. Preserved snapshot at {backup_path}", flush=True)
+                    except Exception as copy_err:
+                        print(f"[LOCAL FIRESTORE CRITICAL] Failed to backup corrupted DB: {copy_err}", flush=True)
                     return {}
             return {}
 
@@ -176,6 +183,10 @@ class LocalFirestoreClient:
                 self.batch_ops.append(("delete", ref.path, None, False))
             def get(self, ref):
                 return ref.get()
+            def commit(self):
+                if self.batch_ops:
+                    self.client._apply_batch(self.batch_ops)
+                    self.batch_ops = []
         return LocalTx(self)
 
     def _get_doc_data(self, path: str) -> Optional[Dict[str, Any]]:

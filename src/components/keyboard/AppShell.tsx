@@ -71,9 +71,7 @@ export function StorageMeter() {
           <HardDrive className="h-3 w-3 opacity-70" />
           <span>Local Storage</span>
         </span>
-        <span>
-          {diag ? diag.usageFormatted : "Estimating…"}
-        </span>
+        <span>{diag ? diag.usageFormatted : "Estimating…"}</span>
       </div>
       <Progress value={diag ? Math.max(1, diag.usagePercent) : 1} className="h-1" />
       <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
