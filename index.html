@@ -933,6 +933,8 @@
               </button>
             </div>
           </div>
+        </div>
+
         <!-- GitHub Integration (Personal Access Token) -->
         <div class="p-3.5 rounded-xl border border-brand-border bg-brand-surface space-y-3">
           <div class="flex items-center justify-between text-xs">
@@ -1169,6 +1171,13 @@
           </button>
         </div>
       </form>
+
+      <!-- Optional Offline / Local Mode Skip -->
+      <div class="pt-3 border-t border-brand-border text-center">
+        <button id="authModalGuestContinueBtn" type="button" class="text-xs text-neutral-400 hover:text-brand-accent font-mono transition-colors">
+          Skip &amp; Continue to Local Workspace &rarr;
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1442,6 +1451,7 @@
     const state = {
       idToken: null,
       firebaseUser: null,
+      hasLaunched: localStorage.getItem('stroke_has_launched') === 'true',
       userEmail: (() => {
         const stored = (localStorage.getItem('stroke_user_email') || '').trim();
         if (!stored || stored === 'null' || stored === 'undefined' || !stored.includes('@')) {
@@ -1551,7 +1561,8 @@
       const greetingView = document.getElementById('greetingView');
       const appWorkspace = document.getElementById('appWorkspace');
       const isAuth = !!(state.userEmail && state.idToken);
-      if (!isAuth) {
+      const shouldShowWorkspace = isAuth || state.hasLaunched || localStorage.getItem('stroke_has_launched') === 'true';
+      if (!shouldShowWorkspace) {
         if (greetingView) {
           greetingView.classList.remove('hidden');
           greetingView.style.display = 'flex';
@@ -3858,6 +3869,7 @@
 
       localStorage.removeItem('stroke_user_email');
       localStorage.removeItem('stroke_has_launched');
+      state.hasLaunched = false;
       state.firebaseUser = null;
       state.userEmail = null;
       state.idToken = null;
@@ -3883,8 +3895,20 @@
       document.getElementById('authModal')?.classList.add('hidden');
     });
 
-    document.getElementById('greetingLaunchBtn')?.addEventListener('click', openAuthModal);
+    document.getElementById('greetingLaunchBtn')?.addEventListener('click', () => {
+      state.hasLaunched = true;
+      localStorage.setItem('stroke_has_launched', 'true');
+      syncViewAuthState();
+    });
     document.getElementById('greetingSignInBtn')?.addEventListener('click', openAuthModal);
+
+    document.getElementById('authModalGuestContinueBtn')?.addEventListener('click', () => {
+      state.hasLaunched = true;
+      localStorage.setItem('stroke_has_launched', 'true');
+      document.getElementById('authModal')?.classList.add('hidden');
+      syncViewAuthState();
+      showToast('Entered Local Developer Workspace.');
+    });
 
     document.getElementById('authTabSignInBtn')?.addEventListener('click', () => showAuthTab('signin'));
     document.getElementById('authTabSignUpBtn')?.addEventListener('click', () => showAuthTab('signup'));

@@ -652,7 +652,11 @@ async def serve_index_page():
     """Serves the Matrix Green Cyberpunk Single-File User Interface."""
     index_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     if os.path.exists(index_file_path):
-        return FileResponse(index_file_path, media_type="text/html")
+        return FileResponse(
+            index_file_path,
+            media_type="text/html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+        )
     return HTMLResponse(
         content="<h1 style='color:#00ff66;background:#050505;font-family:monospace;padding:2rem;'>"
                 "[STROKE] Critical Error: index.html not found in current directory.</h1>",
