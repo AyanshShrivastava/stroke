@@ -9,10 +9,10 @@
   <title>Stroke // AI Systems &amp; VFX Studio</title>
   <!-- Tailwind CSS Engine -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Google Fonts: Space Grotesk & JetBrains Mono -->
+  <!-- Google Fonts: Geist & Geist Mono (Mist Design System) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <script>
     tailwind.config = {
@@ -21,26 +21,30 @@
         extend: {
           colors: {
             brand: {
-              black: '#090b10',
-              surface: '#0d1117',
-              card: '#131823',
-              input: '#090d14',
+              black: '#0b0b0d',
+              surface: '#141416',
+              card: '#18181b',
+              input: '#121215',
               border: 'rgba(255, 255, 255, 0.08)',
               borderHover: 'rgba(255, 255, 255, 0.16)',
-              accent: '#00ff66',
-              accentDark: '#006629',
-              coral: '#ff5c5c',
+              accent: '#3b82f6',
+              accentHover: '#2563eb',
+              accentViolet: '#8b5cf6',
+              accentPink: '#ec4899',
+              accentDark: '#1d4ed8',
+              coral: '#fb7185',
               purple: '#a855f7',
-              cyan: '#00d4ff',
-              amber: '#ffaa00',
-              danger: '#ff4455',
-              text: '#f0f3f8',
-              muted: '#8b949e'
+              cyan: '#06b6d4',
+              amber: '#f59e0b',
+              emerald: '#10b981',
+              danger: '#ef4444',
+              text: '#f4f4f5',
+              muted: '#a1a1aa'
             }
           },
           fontFamily: {
-            mono: ['"JetBrains Mono"', 'monospace'],
-            sans: ['"Space Grotesk"', 'sans-serif'],
+            mono: ['"Geist Mono"', '"JetBrains Mono"', 'monospace'],
+            sans: ['"Geist"', 'system-ui', '-apple-system', 'sans-serif'],
           }
         }
       }
@@ -50,6 +54,11 @@
   <style>
     :root {
       color-scheme: dark;
+      --mist-aurora-1: #3b82f6;
+      --mist-aurora-2: #8b5cf6;
+      --mist-aurora-3: #ec4899;
+      --mist-aurora-4: #fb7185;
+      --mist-aurora-5: #f97316;
     }
 
     /* WebKit/Blink Autofill Reset - Prevents Chrome from overriding input backgrounds to white */
@@ -59,19 +68,19 @@
     input:-webkit-autofill:active,
     textarea:-webkit-autofill,
     select:-webkit-autofill {
-      -webkit-box-shadow: 0 0 0 1000px #0b0e14 inset !important;
-      box-shadow: 0 0 0 1000px #0b0e14 inset !important;
-      -webkit-text-fill-color: #f0f3f8 !important;
-      color: #f0f3f8 !important;
-      caret-color: #00ff66 !important;
+      -webkit-box-shadow: 0 0 0 1000px #141416 inset !important;
+      box-shadow: 0 0 0 1000px #141416 inset !important;
+      -webkit-text-fill-color: #f4f4f5 !important;
+      color: #f4f4f5 !important;
+      caret-color: #3b82f6 !important;
       font-family: inherit !important;
       transition: background-color 50000s ease-in-out 0s;
     }
 
     /* Dedicated dark styling for modal auth inputs */
     #authEmailInput, #authPasswordInput, #authOtpInput {
-      background-color: #0b0e14 !important;
-      color: #f0f3f8 !important;
+      background-color: #121215 !important;
+      color: #f4f4f5 !important;
     }
     #authEmailInput:-webkit-autofill,
     #authEmailInput:-webkit-autofill:hover,
@@ -79,62 +88,124 @@
     #authPasswordInput:-webkit-autofill,
     #authPasswordInput:-webkit-autofill:hover,
     #authPasswordInput:-webkit-autofill:focus {
-      -webkit-box-shadow: 0 0 0 1000px #0b0e14 inset !important;
-      box-shadow: 0 0 0 1000px #0b0e14 inset !important;
-      -webkit-text-fill-color: #f0f3f8 !important;
-      color: #f0f3f8 !important;
+      -webkit-box-shadow: 0 0 0 1000px #121215 inset !important;
+      box-shadow: 0 0 0 1000px #121215 inset !important;
+      -webkit-text-fill-color: #f4f4f5 !important;
+      color: #f4f4f5 !important;
     }
 
     body {
-      background-color: #080a0f;
-      background-image: 
-        radial-gradient(circle at 50% 0%, rgba(120, 80, 255, 0.12) 0%, transparent 45%),
-        radial-gradient(circle at 85% 20%, rgba(255, 90, 90, 0.08) 0%, transparent 35%),
-        radial-gradient(circle at 15% 30%, rgba(0, 255, 102, 0.05) 0%, transparent 40%);
-      color: #f0f3f8;
-      font-family: 'Space Grotesk', sans-serif;
+      background-color: #0b0b0d;
+      color: #f4f4f5;
+      font-family: 'Geist', system-ui, -apple-system, sans-serif;
       height: 100vh;
       overflow: hidden;
       margin: 0;
       padding: 0;
+      letter-spacing: -0.015em;
     }
 
-    .aurora-bg {
-      background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(168, 85, 247, 0.18), transparent 70%),
-                  radial-gradient(ellipse 60% 40% at 85% 15%, rgba(255, 92, 92, 0.12), transparent 60%);
+    /* Mist Design System: Aurora drifts behind hero and workspaces */
+    .mist-hero-aurora {
+      position: relative;
+      isolation: isolate;
+    }
+    .mist-hero-aurora::before {
+      content: "";
+      position: absolute;
+      inset: -40px -10vw 0 -10vw;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(60% 50% at 50% 100%, rgba(236, 72, 153, 0.40), transparent 70%),
+        radial-gradient(45% 45% at 12% 85%, rgba(249, 115, 22, 0.25), transparent 70%),
+        radial-gradient(45% 45% at 88% 85%, rgba(244, 63, 94, 0.30), transparent 70%),
+        radial-gradient(70% 40% at 50% 58%, rgba(59, 130, 246, 0.45), transparent 72%),
+        radial-gradient(50% 35% at 50% 40%, rgba(139, 92, 246, 0.28), transparent 70%);
+      filter: blur(40px) saturate(135%);
+      mask-image: radial-gradient(70% 75% at 50% 60%, #000 40%, transparent 100%);
+      animation: mistAuroraDrift 18s ease-in-out infinite alternate;
+    }
+
+    @keyframes mistAuroraDrift {
+      0% { transform: translate3d(0, 0, 0) scale(1); }
+      100% { transform: translate3d(0, -12px, 0) scale(1.04); }
+    }
+
+    /* Floating Pill-Shaped Composer Shell (Mist Spec) */
+    .mist-composer-shell {
+      background: rgba(20, 20, 22, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 26px !important;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow:
+        0 30px 70px -25px rgba(0, 0, 0, 0.9),
+        0 12px 30px -15px rgba(59, 130, 246, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.04);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mist-composer-shell:focus-within {
+      border-color: rgba(139, 92, 246, 0.45);
+      box-shadow:
+        0 35px 80px -25px rgba(0, 0, 0, 0.95),
+        0 15px 35px -15px rgba(139, 92, 246, 0.3),
+        0 0 0 1px rgba(139, 92, 246, 0.3);
+    }
+
+    /* Minimalist Blurry Header */
+    .mist-header {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(11, 11, 13, 0.82);
+      backdrop-filter: blur(18px) saturate(145%);
+      -webkit-backdrop-filter: blur(18px) saturate(145%);
+    }
+
+    /* Interactive Mist Mode Cards */
+    .mist-mode-card {
+      background: rgba(20, 20, 22, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mist-mode-card:hover {
+      background: rgba(28, 28, 32, 0.85);
+      border-color: rgba(59, 130, 246, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 14px 28px -12px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.15);
     }
 
     .glass-panel {
-      background: rgba(19, 24, 35, 0.7);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: rgba(18, 18, 20, 0.72);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
       border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .glow-text {
-      text-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
+      text-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
     }
     .glow-box {
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(168, 85, 247, 0.06);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(139, 92, 246, 0.08);
     }
     .glow-button {
-      box-shadow: 0 2px 12px rgba(0, 255, 102, 0.2);
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 14px rgba(59, 130, 246, 0.25);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .glow-button:hover:not(:disabled) {
-      box-shadow: 0 4px 20px rgba(0, 255, 102, 0.45);
+      box-shadow: 0 4px 22px rgba(59, 130, 246, 0.5);
       transform: translateY(-1px);
     }
 
-    /* Voice Mode Audio Orb Pulse */
+    /* Voice Mode Audio Visualizer */
     @keyframes orb-pulse {
       0%, 100% {
         transform: scale(1);
-        box-shadow: 0 0 35px rgba(0, 255, 102, 0.4), inset 0 0 25px rgba(0, 255, 102, 0.3);
+        box-shadow: 0 0 35px rgba(59, 130, 246, 0.4), inset 0 0 25px rgba(139, 92, 246, 0.3);
       }
       50% {
         transform: scale(1.14);
-        box-shadow: 0 0 70px rgba(0, 255, 102, 0.8), 0 0 120px rgba(0, 212, 255, 0.4), inset 0 0 40px rgba(0, 255, 102, 0.6);
+        box-shadow: 0 0 70px rgba(59, 130, 246, 0.8), 0 0 120px rgba(236, 72, 153, 0.4), inset 0 0 40px rgba(59, 130, 246, 0.6);
       }
     }
     .voice-orb-active {
@@ -144,11 +215,11 @@
     @keyframes orb-speaking {
       0%, 100% {
         transform: scale(1.05);
-        box-shadow: 0 0 50px rgba(0, 212, 255, 0.6), inset 0 0 30px rgba(0, 212, 255, 0.4);
+        box-shadow: 0 0 50px rgba(59, 130, 246, 0.6), inset 0 0 30px rgba(59, 130, 246, 0.4);
       }
       50% {
         transform: scale(1.22);
-        box-shadow: 0 0 90px rgba(0, 212, 255, 0.9), 0 0 150px rgba(0, 255, 102, 0.5), inset 0 0 50px rgba(0, 212, 255, 0.7);
+        box-shadow: 0 0 90px rgba(59, 130, 246, 0.9), 0 0 150px rgba(139, 92, 246, 0.5), inset 0 0 50px rgba(59, 130, 246, 0.7);
       }
     }
     .voice-orb-speaking {
@@ -166,39 +237,39 @@
     .waveform-bar:nth-child(4) { animation: wave-bounce 0.8s ease-in-out infinite 0.35s; }
     .waveform-bar:nth-child(5) { animation: wave-bounce 1.0s ease-in-out infinite 0.2s; }
 
-    /* Custom Scrollbar */
+    /* Custom Modern Scrollbar */
     ::-webkit-scrollbar {
       width: 5px;
       height: 5px;
     }
     ::-webkit-scrollbar-track {
-      background: #090b10;
+      background: #0b0b0d;
     }
     ::-webkit-scrollbar-thumb {
-      background: #1a2230;
-      border-radius: 4px;
+      background: #27272a;
+      border-radius: 9999px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #00ff66;
+      background: #3f3f46;
     }
     .grid-bg {
-      background-size: 36px 36px;
+      background-size: 32px 32px;
       background-image: 
-        linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
     }
     .shadow-key {
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.1);
     }
-    .shadow-glow-lime {
-      box-shadow: 0 0 25px rgba(163, 230, 53, 0.4);
+    .shadow-glow-mist {
+      box-shadow: 0 0 35px rgba(59, 130, 246, 0.45);
     }
-    .shadow-glow-lime:hover {
-      box-shadow: 0 0 35px rgba(163, 230, 53, 0.65);
+    .shadow-glow-mist:hover {
+      box-shadow: 0 0 50px rgba(59, 130, 246, 0.7);
     }
   </style>
 </head>
-<body class="bg-brand-black text-brand-text flex h-screen w-screen overflow-hidden font-sans select-text">
+<body class="bg-[#0b0b0d] text-brand-text flex h-screen w-screen overflow-hidden font-sans select-text">
 
   <!-- Hidden File Input for Attachment Button (+) - Supports all file types: .py, .csv, .luau, .lua, .json, images, etc. -->
   <input type="file" id="fileAttachmentInput" multiple class="hidden">
@@ -206,26 +277,40 @@
   <!-- ========================================================================= -->
   <!-- GREETING / LANDING PAGE: Displayed when user is NOT signed in             -->
   <!-- ========================================================================= -->
-  <div id="greetingView" class="fixed inset-0 z-40 bg-[#080808] flex flex-col items-center justify-center px-6 text-center select-none grid-bg">
-    <!-- Centered Key Logo Squircle -->
-    <div class="w-20 h-20 rounded-2xl border border-white/10 bg-[#121212] shadow-key flex items-center justify-center font-mono font-bold text-3xl text-[#a3e635]">
-      S
+  <div id="greetingView" class="fixed inset-0 z-40 bg-[#0b0b0d] flex flex-col items-center justify-center px-6 text-center select-none mist-hero-aurora">
+    <!-- Centered Stroke Logo Squircle (Mist Style) -->
+    <div class="relative flex items-center justify-center mb-2">
+      <div class="w-20 h-20 rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-2xl flex items-center justify-center text-white transition-transform hover:scale-105 duration-300">
+        <svg viewBox="0 0 32 32" fill="none" role="img" aria-label="Stroke" class="w-10 h-10 text-white">
+          <path d="M23 5H12a6 6 0 0 0 0 12h8a5 5 0 0 1 0 10H7" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" />
+          <path d="m9 22 14-12" stroke="url(#strokeGrad)" stroke-width="3.5" stroke-linecap="round" />
+          <defs>
+            <linearGradient id="strokeGrad" x1="9" y1="22" x2="23" y2="10" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#3b82f6" />
+              <stop offset="0.5" stop-color="#8b5cf6" />
+              <stop offset="1" stop-color="#ec4899" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div class="absolute -inset-2 bg-gradient-to-r from-blue-500/20 via-violet-500/20 to-pink-500/20 rounded-full blur-xl -z-10"></div>
     </div>
 
     <!-- Title -->
-    <h1 class="mt-8 text-5xl md:text-7xl font-bold tracking-tight text-white">Stroke</h1>
+    <h1 class="mt-6 text-5xl md:text-7xl font-bold tracking-tight text-white font-sans">Stroke</h1>
 
     <!-- Subtitle -->
-    <p class="mt-4 max-w-md text-sm md:text-base text-neutral-400 font-sans leading-relaxed">
-      The all-in-one AI coding agent. Built for AAA Roblox Studio work — no placeholder assets.
+    <p class="mt-4 max-w-md text-sm md:text-base text-zinc-400 font-sans leading-relaxed">
+      The autonomous AI coding companion for AAA Roblox Studio systems. Runs locally on your machine with offline neural inference & verified compiler execution.
     </p>
 
     <!-- Launch Button -->
     <div class="mt-10 flex flex-col items-center space-y-3">
-      <button id="greetingLaunchBtn" class="px-8 py-3 rounded-xl bg-[#a3e635] hover:bg-[#bef264] text-black font-semibold text-sm transition-all duration-200 shadow-glow-lime font-mono flex items-center space-x-2">
-        <span>Launch Stroke / Sign In →</span>
+      <button id="greetingLaunchBtn" class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:via-indigo-500 hover:to-violet-500 text-white font-medium text-sm transition-all duration-200 shadow-xl shadow-indigo-500/25 flex items-center space-x-2 cursor-pointer group">
+        <span>Launch Stroke Workspace</span>
+        <svg class="w-4 h-4 text-white group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
       </button>
-      <button id="greetingSignInBtn" type="button" class="text-xs text-neutral-400 hover:text-white font-mono transition-colors">
+      <button id="greetingSignInBtn" type="button" class="text-xs text-zinc-400 hover:text-white font-medium transition-colors cursor-pointer">
         Have an account? Sign In with Email
       </button>
     </div>
@@ -408,22 +493,22 @@
   <!-- ========================================================================= -->
   <!-- MAIN WORKSPACE: Clean Full-Screen AI Stream                               -->
   <!-- ========================================================================= -->
-  <main class="flex-1 flex flex-col h-full bg-brand-black relative overflow-hidden">
+  <main class="flex-1 flex flex-col h-full bg-[#0b0b0d] relative overflow-hidden">
     
-    <!-- Top Header Bar -->
-    <header class="h-14 border-b border-brand-border px-4 flex items-center justify-between flex-shrink-0 bg-brand-surface/90 backdrop-blur z-20">
+    <!-- Top Header Bar (Mist Clean Header) -->
+    <header class="h-16 mist-header px-5 flex items-center justify-between flex-shrink-0 z-20">
       
       <!-- Left: Expand Sidebar + Single AI Model Indicator -->
       <div class="flex items-center space-x-3">
-        <button id="expandSidebarBtn" class="hidden p-1.5 rounded-lg hover:bg-white/5 text-brand-muted hover:text-white transition-colors" title="Open sidebar">
+        <button id="expandSidebarBtn" class="hidden p-2 rounded-xl hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Open sidebar">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
-        <!-- Single Main AI: Llama 3.2 Offline Core -->
-        <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-white/5 text-white font-sans font-semibold text-xs border border-brand-border shadow-inner">
-          <span class="w-2 h-2 rounded-full bg-brand-accent animate-pulse"></span>
-          <span>Llama 3.2</span>
-          <span class="text-[10px] text-brand-muted font-mono font-normal">Offline Core</span>
+        <!-- Main AI Engine Indicator (Mist Style Pill) -->
+        <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] text-white font-sans font-medium text-xs border border-white/10 shadow-sm backdrop-blur-md">
+          <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+          <span class="font-semibold">Llama 3.2</span>
+          <span class="text-[11px] text-zinc-400 font-mono font-normal">Metal Acceleration</span>
         </div>
       </div>
 
@@ -431,22 +516,22 @@
       <div class="flex items-center space-x-2 sm:space-x-3">
         
         <!-- Private Terminal Status Indicator -->
-        <div id="topTerminalPill" class="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full border border-brand-border bg-brand-surface text-xs text-brand-muted hover:text-white transition-colors cursor-default" title="Private background terminal status">
+        <div id="topTerminalPill" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.03] text-xs text-zinc-400 hover:text-white transition-colors cursor-default" title="Private background terminal status">
           <span id="topTerminalDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span id="topTerminalText" class="font-mono text-white text-[11px]">Terminal: Idle</span>
+          <span id="topTerminalText" class="font-mono text-zinc-300 text-[11px]">Terminal: Idle</span>
         </div>
 
         <!-- Temporary Chat Toggle -->
-        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-amber text-xs text-brand-muted hover:text-white transition-all group" title="Temporary chat: Excluded from chat history">
-          <svg class="w-3.5 h-3.5 text-brand-muted group-hover:text-brand-amber transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+        <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.03] hover:border-amber-500/50 text-xs text-zinc-400 hover:text-white transition-all group cursor-pointer" title="Temporary chat: Excluded from chat history">
+          <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
           <span id="tempChatBtnText" class="font-medium">Temporary chat</span>
-          <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-brand-border"></span>
+          <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-zinc-700"></span>
         </button>
 
         <!-- MCP Config Trigger -->
-        <button id="openMcpHubTopBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-accent text-xs text-brand-muted hover:text-white transition-colors" title="Manage MCP servers via JSON config">
-          <span class="w-2 h-2 rounded-full bg-brand-accent animate-pulse"></span>
-          <span class="font-mono text-white text-[11px]">MCP Servers</span>
+        <button id="openMcpHubTopBtn" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-xs text-blue-300 hover:text-white transition-colors cursor-pointer" title="Manage MCP servers via JSON config">
+          <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+          <span class="font-mono text-[11px] font-medium">Roblox Studio MCP</span>
         </button>
       </div>
     </header>
@@ -461,72 +546,99 @@
     <!-- Center Content: Empty Greeting State OR Chat Stream -->
     <div id="chatScrollContainer" class="flex-1 overflow-y-auto px-4 py-6 flex flex-col items-center">
       
-      <!-- EMPTY STATE: Natural Clean Greeting -->
-      <div id="emptyStateHero" class="my-auto max-w-2xl w-full flex flex-col items-center justify-center text-center space-y-6 pt-10 pb-6 transition-all">
+      <!-- EMPTY STATE: Natural Clean Greeting with Mist Aurora -->
+      <div id="emptyStateHero" class="my-auto max-w-2xl w-full flex flex-col items-center justify-center text-center space-y-7 pt-10 pb-6 transition-all mist-hero-aurora">
         <!-- Top Title & Aura -->
-        <div class="space-y-2">
-          <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-brand-surface/80 border border-brand-border text-[11px] text-brand-muted font-sans mb-1 shadow-sm backdrop-blur-sm">
-            <span class="w-2 h-2 rounded-full bg-brand-accent animate-pulse"></span>
-            <span class="text-white font-medium">Stroke Systems Matrix</span>
-            <span class="text-brand-muted">•</span>
-            <span class="text-brand-accent">Autonomous Luau & VFX</span>
+        <div class="space-y-2.5">
+          <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 font-sans mb-1 shadow-sm backdrop-blur-md">
+            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            <span class="text-white font-semibold">Stroke Studio</span>
+            <span class="text-zinc-500">•</span>
+            <span class="text-blue-400 font-mono">Autonomous Luau &amp; VFX</span>
           </div>
-          <h1 class="text-3xl sm:text-4xl font-sans font-extrabold text-white tracking-tight">
-            What's the vision today?
+          <h1 class="text-3xl sm:text-5xl font-sans font-bold text-white tracking-tight">
+            What will you architect today?
           </h1>
-          <p class="text-xs sm:text-sm text-brand-muted max-w-lg mx-auto font-sans">
-            Build production-ready Roblox systems, craft cinematic particle visual effects, or let autonomous multi-agent pipelines architect entire games.
+          <p class="text-xs sm:text-sm text-zinc-400 max-w-lg mx-auto font-sans leading-relaxed">
+            Generate verified Luau systems, design cinematic Roblox visual effects, or connect directly to live Studio sessions with offline local AI.
           </p>
         </div>
 
-        <!-- Action Quick-Pills (Inspired by Lovable Vision Actions) -->
-        <div class="flex flex-wrap items-center justify-center gap-2 pt-1 pb-1">
-          <button data-prompt="Create a production-ready Roblox Luau system architecture with client-server networking, type checking, and modular service handlers." class="prompt-chip px-3.5 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs text-white flex items-center space-x-1.5 group cursor-pointer">
-            <svg class="w-3.5 h-3.5 text-brand-accent group-hover:scale-110 transition-transform pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-            <span class="font-medium pointer-events-none">Create Luau system</span>
+        <!-- Interactive One-Tap Modes (Directly inspired by Mist design system) -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 w-full text-left">
+          <button data-prompt="Create a production-ready Roblox Luau system architecture with client-server networking, type checking, and modular service handlers." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
+            <div class="flex items-center space-x-2">
+              <div class="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+              </div>
+              <span class="font-semibold text-white text-xs group-hover:text-blue-400 transition-colors pointer-events-none">Luau Systems</span>
+            </div>
+            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">Client-server networking &amp; component state</p>
           </button>
-          <button data-prompt="Generate a cinematic Roblox VFX spell with layered ParticleEmitters, Bezier motion curves, and sound synchronization." class="prompt-chip px-3.5 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-purple-400 hover:bg-brand-card transition-all text-xs text-white flex items-center space-x-1.5 group cursor-pointer">
-            <svg class="w-3.5 h-3.5 text-purple-400 group-hover:scale-110 transition-transform pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-            <span class="font-medium pointer-events-none">Generate VFX spell</span>
+
+          <button data-prompt="Generate a cinematic Roblox VFX spell with layered ParticleEmitters, Bezier motion curves, and sound synchronization." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
+            <div class="flex items-center space-x-2">
+              <div class="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
+                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+              </div>
+              <span class="font-semibold text-white text-xs group-hover:text-violet-400 transition-colors pointer-events-none">Particle &amp; VFX</span>
+            </div>
+            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">Curves, emitter hierarchies &amp; shaders</p>
           </button>
-          <button data-prompt="Audit my game security for RemoteEvent vulnerabilities, server validation gaps, and exploit surfaces." class="prompt-chip px-3.5 py-1.5 rounded-full border border-brand-border bg-brand-surface hover:border-cyan-400 hover:bg-brand-card transition-all text-xs text-white flex items-center space-x-1.5 group cursor-pointer">
-            <svg class="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span class="font-medium pointer-events-none">Audit security & RemoteEvents</span>
+
+          <button data-prompt="Architect an infinite procedural voxel terrain generator with 3D Perlin noise, biome distribution, and greedy meshing." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
+            <div class="flex items-center space-x-2">
+              <div class="w-7 h-7 rounded-lg bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 shrink-0">
+                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+              </div>
+              <span class="font-semibold text-white text-xs group-hover:text-pink-400 transition-colors pointer-events-none">Procedural World</span>
+            </div>
+            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">3D Perlin voxel, biomes &amp; spawning</p>
+          </button>
+
+          <button data-prompt="Audit my game security for RemoteEvent vulnerabilities, server validation gaps, and exploit surfaces." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
+            <div class="flex items-center space-x-2">
+              <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              </div>
+              <span class="font-semibold text-white text-xs group-hover:text-emerald-400 transition-colors pointer-events-none">Bug Hunter</span>
+            </div>
+            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">Honest Luau AST &amp; exploit audits</p>
           </button>
         </div>
 
-        <!-- Quick Prompt Chips (Clean SVGs, Zero Emojis) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl text-left">
-          <button data-prompt="Script a smooth shockwave visual effect in Luau using dual Bezier curves with CurveSize0=-9.83." class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+        <!-- Quick Prompt Chips -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left pt-1">
+          <button data-prompt="Script a smooth shockwave visual effect in Luau using dual Bezier curves with CurveSize0=-9.83." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-blue-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
+            <div class="font-semibold text-white group-hover:text-blue-400 flex items-center space-x-2 pointer-events-none">
+              <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
               <span>Script a smooth shockwave in Luau</span>
             </div>
-            <div class="text-[11px] text-brand-muted mt-1 pointer-events-none">Dual Bezier curves with CurveSize0=-9.83</div>
+            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">Dual Bezier curves with CurveSize0=-9.83</div>
           </button>
 
-          <button data-prompt="Create a fast dash and slash attack visual effect in Luau with snap deceleration and Drag=22.0." class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a3 3 0 11-4.242-4.242L12 12m0 0l-7-7m7 7l-7 7"/></svg>
+          <button data-prompt="Create a fast dash and slash attack visual effect in Luau with snap deceleration and Drag=22.0." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-violet-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
+            <div class="font-semibold text-white group-hover:text-violet-400 flex items-center space-x-2 pointer-events-none">
+              <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a3 3 0 11-4.242-4.242L12 12m0 0l-7-7m7 7l-7 7"/></svg>
               <span>Create a dash and slash visual</span>
             </div>
-            <div class="text-[11px] text-brand-muted mt-1 pointer-events-none">Snap deceleration with Drag=22.0</div>
+            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">Snap deceleration with Drag=22.0</div>
           </button>
 
-          <button data-prompt="Optimize Roblox particle emitters for mobile devices with LOD partitioning and strict 60 FPS budgets." class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg>
+          <button data-prompt="Optimize Roblox particle emitters for mobile devices with LOD partitioning and strict 60 FPS budgets." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-pink-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
+            <div class="font-semibold text-white group-hover:text-pink-400 flex items-center space-x-2 pointer-events-none">
+              <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg>
               <span>Optimize particle emitters for mobile</span>
             </div>
-            <div class="text-[11px] text-brand-muted mt-1 pointer-events-none">LOD partitioning and 60 FPS budgets</div>
+            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">LOD partitioning and 60 FPS budgets</div>
           </button>
 
-          <button data-prompt="Animate a curved energy beam using Ribbon attachments, speed curves, and dynamic transparency." class="prompt-chip p-3 rounded-xl border border-brand-border bg-brand-surface hover:border-brand-accent hover:bg-brand-card transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-brand-accent flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+          <button data-prompt="Animate a curved energy beam using Ribbon attachments, speed curves, and dynamic transparency." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-emerald-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
+            <div class="font-semibold text-white group-hover:text-emerald-400 flex items-center space-x-2 pointer-events-none">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
               <span>Animate a curved energy beam</span>
             </div>
-            <div class="text-[11px] text-brand-muted mt-1 pointer-events-none">Ribbon attachments and speed curves</div>
+            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">Ribbon attachments and speed curves</div>
           </button>
         </div>
       </div>
@@ -536,12 +648,12 @@
     </div>
 
     <!-- ======================================================================= -->
-    <!-- FLOATING COMPOSER: Plus Button for Files/Code/Images + Audio Voice Btn  -->
+    <!-- FLOATING COMPOSER: Mist Shell + Plus Button + Audio Voice Btn           -->
     <!-- ======================================================================= -->
     <div class="w-full px-4 pb-4 flex flex-col items-center justify-center flex-shrink-0 z-30">
       
       <!-- Composer Container -->
-      <div class="w-full max-w-3xl glass-panel rounded-2xl p-2.5 shadow-2xl transition-all duration-200 glow-box hover:border-brand-borderHover focus-within:border-brand-accent/60">
+      <div class="w-full max-w-3xl mist-composer-shell p-3 shadow-2xl transition-all duration-200">
         
         <!-- Attachment Previews Strip (Images, Code Files, Text) -->
         <div id="attachmentsPreviewStrip" class="hidden flex flex-wrap gap-2 pb-2 mb-2 border-b border-brand-border"></div>
@@ -677,18 +789,18 @@
             </button>
 
             <!-- Circular Audio Voice Mode Button -->
-            <button id="startVoiceChatBtn" class="w-9 h-9 rounded-full bg-brand-accent/20 hover:bg-brand-accent/30 border border-brand-accent text-brand-accent flex items-center justify-center transition-all glow-button relative group" title="Start live voice chat with Stroke">
+            <button id="startVoiceChatBtn" class="w-9 h-9 rounded-full bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/30 text-violet-300 flex items-center justify-center transition-all relative group cursor-pointer" title="Start live voice chat with Stroke">
               <div class="flex items-center space-x-0.5 h-4">
-                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
-                <div class="waveform-bar w-0.5 bg-brand-accent rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-violet-400 rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-violet-400 rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-violet-400 rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-violet-400 rounded-full"></div>
+                <div class="waveform-bar w-0.5 bg-violet-400 rounded-full"></div>
               </div>
             </button>
 
-            <!-- Send Button -->
-            <button id="sendPromptBtn" class="w-8 h-8 rounded-full bg-brand-accent text-black flex items-center justify-center hover:bg-emerald-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+            <!-- Send Button (Mist Gradient Style) -->
+            <button id="sendPromptBtn" class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 flex items-center justify-center hover:opacity-90 transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
             </button>
           </div>
@@ -2813,6 +2925,36 @@
     });
 
     sendPromptBtn.addEventListener('click', submitUserPrompt);
+
+    // Rotating Animated Placeholder (Mist Spec)
+    const placeholderIdeas = [
+      "Ask Stroke to architect a replicated combat system with lag compensation...",
+      "Ask Stroke to create a curved energy beam VFX with Ribbon attachments...",
+      "Ask Stroke to audit RemoteEvents for server validation gaps...",
+      "Ask Stroke to generate a procedural 3D voxel terrain with biomes...",
+      "Ask Stroke to optimize particle emitters for mobile 60 FPS budgets..."
+    ];
+    let pIdx = 0, pChar = 0;
+    function animatePlaceholder() {
+      if (promptInput.value || document.activeElement === promptInput) {
+        setTimeout(animatePlaceholder, 1200);
+        return;
+      }
+      const full = placeholderIdeas[pIdx];
+      const done = pChar >= full.length;
+      if (done) {
+        setTimeout(() => {
+          pChar = 0;
+          pIdx = (pIdx + 1) % placeholderIdeas.length;
+          animatePlaceholder();
+        }, 2400);
+      } else {
+        pChar++;
+        promptInput.setAttribute('placeholder', full.slice(0, pChar));
+        setTimeout(animatePlaceholder, 38);
+      }
+    }
+    animatePlaceholder();
 
     // 9. Submit Prompt Handlers
     async function submitUserPrompt() {
