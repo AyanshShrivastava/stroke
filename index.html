@@ -467,24 +467,26 @@
             <span class="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Projects</span>
           </div>
           <div class="space-y-0.5 text-xs">
-            <button class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
+            <button id="sidebarProjectMist" data-project="mist-ui" class="sidebar-project-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-white bg-white/5 border border-white/5 transition-colors group text-left cursor-pointer">
               <span class="flex items-center space-x-2 truncate">
                 <span class="w-2 h-2 rounded-sm bg-amber-500/80 flex-shrink-0"></span>
-                <span class="truncate">Mist UI Refresh</span>
+                <span class="truncate font-medium">Mist UI Refresh</span>
               </span>
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              <span class="project-dot w-1.5 h-1.5 rounded-full bg-amber-400"></span>
             </button>
-            <button class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
+            <button id="sidebarProjectFridge" data-project="smart-fridge" class="sidebar-project-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
               <span class="flex items-center space-x-2 truncate">
                 <span class="w-2 h-2 rounded-sm bg-blue-500/80 flex-shrink-0"></span>
                 <span class="truncate">Smart Fridge Inventory</span>
               </span>
+              <span class="project-dot hidden w-1.5 h-1.5 rounded-full bg-blue-400"></span>
             </button>
-            <button class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
+            <button id="sidebarProjectForgewise" data-project="forgewise" class="sidebar-project-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
               <span class="flex items-center space-x-2 truncate">
                 <span class="w-2 h-2 rounded-sm bg-violet-500/80 flex-shrink-0"></span>
                 <span class="truncate">Forgewise Studio Companion</span>
               </span>
+              <span class="project-dot hidden w-1.5 h-1.5 rounded-full bg-violet-400"></span>
             </button>
             <button id="viewAllProjectsBtn" class="w-full text-left px-2.5 py-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer">
               View all
@@ -515,19 +517,19 @@
         </div>
       </div>
 
-      <!-- Lovable Bottom Feature Banner (from Image 2) -->
+      <!-- Lovable Bottom Referral Card (Exact Match to Image 2: "Share Lovable / Up to 400 credits per referral") -->
       <div class="p-3 pt-0 space-y-2">
-        <div class="relative overflow-hidden rounded-xl p-3 bg-gradient-to-br from-zinc-900 to-zinc-950 border border-white/10 group cursor-pointer hover:border-white/20 transition-all">
+        <div id="shareReferralBanner" class="relative overflow-hidden rounded-2xl p-3 bg-gradient-to-br from-zinc-900 to-zinc-950 border border-white/10 group cursor-pointer hover:border-pink-500/30 transition-all shadow-lg" title="Invite teammates and earn credits">
           <div class="flex items-center justify-between">
             <div class="space-y-0.5 pr-2">
-              <div class="text-xs font-semibold text-white">Stroke Pro Studio</div>
-              <div class="text-[10px] text-zinc-400">Offline GGUF & Live Luau</div>
+              <div class="text-xs font-semibold text-white group-hover:text-pink-300 transition-colors">Share Stroke</div>
+              <div class="text-[10px] text-zinc-400">Up to 400 credits per referral</div>
             </div>
-            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-pink-500/20 flex-shrink-0">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6.4-4.8-6.4 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-pink-500 via-rose-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-pink-500/25 flex-shrink-0 group-hover:scale-105 transition-transform">
+              <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6.4-4.8-6.4 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
             </div>
           </div>
-          <div class="absolute -bottom-6 -right-6 w-16 h-16 bg-gradient-to-br from-rose-500/20 to-violet-600/20 rounded-full blur-xl pointer-events-none"></div>
+          <div class="absolute -bottom-6 -right-6 w-16 h-16 bg-gradient-to-br from-rose-500/30 to-violet-600/30 rounded-full blur-xl pointer-events-none"></div>
         </div>
 
         <!-- User Profile Row -->
@@ -639,6 +641,11 @@
           <span class="font-mono text-[11px] font-medium hidden sm:inline">Roblox Studio MCP</span>
           <span class="font-mono text-[11px] font-medium sm:hidden">MCP</span>
         </button>
+
+        <!-- Keyboard Shortcuts Cheatsheet Trigger -->
+        <button id="openShortcutsBtn" class="p-2 rounded-full border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Keyboard Shortcuts (⌘/)">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </button>
       </div>
     </header>
 
@@ -685,10 +692,44 @@
                 </button>
               </div>
               <div class="flex items-center space-x-2">
-                <button id="heroPlanBtn" type="button" class="px-3 py-1.5 rounded-full text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/5 border border-white/10 flex items-center space-x-1.5 transition-colors cursor-pointer">
-                  <span>Plan</span>
-                  <svg class="w-3 h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </button>
+                <!-- Lovable Floating Mode Dropdown: Plan / Code / Deep / Fast -->
+                <div class="relative inline-block">
+                  <button id="heroPlanBtn" type="button" class="px-3 py-1.5 rounded-full text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/5 border border-white/10 flex items-center space-x-1.5 transition-colors cursor-pointer" title="Select AI execution & reasoning mode">
+                    <span id="heroPlanLabel">Plan</span>
+                    <svg class="w-3 h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                  </button>
+                  <div id="heroPlanDropdown" class="hidden absolute bottom-full mb-2 right-0 w-64 bg-[#16161a]/95 border border-white/10 rounded-2xl p-2 shadow-2xl backdrop-blur-xl z-50 space-y-1 font-sans text-left">
+                    <div class="px-2.5 py-1 text-[10px] uppercase font-bold tracking-wider text-zinc-400 border-b border-white/5">Execution Mode</div>
+                    <button type="button" data-mode="plan" class="hero-plan-option w-full text-left px-2.5 py-2 rounded-xl hover:bg-white/5 transition-colors flex flex-col group cursor-pointer">
+                      <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-blue-400">
+                        <span>📋 Plan Mode</span>
+                        <span class="text-[9px] font-mono text-blue-400">Default</span>
+                      </div>
+                      <span class="text-[10px] text-zinc-400 leading-tight mt-0.5">Architecture roadmap & system requirements</span>
+                    </button>
+                    <button type="button" data-mode="code" class="hero-plan-option w-full text-left px-2.5 py-2 rounded-xl hover:bg-white/5 transition-colors flex flex-col group cursor-pointer">
+                      <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-emerald-400">
+                        <span>⚡ Code & Build</span>
+                        <span class="text-[9px] font-mono text-emerald-400">Active</span>
+                      </div>
+                      <span class="text-[10px] text-zinc-400 leading-tight mt-0.5">Direct Luau & full-stack file generation</span>
+                    </button>
+                    <button type="button" data-mode="deep" class="hero-plan-option w-full text-left px-2.5 py-2 rounded-xl hover:bg-white/5 transition-colors flex flex-col group cursor-pointer">
+                      <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-purple-400">
+                        <span>🔍 Deep Reason</span>
+                        <span class="text-[9px] font-mono text-purple-400">High</span>
+                      </div>
+                      <span class="text-[10px] text-zinc-400 leading-tight mt-0.5">Exhaustive AST validation & test runs</span>
+                    </button>
+                    <button type="button" data-mode="fast" class="hero-plan-option w-full text-left px-2.5 py-2 rounded-xl hover:bg-white/5 transition-colors flex flex-col group cursor-pointer">
+                      <div class="flex items-center justify-between text-xs font-semibold text-white group-hover:text-amber-400">
+                        <span>🚀 Fast Edit</span>
+                        <span class="text-[9px] font-mono text-amber-400">Turbo</span>
+                      </div>
+                      <span class="text-[10px] text-zinc-400 leading-tight mt-0.5">Rapid inline changes with minimal latency</span>
+                    </button>
+                  </div>
+                </div>
                 <button id="heroMicBtn" type="button" class="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer" title="Speech dictation">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
                 </button>
@@ -957,6 +998,163 @@
       <!-- Action Items Container -->
       <div id="commandPaletteList" class="max-h-80 overflow-y-auto p-2 space-y-1 text-xs">
         <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: KEYBOARD SHORTCUTS CHEATSHEET (⌘/)                                -->
+  <!-- ========================================================================= -->
+  <div id="keyboardShortcutsModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 font-sans select-none">
+    <div class="bg-[#16161a] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-white/5 pb-3">
+        <div class="flex items-center space-x-2">
+          <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+          <h3 class="font-sans font-bold text-white text-base">Keyboard Shortcuts</h3>
+        </div>
+        <button id="closeShortcutsModalBtn" class="text-zinc-400 hover:text-white p-1 cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <span class="text-zinc-300">Command Palette</span>
+          <div class="flex items-center space-x-1 font-mono text-[10px]"><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">⌘K</kbd> <span class="text-zinc-500">or</span> <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">Ctrl+K</kbd></div>
+        </div>
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <span class="text-zinc-300">New Conversation</span>
+          <div class="flex items-center space-x-1 font-mono text-[10px]"><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">⌘N</kbd> <span class="text-zinc-500">or</span> <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">Ctrl+N</kbd></div>
+        </div>
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <span class="text-zinc-300">Toggle Sidebar</span>
+          <div class="flex items-center space-x-1 font-mono text-[10px]"><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">⌘B</kbd> <span class="text-zinc-500">or</span> <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">Ctrl+B</kbd></div>
+        </div>
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <span class="text-zinc-300">Keyboard Shortcuts</span>
+          <div class="flex items-center space-x-1 font-mono text-[10px]"><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">⌘/</kbd> <span class="text-zinc-500">or</span> <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">?</kbd></div>
+        </div>
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <span class="text-zinc-300">Send Message</span>
+          <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white font-mono text-[10px]">Enter</kbd>
+        </div>
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <span class="text-zinc-300">Insert Line Break</span>
+          <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white font-mono text-[10px]">Shift + Enter</kbd>
+        </div>
+        <div class="flex items-center justify-between py-1.5">
+          <span class="text-zinc-300">Close Any Modal</span>
+          <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white font-mono text-[10px]">Escape</kbd>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: ADD AI TO YOUR APPS (Exact Match to Image 2 Top Pill)              -->
+  <!-- ========================================================================= -->
+  <div id="addAiToAppsModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 font-sans select-none">
+    <div class="bg-[#16161a] border border-white/10 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-white/5 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <span class="flex items-center -space-x-1">
+            <span class="w-5 h-5 rounded-full bg-blue-500/80 flex items-center justify-center text-[10px]">✨</span>
+            <span class="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center text-[10px]">⚙️</span>
+            <span class="w-5 h-5 rounded-full bg-pink-500/80 flex items-center justify-center text-[10px]">⚡</span>
+          </span>
+          <div>
+            <h3 class="font-sans font-bold text-white text-base">Add AI to your apps</h3>
+            <p class="text-xs text-zinc-400">Stream Stroke AI directly into your web, mobile, Python, or Roblox Luau apps.</p>
+          </div>
+        </div>
+        <button id="closeAddAiToAppsBtn" class="text-zinc-400 hover:text-white p-1 cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Language Tabs -->
+      <div class="flex items-center space-x-1.5 border-b border-white/5 pb-2 text-xs">
+        <button id="tabSdkWeb" type="button" class="sdk-tab px-3 py-1.5 rounded-lg bg-white/10 text-white font-medium cursor-pointer transition-all">React / Web</button>
+        <button id="tabSdkRoblox" type="button" class="sdk-tab px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer transition-all">Roblox Luau</button>
+        <button id="tabSdkPython" type="button" class="sdk-tab px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer transition-all">Python</button>
+        <button id="tabSdkCurl" type="button" class="sdk-tab px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer transition-all">cURL / REST</button>
+      </div>
+
+      <!-- Code Block Container -->
+      <div class="relative bg-[#0c0d10] border border-white/5 rounded-xl p-4 font-mono text-xs text-zinc-300 overflow-x-auto">
+        <button id="copySdkCodeBtn" class="absolute top-3 right-3 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 border border-white/10 text-[11px] text-white flex items-center space-x-1.5 cursor-pointer transition-all">
+          <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <span id="copySdkCodeLabel">Copy</span>
+        </button>
+        <pre id="sdkCodeDisplay" class="whitespace-pre overflow-x-auto leading-relaxed select-text">// React / Web Client Example
+async function queryStroke(prompt) {
+  const res = await fetch('http://127.0.0.1:8501/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [{ role: 'user', content: prompt }],
+      stream: false
+    })
+  });
+  const data = await res.json();
+  return data.choices[0].message.content;
+}</pre>
+      </div>
+
+      <div class="flex items-center justify-between pt-2">
+        <span class="text-[11px] text-zinc-400">Endpoint: <code class="text-blue-400">http://127.0.0.1:8501/v1/chat/completions</code></span>
+        <button id="configureApiKeyFromSdkBtn" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold cursor-pointer transition-all">Configure BYOK Keys</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: SHARE STROKE & EARN CREDITS (Exact Match to Image 2 Bottom Card)   -->
+  <!-- ========================================================================= -->
+  <div id="shareReferralModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 font-sans select-none">
+    <div class="bg-[#16161a] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-white/5 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-500 via-rose-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-pink-500/25">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6.4-4.8-6.4 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-sans font-bold text-white text-base">Share Stroke</h3>
+            <p class="text-xs text-zinc-400">Earn up to 400 credits for each developer who joins.</p>
+          </div>
+        </div>
+        <button id="closeShareReferralBtn" class="text-zinc-400 hover:text-white p-1 cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Referral Link Box -->
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-semibold text-zinc-300">Your Exclusive Invite Link</label>
+        <div class="flex items-center space-x-2">
+          <input id="referralLinkInput" type="text" readonly value="https://stroke.dev/invite/ayansh-7x92" class="flex-1 bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none">
+          <button id="copyReferralLinkBtn" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-violet-600 text-white text-xs font-semibold cursor-pointer hover:opacity-90 transition-opacity">Copy</button>
+        </div>
+      </div>
+
+      <!-- Referral Stats Grid -->
+      <div class="grid grid-cols-3 gap-2.5 pt-1">
+        <div class="rounded-xl bg-white/[0.03] border border-white/5 p-3 text-center">
+          <div class="text-base font-bold text-white">3</div>
+          <div class="text-[10px] text-zinc-400">Invites Sent</div>
+        </div>
+        <div class="rounded-xl bg-white/[0.03] border border-white/5 p-3 text-center">
+          <div class="text-base font-bold text-emerald-400">1,200</div>
+          <div class="text-[10px] text-zinc-400">Credits Earned</div>
+        </div>
+        <div class="rounded-xl bg-white/[0.03] border border-white/5 p-3 text-center">
+          <div class="text-base font-bold text-blue-400">Pro</div>
+          <div class="text-[10px] text-zinc-400">Studio Tier</div>
+        </div>
+      </div>
+
+      <div class="text-center pt-2">
+        <p class="text-[11px] text-zinc-400">Credits never expire and can be used for cloud models or local GGUF quant accelerations.</p>
       </div>
     </div>
   </div>
@@ -1277,7 +1475,10 @@
           <button id="terminalStopBtn" class="px-2.5 py-1 rounded-lg bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 text-xs font-mono transition-colors hidden">
             Stop Process
           </button>
-          <button id="terminalClearBtn" class="px-2.5 py-1 rounded-lg bg-white/5 border border-brand-border text-brand-muted hover:text-white text-xs font-mono transition-colors">
+          <button id="terminalCopyBtn" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-brand-border text-brand-muted hover:text-white text-xs font-mono transition-colors cursor-pointer" title="Copy output logs to clipboard">
+            Copy Output
+          </button>
+          <button id="terminalClearBtn" class="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-brand-border text-brand-muted hover:text-white text-xs font-mono transition-colors cursor-pointer">
             Clear
           </button>
           <button id="closeTerminalModalBtn" class="text-brand-muted hover:text-white p-1">
@@ -1856,7 +2057,10 @@
         'modelsModal',
         'authModal',
         'mandatoryMemoryModal',
-        'commandPaletteModal'
+        'commandPaletteModal',
+        'keyboardShortcutsModal',
+        'addAiToAppsModal',
+        'shareReferralModal'
       ];
       modalIds.forEach(id => {
         const el = document.getElementById(id);
@@ -1878,7 +2082,11 @@
       'terminalModal',
       'backupsModal',
       'modelsModal',
-      'authModal'
+      'authModal',
+      'mandatoryMemoryModal',
+      'keyboardShortcutsModal',
+      'addAiToAppsModal',
+      'shareReferralModal'
     ].forEach(id => {
       const el = document.getElementById(id);
       if (el) {
@@ -2127,19 +2335,207 @@
         heroMicBtn.addEventListener('click', () => micDictationBtn.click());
       }
       const heroPlanBtn = document.getElementById('heroPlanBtn');
-      if (heroPlanBtn && reasoningLevelBtn) {
-        heroPlanBtn.addEventListener('click', () => reasoningLevelBtn.click());
+      const heroPlanDropdown = document.getElementById('heroPlanDropdown');
+      const heroPlanLabel = document.getElementById('heroPlanLabel');
+
+      if (heroPlanBtn && heroPlanDropdown) {
+        heroPlanBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          heroPlanDropdown.classList.toggle('hidden');
+        });
+
+        document.querySelectorAll('.hero-plan-option').forEach(opt => {
+          opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const mode = opt.dataset.mode;
+            let displayLabel = 'Plan';
+            let targetReasoning = 'medium';
+
+            if (mode === 'code') {
+              displayLabel = 'Code';
+              targetReasoning = 'medium';
+            } else if (mode === 'deep') {
+              displayLabel = 'Deep';
+              targetReasoning = 'high';
+            } else if (mode === 'fast') {
+              displayLabel = 'Fast';
+              targetReasoning = 'low';
+            }
+
+            if (heroPlanLabel) heroPlanLabel.textContent = displayLabel;
+            heroPlanDropdown.classList.add('hidden');
+
+            // Synchronize with global reasoning setting
+            const reasoningOpt = document.querySelector(`.reasoning-option[data-level="${targetReasoning}"]`);
+            if (reasoningOpt) reasoningOpt.click();
+
+            showToast(`Execution mode set to: ${displayLabel} (${targetReasoning.toUpperCase()})`, 'success');
+          });
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!heroPlanBtn.contains(e.target) && !heroPlanDropdown.contains(e.target)) {
+            heroPlanDropdown.classList.add('hidden');
+          }
+        });
       }
     }
 
-    // 2c. Navigation & Feature Triggers
+    // 2c. Navigation & Feature Triggers (Lovable Dashboard Modals)
     const topAiAppsPill = document.getElementById('topAiAppsPill');
     const heroAiBadgeBtn = document.getElementById('heroAiBadgeBtn');
     const viewAllProjectsBtn = document.getElementById('viewAllProjectsBtn');
     const sidebarSearchTriggerBtn = document.getElementById('sidebarSearchTriggerBtn');
 
-    if (topAiAppsPill) topAiAppsPill.addEventListener('click', () => openMcpHubModal());
-    if (heroAiBadgeBtn) heroAiBadgeBtn.addEventListener('click', () => openMcpHubModal());
+    // Add AI to your apps Modal
+    const addAiToAppsModal = document.getElementById('addAiToAppsModal');
+    const closeAddAiToAppsBtn = document.getElementById('closeAddAiToAppsBtn');
+    const sdkCodeDisplay = document.getElementById('sdkCodeDisplay');
+    const copySdkCodeBtn = document.getElementById('copySdkCodeBtn');
+    const copySdkCodeLabel = document.getElementById('copySdkCodeLabel');
+    const configureApiKeyFromSdkBtn = document.getElementById('configureApiKeyFromSdkBtn');
+
+    const SDK_SNIPPETS = {
+      web: `// React / Web Client Example\nasync function queryStroke(prompt) {\n  const res = await fetch('http://127.0.0.1:8501/v1/chat/completions', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      messages: [{ role: 'user', content: prompt }],\n      stream: false\n    })\n  });\n  const data = await res.json();\n  return data.choices[0].message.content;\n}`,
+      roblox: `-- Roblox ServerScriptService / StrokeBridge\nlocal HttpService = game:GetService("HttpService")\nlocal STROKE_URL = "http://127.0.0.1:8501/coding/orchestrate"\n\nlocal function queryStrokeAI(prompt, workspacePath)\n    local requestBody = HttpService:JSONEncode({\n        prompt = prompt,\n        project_root = workspacePath or "game/ServerScriptService",\n        auto_commit = false\n    })\n    \n    local response = HttpService:RequestAsync({\n        Url = STROKE_URL,\n        Method = "POST",\n        Headers = { ["Content-Type"] = "application/json" },\n        Body = requestBody\n    })\n    \n    if response.Success then\n        return HttpService:JSONDecode(response.Body)\n    else\n        warn("Stroke AI query failed: " .. tostring(response.StatusCode))\n        return nil\n    end\nend`,
+      python: `# Python Async Client (httpx)\nimport httpx\n\nasync def call_stroke(prompt: str) -> str:\n    async with httpx.AsyncClient() as client:\n        resp = await client.post(\n            "http://127.0.0.1:8501/v1/chat/completions",\n            json={\n                "messages": [{"role": "user", "content": prompt}],\n                "stream": False\n            },\n            timeout=60.0\n        )\n        data = resp.json()\n        return data["choices"][0]["message"]["content"]`,
+      curl: `# Direct Terminal cURL Request\ncurl http://127.0.0.1:8501/v1/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "messages": [\n      {"role": "user", "content": "Create a modular Roblox inventory system"}\n    ],\n    "stream": false\n  }'`
+    };
+
+    function openAddAiToAppsModal() {
+      if (!addAiToAppsModal) return;
+      closeAllModals();
+      addAiToAppsModal.classList.remove('hidden');
+    }
+    function closeAddAiToAppsModal() {
+      if (addAiToAppsModal) addAiToAppsModal.classList.add('hidden');
+    }
+
+    if (topAiAppsPill) topAiAppsPill.addEventListener('click', openAddAiToAppsModal);
+    if (heroAiBadgeBtn) heroAiBadgeBtn.addEventListener('click', openAddAiToAppsModal);
+    if (closeAddAiToAppsBtn) closeAddAiToAppsBtn.addEventListener('click', closeAddAiToAppsModal);
+
+    // SDK Tabs switching
+    const sdkTabs = [
+      { btn: document.getElementById('tabSdkWeb'), key: 'web' },
+      { btn: document.getElementById('tabSdkRoblox'), key: 'roblox' },
+      { btn: document.getElementById('tabSdkPython'), key: 'python' },
+      { btn: document.getElementById('tabSdkCurl'), key: 'curl' }
+    ];
+    sdkTabs.forEach(({ btn, key }) => {
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        sdkTabs.forEach(t => {
+          if (t.btn) {
+            t.btn.className = 'sdk-tab px-3 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer transition-all';
+          }
+        });
+        btn.className = 'sdk-tab px-3 py-1.5 rounded-lg bg-white/10 text-white font-medium cursor-pointer transition-all';
+        if (sdkCodeDisplay && SDK_SNIPPETS[key]) {
+          sdkCodeDisplay.textContent = SDK_SNIPPETS[key];
+        }
+      });
+    });
+
+    if (copySdkCodeBtn) {
+      copySdkCodeBtn.addEventListener('click', async () => {
+        if (!sdkCodeDisplay) return;
+        try {
+          await navigator.clipboard.writeText(sdkCodeDisplay.textContent);
+          if (copySdkCodeLabel) copySdkCodeLabel.textContent = 'Copied!';
+          showToast('Code snippet copied to clipboard', 'success');
+          setTimeout(() => { if (copySdkCodeLabel) copySdkCodeLabel.textContent = 'Copy'; }, 2000);
+        } catch {
+          showToast('Failed to copy code snippet', 'error');
+        }
+      });
+    }
+
+    if (configureApiKeyFromSdkBtn) {
+      configureApiKeyFromSdkBtn.addEventListener('click', () => {
+        closeAddAiToAppsModal();
+        openSettingsModal();
+      });
+    }
+
+    // Share Stroke Referral Modal
+    const shareReferralBanner = document.getElementById('shareReferralBanner');
+    const shareReferralModal = document.getElementById('shareReferralModal');
+    const closeShareReferralBtn = document.getElementById('closeShareReferralBtn');
+    const referralLinkInput = document.getElementById('referralLinkInput');
+    const copyReferralLinkBtn = document.getElementById('copyReferralLinkBtn');
+
+    function openShareReferralModal() {
+      if (!shareReferralModal) return;
+      closeAllModals();
+      shareReferralModal.classList.remove('hidden');
+    }
+    function closeShareReferralModal() {
+      if (shareReferralModal) shareReferralModal.classList.add('hidden');
+    }
+
+    if (shareReferralBanner) shareReferralBanner.addEventListener('click', openShareReferralModal);
+    if (closeShareReferralBtn) closeShareReferralBtn.addEventListener('click', closeShareReferralModal);
+    if (copyReferralLinkBtn && referralLinkInput) {
+      copyReferralLinkBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(referralLinkInput.value);
+          showToast('Referral link copied to clipboard!', 'success');
+        } catch {
+          showToast('Failed to copy referral link', 'error');
+        }
+      });
+    }
+
+    // Terminal Copy Button
+    const terminalCopyBtn = document.getElementById('terminalCopyBtn');
+    if (terminalCopyBtn) {
+      terminalCopyBtn.addEventListener('click', async () => {
+        try {
+          const logEl = document.getElementById('terminalOutputLog');
+          const text = logEl ? (logEl.innerText || logEl.textContent) : '';
+          await navigator.clipboard.writeText(text);
+          showToast('Terminal output copied to clipboard!', 'success');
+        } catch {
+          showToast('Failed to copy terminal output', 'error');
+        }
+      });
+    }
+
+    // Sidebar Project Items Click Controller
+    const sidebarProjects = [
+      { id: 'sidebarProjectMist', name: 'Mist UI Refresh', tag: 'UI/UX', prompt: 'Continue working on Mist UI Refresh: modern aurora aesthetics, rounded-3xl floating composer, and high-performance frontend.' },
+      { id: 'sidebarProjectFridge', name: 'Smart Fridge Inventory', tag: 'Full-Stack', prompt: 'Inspect Smart Fridge Inventory architecture: camera recognition models, ingredient freshness tracking, and inventory database.' },
+      { id: 'sidebarProjectForgewise', name: 'Forgewise Studio Companion', tag: 'Roblox Luau', prompt: 'Review Forgewise Studio Companion: real-time live Roblox Studio instance inspection, physics simulation, and bytecode verification.' }
+    ];
+
+    sidebarProjects.forEach(proj => {
+      const btn = document.getElementById(proj.id);
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        // Toggle active visual indicator
+        sidebarProjects.forEach(p => {
+          const otherBtn = document.getElementById(p.id);
+          if (otherBtn) {
+            otherBtn.className = 'sidebar-project-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer';
+            const dot = otherBtn.querySelector('.project-dot');
+            if (dot) dot.classList.add('hidden');
+          }
+        });
+        btn.className = 'sidebar-project-item w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-white bg-white/5 border border-white/5 transition-colors group text-left cursor-pointer';
+        const activeDot = btn.querySelector('.project-dot');
+        if (activeDot) activeDot.classList.remove('hidden');
+
+        // Populate prompt and focus
+        const heroPrompt = document.getElementById('heroPromptInput');
+        if (heroPrompt) {
+          heroPrompt.value = proj.prompt;
+          heroPrompt.focus();
+        }
+        showToast(`Active project context: ${proj.name}`, 'info');
+      });
+    });
+
     if (viewAllProjectsBtn && openWorkspacesBtn) viewAllProjectsBtn.addEventListener('click', () => openWorkspacesBtn.click());
     if (sidebarSearchTriggerBtn && searchChatsBtn) sidebarSearchTriggerBtn.addEventListener('click', () => searchChatsBtn.click());
 
@@ -2548,14 +2944,60 @@
       });
     }
 
-    // Global Command Palette Shortcut: ⌘K or Ctrl+K
+    // Global Keyboard Shortcuts
+    const keyboardShortcutsModal = document.getElementById('keyboardShortcutsModal');
+    const openShortcutsBtn = document.getElementById('openShortcutsBtn');
+    const closeShortcutsModalBtn = document.getElementById('closeShortcutsModalBtn');
+
+    function openShortcutsModal() {
+      if (!keyboardShortcutsModal) return;
+      closeAllModals();
+      keyboardShortcutsModal.classList.remove('hidden');
+    }
+    function closeShortcutsModal() {
+      if (keyboardShortcutsModal) keyboardShortcutsModal.classList.add('hidden');
+    }
+
+    if (openShortcutsBtn) openShortcutsBtn.addEventListener('click', openShortcutsModal);
+    if (closeShortcutsModalBtn) closeShortcutsModalBtn.addEventListener('click', closeShortcutsModal);
+    if (keyboardShortcutsModal) {
+      keyboardShortcutsModal.addEventListener('click', (e) => {
+        if (e.target === keyboardShortcutsModal) closeShortcutsModal();
+      });
+    }
+
+    // Global Command Palette Shortcut (⌘K / Ctrl+K), Shortcuts (⌘/), New Chat (⌘N), Sidebar (⌘B)
     window.addEventListener('keydown', (e) => {
+      // 1. Command Palette: ⌘K or Ctrl+K
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if (commandPaletteModal && !commandPaletteModal.classList.contains('hidden')) {
           closeCommandPalette();
         } else {
           openCommandPalette();
+        }
+      }
+      // 2. Keyboard Shortcuts: ⌘/ or Ctrl+/ or '?' (when not in input)
+      else if (((e.metaKey || e.ctrlKey) && e.key === '/') || (e.key === '?' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA')) {
+        e.preventDefault();
+        if (keyboardShortcutsModal && !keyboardShortcutsModal.classList.contains('hidden')) {
+          closeShortcutsModal();
+        } else {
+          openShortcutsModal();
+        }
+      }
+      // 3. New Chat: ⌘N or Ctrl+N (when not in browser native)
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n' && e.altKey) {
+        e.preventDefault();
+        newChatBtn.click();
+      }
+      // 4. Toggle Sidebar: ⌘B or Ctrl+B
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        if (sidebar.classList.contains('-ml-64') || sidebar.classList.contains('-translate-x-full')) {
+          openSidebar();
+        } else {
+          closeSidebar();
         }
       }
     });
@@ -5274,26 +5716,46 @@
     }
 
     // Utilities
-    function showToast(message) {
+    function showToast(message, type = 'info') {
       let tc = document.getElementById('toastContainer');
       if (!tc) {
         tc = document.createElement('div');
         tc.id = 'toastContainer';
-        tc.className = 'fixed top-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none';
+        tc.className = 'fixed top-5 right-5 z-50 flex flex-col space-y-2.5 pointer-events-none';
         document.body.appendChild(tc);
       }
       const el = document.createElement('div');
-      el.className = 'px-3.5 py-2 rounded-xl bg-brand-card border border-brand-accent/40 text-brand-accent text-xs font-mono shadow-2xl transition-all duration-300 transform translate-y-0 opacity-100 flex items-center space-x-2';
+      
+      let borderGlow = 'border-blue-500/30 text-blue-300';
+      let dotColor = 'bg-blue-400';
+      let icon = '<svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+      
+      if (type === 'success' || (typeof message === 'string' && (message.includes('success') || message.includes('complete') || message.includes('passed')))) {
+        borderGlow = 'border-emerald-500/40 text-emerald-300 shadow-emerald-500/10';
+        dotColor = 'bg-emerald-400';
+        icon = '<svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+      } else if (type === 'error' || (typeof message === 'string' && (message.includes('error') || message.includes('failed') || message.includes('invalid')))) {
+        borderGlow = 'border-rose-500/40 text-rose-300 shadow-rose-500/10';
+        dotColor = 'bg-rose-400';
+        icon = '<svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+      } else if (type === 'warning' || (typeof message === 'string' && message.includes('warning'))) {
+        borderGlow = 'border-amber-500/40 text-amber-300 shadow-amber-500/10';
+        dotColor = 'bg-amber-400';
+        icon = '<svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+      }
+
+      el.className = `pointer-events-auto px-4 py-2.5 rounded-2xl bg-[#141416]/95 border ${borderGlow} text-xs font-sans shadow-2xl backdrop-blur-xl transition-all duration-300 transform translate-y-0 opacity-100 flex items-center space-x-2.5 cursor-pointer hover:opacity-90`;
       el.innerHTML = `
-        <span class="w-1.5 h-1.5 rounded-full bg-brand-accent flex-shrink-0"></span>
-        <span>${escapeHtml(message)}</span>
+        <span class="flex-shrink-0">${icon}</span>
+        <span class="font-medium text-white">${escapeHtml(message)}</span>
       `;
+      el.onclick = () => el.remove();
       tc.appendChild(el);
       setTimeout(() => {
         el.style.opacity = '0';
-        el.style.transform = 'translateY(-8px)';
+        el.style.transform = 'translateY(-10px) scale(0.95)';
         setTimeout(() => el.remove(), 300);
-      }, 2500);
+      }, 3000);
     }
     function escapeHtml(str) {
       return (str || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
