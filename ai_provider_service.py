@@ -2608,7 +2608,7 @@ def get_active_model_config_path() -> Path:
 
 def get_active_model_config() -> Dict[str, Any]:
     """Reads active model and provider preferences from user application data."""
-    config_path = get_active_model_config_path()
+    config_path = Path(get_active_model_config_path())
     default_config = {
         "active_provider": "groq",
         "active_model": "llama-3.3-70b-versatile",
@@ -2630,10 +2630,20 @@ def get_active_model_config() -> Dict[str, Any]:
 
 
 def set_active_model_config(config_updates: Dict[str, Any]) -> Dict[str, Any]:
-    """Saves updated model and provider preferences atomically."""
+    """Saves updated model and provider preferences atomically with validation and resolution."""
+    updates = dict(config_updates)
+    if "active_model" in updates and updates["active_model"]:
+        updates["active_model"] = resolve_model_id(updates["active_model"])
+    if "fallback_model" in updates and updates["fallback_model"]:
+        updates["fallback_model"] = resolve_model_id(updates["fallback_model"])
+    if "active_provider" in updates and updates["active_provider"]:
+        updates["active_provider"] = str(updates["active_provider"]).lower().strip()
+    if "fallback_provider" in updates and updates["fallback_provider"]:
+        updates["fallback_provider"] = str(updates["fallback_provider"]).lower().strip()
+
     current = get_active_model_config()
-    current.update(config_updates)
-    config_path = get_active_model_config_path()
+    current.update(updates)
+    config_path = Path(get_active_model_config_path())
     paths_service.atomic_write_json(config_path, current)
     return current
 
@@ -3201,8 +3211,10 @@ def probe_filesystem() -> FilesystemHealthStatus:
         return FilesystemHealthStatus(models_dir_writable=False, workspace_dir_writable=False)
 
 
-async def probe_remote_provider(provider: str) -> RemoteProviderHealthStatus:
-    key = credentials_vault_service.vault.get_credential(provider)
+async def probe_remote_provider(provider: str, user_id: Optional[str] = None) -> RemoteProviderHealthStatus:
+    key = credentials_vault_service.vault.get_credential(provider, user_id) if user_id else None
+    if not key:
+        key = credentials_vault_service.vault.get_credential(provider)
     if not key:
         env_map = {"openai": "OPENAI_API_KEY", "groq": "GROQ_API_KEY", "gemini": "GEMINI_API_KEY", "openrouter": "OPENROUTER_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
         if provider in env_map and os.environ.get(env_map[provider]):
@@ -3227,7 +3239,11 @@ async def probe_remote_provider(provider: str) -> RemoteProviderHealthStatus:
         return RemoteProviderHealthStatus(provider=provider, configured=True, connected=False, error=str(exc))
 
 
-async def probe_all_ai_health(ollama_host: str = "http://localhost:11434", timeout: float = 2.0) -> AiStatusResponse:
+async def probe_all_ai_health(
+    ollama_host: str = "http://localhost:11434",
+    timeout: float = 2.0,
+    user_id: Optional[str] = None
+) -> AiStatusResponse:
     local_model = probe_gguf_local()
     llama_cpp_stat = probe_llama_cpp()
 
@@ -3259,7 +3275,7 @@ async def probe_all_ai_health(ollama_host: str = "http://localhost:11434", timeo
     remote_provs = {}
     for p in ["openai", "groq", "gemini", "openrouter", "anthropic"]:
         try:
-            remote_provs[p] = await probe_remote_provider(p)
+            remote_provs[p] = await probe_remote_provider(p, user_id=user_id)
         except Exception as exc:
             remote_provs[p] = RemoteProviderHealthStatus(provider=p, configured=False, connected=False, error=str(exc))
 

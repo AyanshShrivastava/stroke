@@ -507,12 +507,23 @@ class RobloxDomainTestRunner:
         if blocking_errors or api_status == "FAIL" or syntax_status == "FAIL" or static_status == "FAIL":
             is_verified = False
             verification_status = "FAIL"
+            verification_state = "failed"
         elif has_compiler_verified and syntax_status == "PASS":
             is_verified = True
             verification_status = "PASS"
+            verification_state = "passed"
+        elif "COMPILER NOT INSTALLED" in str(syntax_status) or "Compiler Missing" in str(compiler_used):
+            is_verified = False
+            verification_status = "UNVERIFIED"
+            verification_state = "compiler_unavailable"
+        elif passed_checks and not blocking_errors:
+            is_verified = False
+            verification_status = "PARTIALLY_VERIFIED"
+            verification_state = "partially_verified"
         else:
             is_verified = False
             verification_status = "UNVERIFIED"
+            verification_state = "unverified"
 
         return {
             "passed_checks": passed_checks,
@@ -520,6 +531,7 @@ class RobloxDomainTestRunner:
             "untested_limitations": untested_limitations,
             "is_verified": is_verified,
             "verification_status": verification_status,
+            "verification_state": verification_state,
             "has_compiler_verified": has_compiler_verified,
             "syntax_status": syntax_status,
             "static_status": static_status,
@@ -681,12 +693,23 @@ class RobloxDomainTestRunner:
         if blocking_errors or syntax_status == "FAIL" or test_status == "FAIL":
             is_verified = False
             verification_status = "FAIL"
+            verification_state = "failed"
         elif syntax_status == "PASS" and has_compiler_verified and test_status != "FAIL":
             is_verified = True
             verification_status = "PASS"
+            verification_state = "passed"
+        elif not has_compiler_verified and syntax_status == "PASS":
+            is_verified = False
+            verification_status = "PARTIALLY_VERIFIED"
+            verification_state = "partially_verified"
+        elif "Compiler Missing" in str(compiler_used) or not has_compiler_verified:
+            is_verified = False
+            verification_status = "UNVERIFIED"
+            verification_state = "compiler_unavailable"
         else:
             is_verified = False
             verification_status = "UNVERIFIED"
+            verification_state = "unverified"
 
         return {
             "passed_checks": passed_checks,
@@ -694,6 +717,7 @@ class RobloxDomainTestRunner:
             "untested_limitations": untested_limitations,
             "is_verified": is_verified,
             "verification_status": verification_status,
+            "verification_state": verification_state,
             "has_compiler_verified": has_compiler_verified,
             "syntax_status": syntax_status,
             "static_status": static_status,
@@ -710,7 +734,7 @@ class RobloxDomainTestRunner:
     def test_generic_code(cls, code: str, language: str) -> Dict[str, Any]:
         """
         Handles unsupported languages (e.g. JS, TS, C++, Rust).
-        Never returns PASS; strictly marks as UNVERIFIED.
+        Never returns PASS; strictly marks as UNVERIFIED / not_tested.
         """
         lang_norm = (language or "unknown").strip().lower()
         return {
@@ -718,11 +742,12 @@ class RobloxDomainTestRunner:
             "failed_checks": [],
             "untested_limitations": [
                 f"Automated compiler and domain verification pipeline is not configured for '{lang_norm}'.",
-                "Bytecode compilation, type analysis, and runtime behavior remain UNVERIFIED."
+                "Bytecode compilation, type analysis, and runtime behavior remain NOT TESTED."
             ],
             "is_verified": False,
             "has_compiler_verified": False,
             "verification_status": "UNVERIFIED",
+            "verification_state": "not_tested",
             "syntax_status": f"UNVERIFIED (NO COMPILER FOR {lang_norm.upper()})",
             "static_status": "UNVERIFIED",
             "api_status": "NOT RUN",
@@ -1595,6 +1620,14 @@ class StrokeCodingLoop:
             badge = "FAILED (ROBLOX API OR TYPE ERRORS DETECTED)" if api_status == "FAIL" else "FAILED (SYNTAX OR RUNTIME ISSUES DETECTED)"
         elif verification_status == "PASS" and is_verified and has_compiler_verified:
             badge = f"VERIFIED ({iterations} PASS{'ES' if iterations > 1 else ''})"
+        elif verification_status == "COMPILER_UNAVAILABLE":
+            badge = "COMPILER UNAVAILABLE (STATIC AST PASSED, COMPILER MISSING)"
+        elif verification_status == "PARTIALLY_VERIFIED":
+            badge = "PARTIALLY VERIFIED (STATIC CHECKS PASSED, LIVE RUNTIME UNTESTED)"
+        elif verification_status == "NOT_TESTED":
+            badge = "NOT TESTED (UNSUPPORTED LANGUAGE OR PIPELINE NOT CONFIGURED)"
+        elif verification_status == "VERIFICATION_ERROR":
+            badge = "VERIFICATION ERROR (RUNNER ENCOUNTERED EXCEPTION)"
         elif verification_status == "UNVERIFIED" and len(errors) == 0 and api_status == "PASS" and static_status == "PASS":
             badge = "STATIC CHECKS PASSED (COMPILER UNVERIFIED)"
         elif verification_status == "UNVERIFIED":
@@ -1760,7 +1793,24 @@ class StrokeCodingLoop:
 
             blocking_errors = [c for c in combined_failed if c.get("type") == "error"]
             is_verified_all = all(r.get("is_verified", False) for r in b_reps)
-            verification_status = "PASS" if (is_verified_all and all_compiler_verified) else ("FAIL" if blocking_errors or _aggregate_status("syntax_status") == "FAIL" else "UNVERIFIED")
+            if blocking_errors or _aggregate_status("syntax_status") == "FAIL":
+                verification_status = "FAIL"
+                verification_state = "failed"
+            elif is_verified_all and all_compiler_verified:
+                verification_status = "PASS"
+                verification_state = "passed"
+            elif any(r.get("verification_state") == "compiler_unavailable" for r in b_reps):
+                verification_status = "UNVERIFIED"
+                verification_state = "compiler_unavailable"
+            elif any(r.get("verification_state") == "partially_verified" for r in b_reps) or combined_passed:
+                verification_status = "PARTIALLY_VERIFIED"
+                verification_state = "partially_verified"
+            elif all(r.get("verification_state") == "not_tested" for r in b_reps):
+                verification_status = "UNVERIFIED"
+                verification_state = "not_tested"
+            else:
+                verification_status = "UNVERIFIED"
+                verification_state = "unverified"
 
             report = {
                 "passed_checks": combined_passed,
@@ -1769,6 +1819,7 @@ class StrokeCodingLoop:
                 "is_verified": is_verified_all,
                 "has_compiler_verified": all_compiler_verified,
                 "verification_status": verification_status,
+                "verification_state": verification_state,
                 "iteration_count": iteration,
                 "syntax_status": _aggregate_status("syntax_status"),
                 "static_status": _aggregate_status("static_status"),
@@ -2079,7 +2130,24 @@ class StrokeCodingLoop:
 
             blocking_errors = [c for c in combined_failed if c.get("type") == "error"]
             is_verified_all = all(r.get("is_verified", False) for r in b_reps)
-            verification_status = "PASS" if (is_verified_all and all_compiler_verified) else ("FAIL" if blocking_errors or _agg_status("syntax_status") == "FAIL" else "UNVERIFIED")
+            if blocking_errors or _agg_status("syntax_status") == "FAIL":
+                verification_status = "FAIL"
+                verification_state = "failed"
+            elif is_verified_all and all_compiler_verified:
+                verification_status = "PASS"
+                verification_state = "passed"
+            elif any(r.get("verification_state") == "compiler_unavailable" for r in b_reps):
+                verification_status = "UNVERIFIED"
+                verification_state = "compiler_unavailable"
+            elif any(r.get("verification_state") == "partially_verified" for r in b_reps) or combined_passed:
+                verification_status = "PARTIALLY_VERIFIED"
+                verification_state = "partially_verified"
+            elif all(r.get("verification_state") == "not_tested" for r in b_reps):
+                verification_status = "UNVERIFIED"
+                verification_state = "not_tested"
+            else:
+                verification_status = "UNVERIFIED"
+                verification_state = "unverified"
 
             test_report = {
                 "passed_checks": combined_passed,
@@ -2088,6 +2156,7 @@ class StrokeCodingLoop:
                 "is_verified": is_verified_all,
                 "has_compiler_verified": all_compiler_verified,
                 "verification_status": verification_status,
+                "verification_state": verification_state,
                 "iteration_count": iteration,
                 "syntax_status": _agg_status("syntax_status"),
                 "static_status": _agg_status("static_status"),

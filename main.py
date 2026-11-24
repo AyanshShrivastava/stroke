@@ -2729,7 +2729,7 @@ async def get_ai_status(user: AuthenticatedUser = Depends(get_current_user)):
     GitHub, network, and filesystem via independent health probes.
     Guarantees consistent validated JSON schema and never returns null under any scenario.
     """
-    status_report = await ai_provider_service.probe_all_ai_health(ollama_host=OLLAMA_HOST)
+    status_report = await ai_provider_service.probe_all_ai_health(ollama_host=OLLAMA_HOST, user_id=user.uid)
     return status_report.to_api_dict()
 
 
@@ -2751,7 +2751,7 @@ async def get_registered_providers(user: AuthenticatedUser = Depends(get_current
     GET /ai/providers
     Returns documented AI providers and their capability profiles.
     """
-    health = await ai_provider_service.probe_all_ai_health(ollama_host=OLLAMA_HOST)
+    health = await ai_provider_service.probe_all_ai_health(ollama_host=OLLAMA_HOST, user_id=user.uid)
     return {
         "status": "success",
         "providers": {
@@ -4140,6 +4140,9 @@ async def chat_with_neural_ai_stream(payload: AiChatRequest, user: Authenticated
 
             yield f"data: {json.dumps({'type': 'done', 'finish_reason': finish_reason, 'provider': target_provider, 'model': target_model})}\n\n"
             yield "data: [DONE]\n\n"
+        except asyncio.CancelledError:
+            logger.info("AI chat stream gracefully closed by client disconnect.")
+            return
         except ai_provider_service.ProviderAuthenticationError as auth_err:
             yield f"data: {json.dumps({'type': 'error', 'error': f'Authentication failed: {str(auth_err)}', 'error_type': 'auth'})}\n\n"
             yield "data: [DONE]\n\n"
