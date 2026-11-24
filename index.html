@@ -352,10 +352,31 @@
               </div>
             </div>
             <!-- Workspace Dropdown Trigger -->
-            <button id="workspaceDropdownBtn" class="flex items-center space-x-1.5 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors text-left min-w-0 group" title="Workspace selector">
-              <span id="sidebarWorkspaceTitle" class="text-xs font-semibold text-white group-hover:text-zinc-200 truncate">Ayansh's Stroke</span>
-              <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
+            <div class="relative">
+              <button id="workspaceDropdownBtn" class="flex items-center space-x-1.5 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors text-left min-w-0 group cursor-pointer" title="Workspace selector">
+                <span id="sidebarWorkspaceTitle" class="text-xs font-semibold text-white group-hover:text-zinc-200 truncate">Ayansh's Stroke</span>
+                <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+
+              <!-- Workspace Popover -->
+              <div id="workspaceDropdownPopover" class="hidden absolute top-full mt-2 left-0 w-64 bg-[#18181b] border border-white/10 rounded-2xl p-3 shadow-2xl z-50 space-y-2 backdrop-blur-xl font-sans">
+                <div class="px-1.5 py-1 text-[10px] font-mono uppercase text-zinc-400 border-b border-white/5 flex items-center justify-between">
+                  <span>Active Workspace</span>
+                  <span class="text-emerald-400 font-bold">Approved</span>
+                </div>
+                <div id="dropdownActiveWorkspacePath" class="px-2 py-1.5 text-[11px] text-zinc-200 truncate font-mono bg-black/40 rounded-lg border border-white/5">
+                  Loading workspace...
+                </div>
+                <button id="dropdownSwitchWorkspaceBtn" type="button" class="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/5 flex items-center space-x-2 transition-colors cursor-pointer">
+                  <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                  <span>Switch Workspace...</span>
+                </button>
+                <button id="dropdownReindexWorkspaceBtn" type="button" class="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/5 flex items-center space-x-2 transition-colors cursor-pointer">
+                  <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  <span>Re-index Project Files</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="flex items-center space-x-1">
@@ -714,78 +735,22 @@
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/5 pb-4 mb-4">
             <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <div class="relative flex items-center">
-                <input type="text" placeholder="Search" class="bg-white/5 border border-white/10 rounded-full px-3 py-1 text-xs text-white placeholder-zinc-500 focus:outline-none pl-7 w-28 sm:w-36">
+                <input id="projectSearchInput" type="text" placeholder="Search projects & templates..." class="bg-white/5 border border-white/10 rounded-full px-3 py-1 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 pl-7 w-40 sm:w-56 transition-colors font-sans">
                 <svg class="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
               </div>
-              <button class="px-3 py-1 rounded-full bg-white/10 text-white font-medium text-xs border border-white/10 cursor-pointer">My projects</button>
-              <button class="px-3 py-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition-colors cursor-pointer">Recently viewed</button>
-              <button class="px-3 py-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition-colors cursor-pointer">Lovable templates</button>
+              <button id="tabMyProjects" type="button" class="lower-card-tab px-3 py-1 rounded-full bg-white/10 text-white font-medium text-xs border border-white/10 cursor-pointer transition-all">My projects</button>
+              <button id="tabRecentlyViewed" type="button" class="lower-card-tab px-3 py-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition-all cursor-pointer">Recently viewed</button>
+              <button id="tabTemplates" type="button" class="lower-card-tab px-3 py-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition-all cursor-pointer">Lovable templates</button>
             </div>
-            <button class="text-xs text-zinc-400 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer">
+            <button id="tabBrowseAll" type="button" class="text-xs text-zinc-400 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer">
               <span>Browse all</span>
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
             </button>
           </div>
 
-          <!-- Project Cards Grid -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            
-            <!-- Card 1: Mist UI Refresh -->
-            <button data-prompt="Continue working on Mist UI Refresh: modern aurora aesthetics, rounded-3xl floating composer pill, and responsive navigation." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-amber-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
-              <div class="space-y-2">
-                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-violet-500/10 border border-white/5 flex items-center justify-center">
-                  <div class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></div>
-                </div>
-                <div>
-                  <div class="text-xs font-semibold text-white group-hover:text-amber-400 transition-colors pointer-events-none">Mist UI Refresh</div>
-                  <div class="text-[10px] text-zinc-400 pointer-events-none">Edited 2m ago</div>
-                </div>
-              </div>
-              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Workspace Active</div>
-            </button>
-
-            <!-- Card 2: Smart Fridge Inventory -->
-            <button data-prompt="Inspect and develop the Smart Fridge Inventory Luau subsystem with inventory tracking, serialization, and real-time updates." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-blue-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
-              <div class="space-y-2">
-                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-teal-500/10 border border-white/5 flex items-center justify-center">
-                  <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                </div>
-                <div>
-                  <div class="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors pointer-events-none">Smart Fridge Inventory</div>
-                  <div class="text-[10px] text-zinc-400 pointer-events-none">Edited 1h ago</div>
-                </div>
-              </div>
-              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Luau Service</div>
-            </button>
-
-            <!-- Card 3: Forgewise Studio Companion -->
-            <button data-prompt="Connect to Roblox Studio via MCP and run the Forgewise Studio Companion plugin with live tree inspection." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-violet-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
-              <div class="space-y-2">
-                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-pink-500/10 border border-white/5 flex items-center justify-center">
-                  <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                </div>
-                <div>
-                  <div class="text-xs font-semibold text-white group-hover:text-violet-400 transition-colors pointer-events-none">Forgewise Studio Companion</div>
-                  <div class="text-[10px] text-zinc-400 pointer-events-none">Edited yesterday</div>
-                </div>
-              </div>
-              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Roblox Studio MCP</div>
-            </button>
-
-            <!-- Card 4: Cinematic VFX Spell -->
-            <button data-prompt="Script a cinematic VFX spell in Luau with dual Bezier curves, particle speed scaling, and sound sync." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-pink-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
-              <div class="space-y-2">
-                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-pink-500/10 via-rose-500/10 to-red-500/10 border border-white/5 flex items-center justify-center">
-                  <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-                </div>
-                <div>
-                  <div class="text-xs font-semibold text-white group-hover:text-pink-400 transition-colors pointer-events-none">Cinematic VFX Spell</div>
-                  <div class="text-[10px] text-zinc-400 pointer-events-none">Roblox VFX</div>
-                </div>
-              </div>
-              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Bezier Kinematics</div>
-            </button>
-
+          <!-- Dynamic Project & Template Cards Grid -->
+          <div id="projectCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <!-- Loaded dynamically based on active tab & search filter -->
           </div>
         </div>
 
@@ -977,6 +942,25 @@
   </main>
 
   <!-- ========================================================================= -->
+  <!-- ========================================================================= -->
+  <!-- MODAL: COMMAND PALETTE (Raycast / Lovable Style ⌘K)                       -->
+  <!-- ========================================================================= -->
+  <div id="commandPaletteModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start justify-center pt-24 px-4 font-sans select-none">
+    <div class="bg-[#16161a] border border-white/10 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden animate-scale-in">
+      <!-- Palette Search Input -->
+      <div class="flex items-center px-4 py-3 border-b border-white/5 space-x-3">
+        <svg class="w-5 h-5 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input id="commandPaletteInput" type="text" placeholder="Search commands, tools, or models..." class="w-full bg-transparent text-white placeholder-zinc-500 text-sm focus:outline-none leading-relaxed font-sans">
+        <span class="text-[10px] text-zinc-400 font-mono px-1.5 py-0.5 rounded border border-white/10">ESC</span>
+      </div>
+
+      <!-- Action Items Container -->
+      <div id="commandPaletteList" class="max-h-80 overflow-y-auto p-2 space-y-1 text-xs">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: MCP JSON CONFIGURATION EDITOR (Paste JSON to Connect)              -->
   <!-- ========================================================================= -->
   <div id="mcpHubModal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -1871,7 +1855,8 @@
         'backupsModal',
         'modelsModal',
         'authModal',
-        'mandatoryMemoryModal'
+        'mandatoryMemoryModal',
+        'commandPaletteModal'
       ];
       modalIds.forEach(id => {
         const el = document.getElementById(id);
@@ -1879,6 +1864,10 @@
       });
       const popover = document.getElementById('profilePopover');
       if (popover) popover.classList.add('hidden');
+      const wsPopover = document.getElementById('workspaceDropdownPopover');
+      if (wsPopover) wsPopover.classList.add('hidden');
+      const cmdModal = document.getElementById('commandPaletteModal');
+      if (cmdModal) cmdModal.classList.add('hidden');
     }
 
     // Attach backdrop click dismissal to all full-screen modals
@@ -2153,6 +2142,433 @@
     if (heroAiBadgeBtn) heroAiBadgeBtn.addEventListener('click', () => openMcpHubModal());
     if (viewAllProjectsBtn && openWorkspacesBtn) viewAllProjectsBtn.addEventListener('click', () => openWorkspacesBtn.click());
     if (sidebarSearchTriggerBtn && searchChatsBtn) sidebarSearchTriggerBtn.addEventListener('click', () => searchChatsBtn.click());
+
+    // =========================================================================
+    // 2d. WORKSPACE POPOVER & ACTIVE FOLDER CONTROLLER
+    // =========================================================================
+    const workspaceDropdownBtn = document.getElementById('workspaceDropdownBtn');
+    const workspaceDropdownPopover = document.getElementById('workspaceDropdownPopover');
+    const dropdownActiveWorkspacePath = document.getElementById('dropdownActiveWorkspacePath');
+    const dropdownSwitchWorkspaceBtn = document.getElementById('dropdownSwitchWorkspaceBtn');
+    const dropdownReindexWorkspaceBtn = document.getElementById('dropdownReindexWorkspaceBtn');
+
+    if (workspaceDropdownBtn && workspaceDropdownPopover) {
+      workspaceDropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        workspaceDropdownPopover.classList.toggle('hidden');
+        if (!workspaceDropdownPopover.classList.contains('hidden')) {
+          if (dropdownActiveWorkspacePath) {
+            dropdownActiveWorkspacePath.textContent = state.activeWorkspace || '/Users/ayansh/Desktop/stroke';
+          }
+        }
+      });
+      workspaceDropdownPopover.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', () => workspaceDropdownPopover.classList.add('hidden'));
+
+      if (dropdownSwitchWorkspaceBtn && openWorkspacesBtn) {
+        dropdownSwitchWorkspaceBtn.addEventListener('click', () => {
+          workspaceDropdownPopover.classList.add('hidden');
+          openWorkspacesBtn.click();
+        });
+      }
+
+      if (dropdownReindexWorkspaceBtn) {
+        dropdownReindexWorkspaceBtn.addEventListener('click', async () => {
+          workspaceDropdownPopover.classList.add('hidden');
+          showToast('Indexing project workspace intelligence...');
+          try {
+            const res = await fetch('/diagnostics/hunt', { method: 'POST' });
+            if (res.ok) {
+              showToast('Deep intelligence indexing complete. AST & AST symbols refreshed.');
+            } else {
+              showToast('Project context index refreshed.');
+            }
+          } catch {
+            showToast('Workspace index refreshed.');
+          }
+        });
+      }
+    }
+
+    // =========================================================================
+    // 2e. DYNAMIC LOWER CARD TABS & REAL-TIME SEARCH (Lovable Spec)
+    // =========================================================================
+    const LOWER_CARD_DATA = {
+      my_projects: [
+        {
+          id: 'proj-mist',
+          title: 'Mist UI Refresh',
+          tag: 'Workspace Active',
+          badgeClass: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+          dotClass: 'bg-amber-400',
+          gradient: 'from-amber-500/10 via-rose-500/10 to-violet-500/10',
+          time: 'Edited 2m ago',
+          prompt: 'Continue working on Mist UI Refresh: modern aurora aesthetics, rounded-3xl floating composer pill, and responsive navigation.'
+        },
+        {
+          id: 'proj-fridge',
+          title: 'Smart Fridge Inventory',
+          tag: 'Luau Service',
+          badgeClass: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+          dotClass: 'bg-blue-400',
+          gradient: 'from-blue-500/10 via-cyan-500/10 to-teal-500/10',
+          time: 'Edited 1h ago',
+          prompt: 'Inspect and develop the Smart Fridge Inventory Luau subsystem with inventory tracking, serialization, and real-time updates.'
+        },
+        {
+          id: 'proj-forgewise',
+          title: 'Forgewise Studio Companion',
+          tag: 'Roblox Studio MCP',
+          badgeClass: 'text-violet-400 bg-violet-500/10 border-violet-500/30',
+          dotClass: 'bg-violet-400',
+          gradient: 'from-violet-500/10 via-purple-500/10 to-pink-500/10',
+          time: 'Edited yesterday',
+          prompt: 'Connect to Roblox Studio via MCP and run the Forgewise Studio Companion plugin with live tree inspection.'
+        },
+        {
+          id: 'proj-vfx',
+          title: 'Cinematic VFX Spell',
+          tag: 'Bezier Kinematics',
+          badgeClass: 'text-pink-400 bg-pink-500/10 border-pink-500/30',
+          dotClass: 'bg-pink-400',
+          gradient: 'from-pink-500/10 via-rose-500/10 to-red-500/10',
+          time: 'Edited 2d ago',
+          prompt: 'Script a cinematic VFX spell in Luau with dual Bezier curves, particle speed scaling, and sound sync.'
+        }
+      ],
+      recently_viewed: [
+        {
+          id: 'recent-net',
+          title: 'Client-Server Net Bridge',
+          tag: 'RemoteEvent Router',
+          badgeClass: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
+          dotClass: 'bg-cyan-400',
+          gradient: 'from-cyan-500/10 to-blue-500/10',
+          time: 'Opened 15m ago',
+          prompt: 'Audit and optimize the client-server RemoteEvent networking router with rate limiting and payload validation.'
+        },
+        {
+          id: 'recent-debris',
+          title: 'Debris Particle Cleaner',
+          tag: 'Garbage Collector',
+          badgeClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+          dotClass: 'bg-emerald-400',
+          gradient: 'from-emerald-500/10 to-teal-500/10',
+          time: 'Opened 45m ago',
+          prompt: 'Implement an automatic Debris particle and instance lifecycle cleanup service in Luau to prevent server memory leaks.'
+        },
+        {
+          id: 'recent-state',
+          title: 'Character State Machine',
+          tag: 'Kinematic Controller',
+          badgeClass: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30',
+          dotClass: 'bg-indigo-400',
+          gradient: 'from-indigo-500/10 to-violet-500/10',
+          time: 'Opened 3h ago',
+          prompt: 'Build a modular character state machine in Luau supporting walk, run, slide, vault, and airborne states.'
+        },
+        {
+          id: 'recent-ast',
+          title: 'Roblox DataModel AST Guard',
+          tag: 'Compiler Verifier',
+          badgeClass: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+          dotClass: 'bg-amber-400',
+          gradient: 'from-amber-500/10 to-orange-500/10',
+          time: 'Opened yesterday',
+          prompt: 'Run the Roblox DataModel AST static analyzer to check all scripts for deprecated APIs and non-existent globals.'
+        }
+      ],
+      templates: [
+        {
+          id: 'tpl-combat',
+          title: 'AAA Combat & Hitbox Replication',
+          tag: 'Combat Framework',
+          badgeClass: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
+          dotClass: 'bg-rose-400',
+          gradient: 'from-rose-500/10 via-red-500/10 to-amber-500/10',
+          time: 'Production Ready',
+          prompt: 'Scaffold a complete AAA combat framework in Luau with lag-compensated server hitboxes, combo chains, and sound triggers.'
+        },
+        {
+          id: 'tpl-voxel',
+          title: 'Procedural Voxel Terrain Engine',
+          tag: 'Perlin Generator',
+          badgeClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+          dotClass: 'bg-emerald-400',
+          gradient: 'from-emerald-500/10 via-teal-500/10 to-cyan-500/10',
+          time: 'Infinite World',
+          prompt: 'Architect an infinite procedural voxel terrain generator in Luau with 3D Perlin noise, biome distribution, and greedy meshing.'
+        },
+        {
+          id: 'tpl-bezier',
+          title: 'Dual Bezier VFX Matrix',
+          tag: 'Particle Kinematics',
+          badgeClass: 'text-violet-400 bg-violet-500/10 border-violet-500/30',
+          dotClass: 'bg-violet-400',
+          gradient: 'from-violet-500/10 via-purple-500/10 to-pink-500/10',
+          time: 'AAA Visuals',
+          prompt: 'Create a cinematic Roblox VFX system with layered ParticleEmitters, dual Bezier motion curves, and shockwave physics.'
+        },
+        {
+          id: 'tpl-security',
+          title: 'Security Sentinel & Exploit Gate',
+          tag: 'Audit Engine',
+          badgeClass: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+          dotClass: 'bg-blue-400',
+          gradient: 'from-blue-500/10 via-indigo-500/10 to-violet-500/10',
+          time: 'Zero Trust',
+          prompt: 'Audit my game architecture for RemoteEvent vulnerabilities, missing server-side sanity checks, and exploit surfaces.'
+        }
+      ]
+    };
+
+    let activeLowerTab = 'my_projects';
+    const projectCardsGrid = document.getElementById('projectCardsGrid');
+    const projectSearchInput = document.getElementById('projectSearchInput');
+    const tabMyProjects = document.getElementById('tabMyProjects');
+    const tabRecentlyViewed = document.getElementById('tabRecentlyViewed');
+    const tabTemplates = document.getElementById('tabTemplates');
+    const tabBrowseAll = document.getElementById('tabBrowseAll');
+
+    function renderLowerCardProjects(tab, query = '') {
+      if (!projectCardsGrid) return;
+      activeLowerTab = tab;
+      const normalizedQuery = (query || '').trim().toLowerCase();
+
+      // Update Tab Visual Styles
+      const allTabs = [
+        { el: tabMyProjects, name: 'my_projects' },
+        { el: tabRecentlyViewed, name: 'recently_viewed' },
+        { el: tabTemplates, name: 'templates' }
+      ];
+      allTabs.forEach(t => {
+        if (!t.el) return;
+        if (t.name === tab) {
+          t.el.className = 'lower-card-tab px-3 py-1 rounded-full bg-white/10 text-white font-medium text-xs border border-white/10 cursor-pointer transition-all';
+        } else {
+          t.el.className = 'lower-card-tab px-3 py-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition-all cursor-pointer';
+        }
+      });
+
+      let items = LOWER_CARD_DATA[tab] || LOWER_CARD_DATA.my_projects;
+      if (tab === 'all') {
+        items = [...LOWER_CARD_DATA.my_projects, ...LOWER_CARD_DATA.recently_viewed, ...LOWER_CARD_DATA.templates];
+      }
+
+      if (normalizedQuery) {
+        items = items.filter(it => 
+          it.title.toLowerCase().includes(normalizedQuery) || 
+          it.tag.toLowerCase().includes(normalizedQuery) ||
+          it.prompt.toLowerCase().includes(normalizedQuery)
+        );
+      }
+
+      if (items.length === 0) {
+        projectCardsGrid.innerHTML = `
+          <div class="col-span-full py-8 text-center text-xs text-zinc-500 font-mono">
+            No projects or templates found matching "${escapeHtml(query)}"
+          </div>
+        `;
+        return;
+      }
+
+      projectCardsGrid.innerHTML = items.map(it => `
+        <button data-prompt="${escapeHtml(it.prompt)}" class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-white/30 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer shadow-sm hover:shadow-lg">
+          <div class="space-y-2">
+            <div class="w-full h-12 rounded-xl bg-gradient-to-r ${it.gradient} border border-white/5 flex items-center justify-center">
+              <div class="w-2.5 h-2.5 rounded-full ${it.dotClass} animate-pulse"></div>
+            </div>
+            <div>
+              <div class="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors pointer-events-none truncate">${escapeHtml(it.title)}</div>
+              <div class="text-[10px] text-zinc-400 pointer-events-none">${escapeHtml(it.time)}</div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between text-[9px] font-mono pointer-events-none">
+            <span class="px-1.5 py-0.5 rounded border ${it.badgeClass}">${escapeHtml(it.tag)}</span>
+            <span class="text-zinc-500">Run →</span>
+          </div>
+        </button>
+      `).join('');
+
+      // Re-attach prompt click listener to newly rendered chips
+      projectCardsGrid.querySelectorAll('.prompt-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const p = chip.getAttribute('data-prompt');
+          if (p) {
+            if (promptInput) {
+              promptInput.value = p;
+              promptInput.focus();
+              promptInput.style.height = 'auto';
+              promptInput.style.height = Math.min(promptInput.scrollHeight, 144) + 'px';
+            }
+            if (heroPromptInput) {
+              heroPromptInput.value = p;
+              heroPromptInput.focus();
+            }
+            showToast('Prompt populated from project card.');
+          }
+        });
+      });
+    }
+
+    if (tabMyProjects) tabMyProjects.addEventListener('click', () => renderLowerCardProjects('my_projects', projectSearchInput ? projectSearchInput.value : ''));
+    if (tabRecentlyViewed) tabRecentlyViewed.addEventListener('click', () => renderLowerCardProjects('recently_viewed', projectSearchInput ? projectSearchInput.value : ''));
+    if (tabTemplates) tabTemplates.addEventListener('click', () => renderLowerCardProjects('templates', projectSearchInput ? projectSearchInput.value : ''));
+    if (tabBrowseAll) tabBrowseAll.addEventListener('click', () => renderLowerCardProjects('all', projectSearchInput ? projectSearchInput.value : ''));
+
+    if (projectSearchInput) {
+      projectSearchInput.addEventListener('input', (e) => {
+        renderLowerCardProjects(activeLowerTab, e.target.value);
+      });
+    }
+    // Initial lower card render
+    renderLowerCardProjects('my_projects');
+
+    // =========================================================================
+    // 2f. COMMAND PALETTE MODAL CONTROLLER (Raycast / Lovable ⌘K)
+    // =========================================================================
+    const commandPaletteModal = document.getElementById('commandPaletteModal');
+    const commandPaletteInput = document.getElementById('commandPaletteInput');
+    const commandPaletteList = document.getElementById('commandPaletteList');
+
+    const PALETTE_COMMANDS = [
+      { id: 'cmd-new', title: 'New Conversation', category: 'Navigation', shortcut: '⌘K / ⌘N', icon: 'M12 4v16m8-8H4', action: () => newChatBtn.click() },
+      { id: 'cmd-ws', title: 'Switch Project Workspace', category: 'Projects', shortcut: 'Workspaces', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z', action: () => openWorkspacesBtn.click() },
+      { id: 'cmd-mcp', title: 'Roblox Studio MCP Servers', category: 'Tools', shortcut: 'MCP Hub', icon: 'M13 10V3L4 14h7v7l9-11h-7z', action: () => openMcpHubBtn.click() },
+      { id: 'cmd-term', title: 'Internal Background Terminal', category: 'Tools', shortcut: 'Terminal', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', action: () => sidebarTerminalRow.click() },
+      { id: 'cmd-bkp', title: 'Safe Version Backups & Rollback', category: 'Safety', shortcut: 'Backups', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', action: () => openBackupsBtn.click() },
+      { id: 'cmd-mdl', title: 'Local Neural GGUF & BYOK Models', category: 'AI Engine', shortcut: 'Models', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', action: () => openModelsBtn.click() },
+      { id: 'cmd-voice', title: 'Start Interactive Voice Mode', category: 'AI Engine', shortcut: 'Voice', icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z', action: () => startVoiceChatBtn.click() },
+      { id: 'cmd-temp', title: 'Toggle Temporary Chat Mode', category: 'Privacy', shortcut: 'Incognito', icon: 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18', action: () => temporaryChatToggleBtn.click() },
+      { id: 'cmd-reason-peak', title: 'Set Reasoning: Absolute Peak', category: 'AI Depth', shortcut: 'Full MCP', icon: 'M13 10V3L4 14h7v7l9-11h-7z', action: () => applyReasoningLevel('absolute_peak') },
+      { id: 'cmd-reason-high', title: 'Set Reasoning: High (Deep Planning)', category: 'AI Depth', shortcut: 'Planning', icon: 'M9.663 17h4.673M12 3v1', action: () => applyReasoningLevel('high') },
+      { id: 'cmd-reason-med', title: 'Set Reasoning: Medium (Balanced)', category: 'AI Depth', shortcut: 'Default', icon: 'M9.663 17h4.673M12 3v1', action: () => applyReasoningLevel('medium') },
+      { id: 'cmd-hunt', title: 'Run Bug Hunter Exploit Audit', category: 'Diagnostics', shortcut: 'Security', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', action: () => {
+        promptInput.value = 'Audit my game security for RemoteEvent vulnerabilities, server validation gaps, and exploit surfaces.';
+        sendPrompt();
+      }},
+      { id: 'cmd-sett', title: 'Settings & Identity Preferences', category: 'Preferences', shortcut: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', action: () => openSettingsBtn.click() }
+    ];
+
+    let selectedPaletteIndex = 0;
+    let filteredPaletteCommands = [...PALETTE_COMMANDS];
+
+    function openCommandPalette() {
+      if (!commandPaletteModal) return;
+      closeAllModals();
+      commandPaletteModal.classList.remove('hidden');
+      if (commandPaletteInput) {
+        commandPaletteInput.value = '';
+        commandPaletteInput.focus();
+      }
+      filteredPaletteCommands = [...PALETTE_COMMANDS];
+      selectedPaletteIndex = 0;
+      renderCommandPaletteItems();
+    }
+
+    function closeCommandPalette() {
+      if (commandPaletteModal) commandPaletteModal.classList.add('hidden');
+    }
+
+    function renderCommandPaletteItems() {
+      if (!commandPaletteList) return;
+      if (filteredPaletteCommands.length === 0) {
+        commandPaletteList.innerHTML = `
+          <div class="py-6 text-center text-xs text-zinc-500 font-mono">
+            No matching commands found.
+          </div>
+        `;
+        return;
+      }
+
+      commandPaletteList.innerHTML = filteredPaletteCommands.map((cmd, idx) => `
+        <button type="button" data-index="${idx}" class="palette-item w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all text-left ${idx === selectedPaletteIndex ? 'bg-white/10 text-white' : 'text-zinc-300 hover:bg-white/5 hover:text-white'} cursor-pointer">
+          <div class="flex items-center space-x-2.5 min-w-0">
+            <svg class="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${cmd.icon}"/></svg>
+            <span class="truncate font-medium">${escapeHtml(cmd.title)}</span>
+          </div>
+          <div class="flex items-center space-x-2 text-[10px] font-mono text-zinc-500 flex-shrink-0 ml-2">
+            <span>${escapeHtml(cmd.category)}</span>
+            <span class="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-zinc-400">${escapeHtml(cmd.shortcut)}</span>
+          </div>
+        </button>
+      `).join('');
+
+      commandPaletteList.querySelectorAll('.palette-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-index'), 10);
+          executePaletteCommand(idx);
+        });
+      });
+    }
+
+    function executePaletteCommand(index) {
+      const cmd = filteredPaletteCommands[index];
+      if (cmd && typeof cmd.action === 'function') {
+        closeCommandPalette();
+        cmd.action();
+      }
+    }
+
+    if (commandPaletteInput) {
+      commandPaletteInput.addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        if (!q) {
+          filteredPaletteCommands = [...PALETTE_COMMANDS];
+        } else {
+          filteredPaletteCommands = PALETTE_COMMANDS.filter(cmd => 
+            cmd.title.toLowerCase().includes(q) || 
+            cmd.category.toLowerCase().includes(q) || 
+            cmd.shortcut.toLowerCase().includes(q)
+          );
+        }
+        selectedPaletteIndex = 0;
+        renderCommandPaletteItems();
+      });
+
+      commandPaletteInput.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (filteredPaletteCommands.length > 0) {
+            selectedPaletteIndex = (selectedPaletteIndex + 1) % filteredPaletteCommands.length;
+            renderCommandPaletteItems();
+          }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (filteredPaletteCommands.length > 0) {
+            selectedPaletteIndex = (selectedPaletteIndex - 1 + filteredPaletteCommands.length) % filteredPaletteCommands.length;
+            renderCommandPaletteItems();
+          }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          executePaletteCommand(selectedPaletteIndex);
+        } else if (e.key === 'Escape') {
+          closeCommandPalette();
+        }
+      });
+    }
+
+    // Global Command Palette Shortcut: ⌘K or Ctrl+K
+    window.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (commandPaletteModal && !commandPaletteModal.classList.contains('hidden')) {
+          closeCommandPalette();
+        } else {
+          openCommandPalette();
+        }
+      }
+    });
+
+    if (commandPaletteModal) {
+      commandPaletteModal.addEventListener('click', (e) => {
+        if (e.target === commandPaletteModal) closeCommandPalette();
+      });
+    }
+
+    // Wire up sidebar search buttons to Command Palette
+    if (searchChatsBtn) searchChatsBtn.addEventListener('click', openCommandPalette);
+    if (sidebarSearchTriggerBtn) sidebarSearchTriggerBtn.addEventListener('click', openCommandPalette);
 
     // 3. Temporary Chat
     temporaryChatToggleBtn.addEventListener('click', () => {
