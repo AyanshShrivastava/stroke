@@ -728,20 +728,18 @@
                 </button>
 
                 <!-- Inline Creativity Slider in menu -->
-                <div class="pt-2 mt-1 border-t border-brand-border/60 px-2 space-y-1.5">
+                <div class="pt-2 mt-1 border-t border-brand-border/60 px-2 space-y-2">
                   <div class="flex items-center justify-between text-xs">
-                    <span class="text-[10px] font-mono uppercase tracking-wider text-brand-muted font-semibold">Creativity</span>
-                    <span id="menuCreativityValDisplay" class="font-mono text-brand-accent font-bold text-[11px]">0.35</span>
+                    <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-300 font-semibold">Creativity</span>
+                    <span id="menuCreativityValDisplay" class="font-mono text-blue-400 font-bold text-[11px] bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">0.35</span>
                   </div>
-                  <input id="menuCreativitySlider" type="range" min="0.0" max="1.0" step="0.05" value="0.35" class="w-full accent-emerald-400 bg-brand-surface cursor-pointer h-1.5 rounded">
-                  <div class="flex justify-between text-[9px] text-brand-muted font-mono">
-                    <span>Precise (0.0)</span>
-                    <span class="text-brand-accent">Default (0.35)</span>
-                    <span>Inventive (1.0)</span>
+                  <input id="menuCreativitySlider" type="range" min="0.0" max="1.0" step="0.05" value="0.35" class="w-full accent-blue-500 bg-zinc-800 cursor-pointer h-2 rounded-lg appearance-none">
+                  <div class="grid grid-cols-4 gap-1 text-[9px] font-mono">
+                    <button type="button" class="creativity-preset-btn px-1 py-0.5 rounded text-center border border-white/5 bg-white/[0.03] text-zinc-400 hover:text-blue-300 cursor-pointer" data-val="0.00">0.0</button>
+                    <button type="button" class="creativity-preset-btn px-1 py-0.5 rounded text-center border border-white/5 bg-white/[0.03] text-zinc-400 hover:text-blue-300 cursor-pointer" data-val="0.35">0.35</button>
+                    <button type="button" class="creativity-preset-btn px-1 py-0.5 rounded text-center border border-white/5 bg-white/[0.03] text-zinc-400 hover:text-blue-300 cursor-pointer" data-val="0.70">0.70</button>
+                    <button type="button" class="creativity-preset-btn px-1 py-0.5 rounded text-center border border-white/5 bg-white/[0.03] text-zinc-400 hover:text-blue-300 cursor-pointer" data-val="1.00">1.0</button>
                   </div>
-                  <p class="text-[9px] text-brand-muted leading-tight">
-                    Controls model randomness: lower (0.1–0.35) gives strict bug-free code; higher gives novel ideas & artistic VFX.
-                  </p>
                 </div>
               </div>
             </div>
@@ -756,29 +754,41 @@
               </button>
 
               <!-- Creativity Popover Menu -->
-              <div id="creativityMenu" class="hidden absolute bottom-full mb-2 right-0 w-72 bg-brand-card border border-brand-border rounded-xl p-3 shadow-2xl z-50 space-y-2.5 font-sans">
-                <div class="flex items-center justify-between text-xs border-b border-brand-border/50 pb-1.5">
-                  <span class="font-mono text-[10px] uppercase tracking-wider text-brand-muted font-semibold">Model Creativity</span>
-                  <span id="creativityValDisplay" class="font-mono text-brand-accent font-bold text-xs">0.35</span>
+              <div id="creativityMenu" class="hidden absolute bottom-full mb-2 right-0 w-80 bg-brand-card border border-brand-border rounded-2xl p-4 shadow-2xl z-50 space-y-3 font-sans backdrop-blur-xl">
+                <div class="flex items-center justify-between border-b border-brand-border/60 pb-2">
+                  <div class="flex items-center space-x-1.5">
+                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                    <span class="font-mono text-[11px] uppercase tracking-wider text-white font-semibold">Model Creativity</span>
+                  </div>
+                  <span id="creativityValDisplay" class="font-mono text-blue-400 font-bold text-xs bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">0.35</span>
                 </div>
-                <div class="space-y-1">
-                  <input id="creativitySlider" type="range" min="0.0" max="1.0" step="0.05" value="0.35" class="w-full accent-emerald-400 bg-brand-surface cursor-pointer">
-                  <div class="flex justify-between text-[9px] text-brand-muted font-mono">
-                    <span>Deterministic (0.0)</span>
-                    <span class="text-brand-accent font-bold">Default (0.35)</span>
-                    <span>Inventive (1.0)</span>
+
+                <div class="space-y-2">
+                  <!-- Custom Styled Range Slider -->
+                  <div class="relative flex items-center py-1">
+                    <input id="creativitySlider" type="range" min="0.0" max="1.0" step="0.05" value="0.35" class="w-full h-2 rounded-lg appearance-none bg-zinc-800 accent-blue-500 cursor-pointer focus:outline-none">
+                  </div>
+
+                  <!-- Clickable Quick Preset Pills -->
+                  <div class="grid grid-cols-4 gap-1.5 pt-1">
+                    <button type="button" class="creativity-preset-btn px-1.5 py-1 rounded-md text-[10px] font-mono border border-white/5 bg-white/[0.03] hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 text-zinc-400 transition-all text-center cursor-pointer" data-val="0.00">
+                      0.0 Strict
+                    </button>
+                    <button type="button" class="creativity-preset-btn px-1.5 py-1 rounded-md text-[10px] font-mono border border-white/5 bg-white/[0.03] hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 text-zinc-400 transition-all text-center cursor-pointer" data-val="0.35">
+                      0.35 Default
+                    </button>
+                    <button type="button" class="creativity-preset-btn px-1.5 py-1 rounded-md text-[10px] font-mono border border-white/5 bg-white/[0.03] hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 text-zinc-400 transition-all text-center cursor-pointer" data-val="0.70">
+                      0.70 Balanced
+                    </button>
+                    <button type="button" class="creativity-preset-btn px-1.5 py-1 rounded-md text-[10px] font-mono border border-white/5 bg-white/[0.03] hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-300 text-zinc-400 transition-all text-center cursor-pointer" data-val="1.00">
+                      1.00 Artistic
+                    </button>
                   </div>
                 </div>
-                <div class="p-2.5 rounded-lg bg-black/40 border border-brand-border/40 text-[10px] text-brand-muted leading-relaxed">
-                  <strong class="text-white">What does Creativity mean?</strong>
-                  <p class="mt-0.5 text-brand-muted text-[10px]">
-                    Creativity configures the temperature and entropy of the neural model:
-                  </p>
-                  <ul class="mt-1 list-disc list-inside space-y-1 text-[9px]">
-                    <li><span class="text-emerald-400 font-semibold">0.1 - 0.35 (Recommended):</span> Produces mathematically exact, bug-free, compiler-clean Luau and Python code with minimal hallucination.</li>
-                    <li><span class="text-cyan-400 font-semibold">0.4 - 0.7:</span> Balanced problem-solving for modular game systems, UI layouts, and logic.</li>
-                    <li><span class="text-purple-400 font-semibold">0.75 - 1.0:</span> Maximum novelty for cinematic particle aesthetics, environmental world-building, and artistic flair.</li>
-                  </ul>
+
+                <div id="creativityDescBox" class="p-2.5 rounded-xl bg-black/40 border border-brand-border/40 text-[10px] text-zinc-300 leading-relaxed font-sans">
+                  <span id="creativityDescTitle" class="font-semibold text-white">Default (0.35):</span>
+                  <span id="creativityDescText" class="text-zinc-400"> Mathematically exact, compiler-clean Luau code with minimal hallucination.</span>
                 </div>
               </div>
             </div>
@@ -1577,8 +1587,16 @@
       thinkMode: (localStorage.getItem('stroke_reasoning_level') === 'high' || localStorage.getItem('stroke_reasoning_level') === 'maximum' || localStorage.getItem('stroke_reasoning_level') === 'absolute_peak'),
       activeSessionId: 'session-' + Date.now(),
       selectedModel: 'llama3.2',
-      creativity: parseFloat(localStorage.getItem('stroke_creativity') || '0.35'),
-      temperature: parseFloat(localStorage.getItem('stroke_creativity') || '0.35'),
+      creativity: (() => {
+        const val = localStorage.getItem('stroke_creativity');
+        const parsed = parseFloat(val);
+        return (!isNaN(parsed) && parsed >= 0.0 && parsed <= 1.0) ? parsed : 0.35;
+      })(),
+      temperature: (() => {
+        const val = localStorage.getItem('stroke_creativity');
+        const parsed = parseFloat(val);
+        return (!isNaN(parsed) && parsed >= 0.0 && parsed <= 1.0) ? parsed : 0.35;
+      })(),
       isVoiceActive: false,
       isVoiceMuted: false,
       chatMessages: [],
@@ -1961,19 +1979,63 @@
     }
 
     // 4b. Creativity Controller & Syncer
-    function updateCreativity(val) {
-      const num = Math.min(1.0, Math.max(0.0, parseFloat(val) || 0.35));
+    const CREATIVITY_DESCRIPTIONS = {
+      strict: { title: "Strict (0.00 – 0.20):", text: " Deterministic compiler-exact output. Zero hallucinations, ideal for networking & security audits." },
+      default: { title: "Balanced (0.25 – 0.45):", text: " Optimal default. Reliable type-checked Luau architecture with clean component state." },
+      novel: { title: "Creative (0.50 – 0.75):", text: " Exploratory design for novel game mechanics, custom procedural algorithms, and UI logic." },
+      artistic: { title: "Artistic (0.80 – 1.00):", text: " Maximum entropy. Dynamic particle VFX aesthetics, shaders, and creative world generation." }
+    };
+
+    function getCreativityTier(val) {
+      if (val <= 0.22) return 'strict';
+      if (val <= 0.48) return 'default';
+      if (val <= 0.78) return 'novel';
+      return 'artistic';
+    }
+
+    function updateCreativity(val, sourceEl) {
+      const parsed = parseFloat(val);
+      const num = Math.min(1.0, Math.max(0.0, isNaN(parsed) ? 0.35 : parsed));
       state.creativity = num;
       state.temperature = num;
       localStorage.setItem('stroke_creativity', num.toFixed(2));
 
-      if (creativityValueBadge) creativityValueBadge.textContent = num.toFixed(2);
-      if (creativityValDisplay) creativityValDisplay.textContent = num.toFixed(2);
-      if (menuCreativityValDisplay) menuCreativityValDisplay.textContent = num.toFixed(2);
-      if (creativitySlider && Math.abs(parseFloat(creativitySlider.value) - num) > 0.001) creativitySlider.value = num;
-      if (menuCreativitySlider && Math.abs(parseFloat(menuCreativitySlider.value) - num) > 0.001) menuCreativitySlider.value = num;
-      if (settingsTempSlider && Math.abs(parseFloat(settingsTempSlider.value) - num) > 0.001) settingsTempSlider.value = num;
-      if (settingsTempValText) settingsTempValText.textContent = num.toFixed(2);
+      const formatted = num.toFixed(2);
+      if (creativityValueBadge) creativityValueBadge.textContent = formatted;
+      if (creativityValDisplay) creativityValDisplay.textContent = formatted;
+      if (menuCreativityValDisplay) menuCreativityValDisplay.textContent = formatted;
+      if (settingsTempValText) settingsTempValText.textContent = formatted;
+
+      // Only update slider value if it's NOT the element the user is actively dragging
+      if (creativitySlider && creativitySlider !== sourceEl && Math.abs(parseFloat(creativitySlider.value) - num) > 0.001) {
+        creativitySlider.value = num;
+      }
+      if (menuCreativitySlider && menuCreativitySlider !== sourceEl && Math.abs(parseFloat(menuCreativitySlider.value) - num) > 0.001) {
+        menuCreativitySlider.value = num;
+      }
+      if (settingsTempSlider && settingsTempSlider !== sourceEl && Math.abs(parseFloat(settingsTempSlider.value) - num) > 0.001) {
+        settingsTempSlider.value = num;
+      }
+
+      // Update preset buttons styling
+      document.querySelectorAll('.creativity-preset-btn').forEach(btn => {
+        const btnVal = parseFloat(btn.getAttribute('data-val'));
+        if (!isNaN(btnVal) && Math.abs(btnVal - num) < 0.05) {
+          btn.classList.add('border-blue-500', 'bg-blue-500/20', 'text-blue-300', 'font-semibold');
+          btn.classList.remove('border-white/5', 'bg-white/[0.03]', 'text-zinc-400');
+        } else {
+          btn.classList.remove('border-blue-500', 'bg-blue-500/20', 'text-blue-300', 'font-semibold');
+          btn.classList.add('border-white/5', 'bg-white/[0.03]', 'text-zinc-400');
+        }
+      });
+
+      // Update descriptive box
+      const tier = getCreativityTier(num);
+      const desc = CREATIVITY_DESCRIPTIONS[tier];
+      const descTitle = document.getElementById('creativityDescTitle');
+      const descText = document.getElementById('creativityDescText');
+      if (descTitle && desc) descTitle.textContent = desc.title;
+      if (descText && desc) descText.textContent = desc.text;
     }
 
     if (reasoningLevelBtn) {
@@ -1996,12 +2058,36 @@
       });
     }
 
+    // Prevent clicks/drags inside the popovers from bubbling to document and auto-closing them
+    if (creativityMenu) {
+      ['click', 'mousedown', 'pointerdown'].forEach(evt => {
+        creativityMenu.addEventListener(evt, (e) => e.stopPropagation());
+      });
+    }
+    if (reasoningLevelMenu) {
+      ['click', 'mousedown', 'pointerdown'].forEach(evt => {
+        reasoningLevelMenu.addEventListener(evt, (e) => e.stopPropagation());
+      });
+    }
+
+    // Sliders event listeners (both input and change to handle drag + keyboard step)
     if (creativitySlider) {
-      creativitySlider.addEventListener('input', (e) => updateCreativity(e.target.value));
+      creativitySlider.addEventListener('input', (e) => updateCreativity(e.target.value, e.target));
+      creativitySlider.addEventListener('change', (e) => updateCreativity(e.target.value, e.target));
     }
     if (menuCreativitySlider) {
-      menuCreativitySlider.addEventListener('input', (e) => updateCreativity(e.target.value));
+      menuCreativitySlider.addEventListener('input', (e) => updateCreativity(e.target.value, e.target));
+      menuCreativitySlider.addEventListener('change', (e) => updateCreativity(e.target.value, e.target));
     }
+
+    // Clickable quick preset buttons
+    document.querySelectorAll('.creativity-preset-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const v = btn.getAttribute('data-val');
+        if (v !== null) updateCreativity(v);
+      });
+    });
 
     document.querySelectorAll('.reasoning-option').forEach(opt => {
       opt.addEventListener('click', () => {
@@ -2238,9 +2324,14 @@
       });
     }
 
-    settingsTempSlider.addEventListener('input', (e) => {
-      updateCreativity(e.target.value);
-    });
+    if (settingsTempSlider) {
+      settingsTempSlider.addEventListener('input', (e) => {
+        updateCreativity(e.target.value, e.target);
+      });
+      settingsTempSlider.addEventListener('change', (e) => {
+        updateCreativity(e.target.value, e.target);
+      });
+    }
 
     settingsOpenMcpBtn.addEventListener('click', () => {
       closeSettingsModal();
