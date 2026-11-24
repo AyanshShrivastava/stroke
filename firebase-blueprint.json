@@ -1,0 +1,353 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile and workspace preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified user email address",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile avatar URL",
+          "maxLength": 512,
+          "pattern": "^https://.*"
+        },
+        "preferredProvider": {
+          "type": "string",
+          "enum": ["gemini", "openrouter", "groq", "custom"],
+          "description": "Default AI generation provider"
+        },
+        "preferredModel": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Default AI model identifier"
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["dark", "light"],
+          "description": "Studio color theme preference"
+        },
+        "defaultViewMode": {
+          "type": "string",
+          "enum": ["preview", "visual", "code", "split"],
+          "description": "Default workspace editor tab"
+        },
+        "defaultViewport": {
+          "type": "string",
+          "enum": ["desktop", "tablet", "mobile"],
+          "description": "Default workspace preview viewport"
+        },
+        "enableAppAi": {
+          "type": "boolean",
+          "description": "Legacy boolean for always-on App AI runtime"
+        },
+        "appAiMode": {
+          "type": "string",
+          "enum": ["on_request", "always", "off"],
+          "description": "Controls when generated websites include live /api/app-ai features"
+        },
+        "webSearchMode": {
+          "type": "string",
+          "enum": ["auto", "on", "off"],
+          "description": "Default Web Search behavior (auto, on, or off); never stores search API keys"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp"
+        }
+      },
+      "required": ["uid", "email", "displayName", "createdAt", "updatedAt"]
+    },
+    "MistProject": {
+      "title": "MistProject",
+      "description": "An AI-generated website project owned by a user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "prompt": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "templateId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "appAiEnabled": {
+          "type": "boolean"
+        },
+        "publishedSlug": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_\\-]*$"
+        },
+        "isPublished": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerId", "name", "prompt", "isPublished", "createdAt", "updatedAt"]
+    },
+    "ProjectFile": {
+      "title": "ProjectFile",
+      "description": "A single source code file belonging to a MistProject.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "language": {
+          "type": "string",
+          "enum": ["tsx", "ts", "css", "html", "json"]
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 200000
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "projectId", "ownerId", "path", "language", "content", "updatedAt"]
+    },
+    "Deployment": {
+      "title": "Deployment",
+      "description": "Published standalone website bundle addressable by public slug.",
+      "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "htmlBundle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 900000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["slug", "ownerId", "projectId", "title", "htmlBundle", "createdAt", "updatedAt"]
+    },
+    "UserCredentialVault": {
+      "title": "UserCredentialVault",
+      "description": "Account-bound AES-256-GCM encrypted BYOK AI & Web Search credentials synced exclusively to the signed-in user's Google account.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "boundEmail": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "algorithm": {
+          "type": "string",
+          "enum": ["AES-256-GCM"]
+        },
+        "ciphertext": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        },
+        "aiKeyHint": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "searchKeyHint": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "boundEmail", "algorithm", "ciphertext", "createdAt", "updatedAt"]
+    },
+    "ProjectMessage": {
+      "title": "ProjectMessage",
+      "description": "Persisted refinement and build chat message belonging to a MistProject.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "assistant"]
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 24000
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "timestamp": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "changedFiles": {
+          "type": "array"
+        },
+        "searchOutcome": {
+          "type": "object"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "projectId", "ownerId", "role", "content", "seq", "timestamp", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account documents containing PII, accessible only by the authenticated owner."
+    },
+    "/users/{userId}/private/{vaultId}": {
+      "schema": { "$ref": "#/entities/UserCredentialVault" },
+      "description": "Encrypted BYOK credential vault bound to the authenticated owner UID and verified email."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/MistProject" },
+      "description": "User website projects with strict ownerId isolation."
+    },
+    "/projects/{projectId}/files/{fileId}": {
+      "schema": { "$ref": "#/entities/ProjectFile" },
+      "description": "Source files belonging to a project, gated by parent project ownership."
+    },
+    "/projects/{projectId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ProjectMessage" },
+      "description": "Chat & refinement message history belonging to a project, gated by parent project ownership."
+    },
+    "/deployments/{slug}": {
+      "schema": { "$ref": "#/entities/Deployment" },
+      "description": "Published website HTML bundles; readable individually by slug, writable only by verified project owner."
+    }
+  }
+}

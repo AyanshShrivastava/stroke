@@ -1,0 +1,716 @@
+{
+  "users/test_feed_user_101": {
+    "uid": "test_feed_user_101",
+    "email": "feed_tester@stroke.ai",
+    "database_fed": true,
+    "created_at": "2026-11-14T12:58:35.348782+00:00",
+    "updated_at": "2026-11-15T04:21:41.617379+00:00"
+  },
+  "users/test_feed_user_101/records/STRK-BAT-001": {
+    "record_id": "STRK-BAT-001",
+    "cycle": 1,
+    "stage_name": "Cycle 1/5: Void Singularity & Flipbook Convergence",
+    "vfx_name": "Void / Space-Time Convergence (Void)",
+    "element": "Void",
+    "metric_load": 96.4,
+    "status": "optimized",
+    "integrity_hash": "cabe0093354d36d3",
+    "primary_asset": "rbxassetid://13780268621",
+    "color_hex": "#c15eff",
+    "particle_count": 13,
+    "beam_count": 6,
+    "models_absorbed": [
+      "Hollow purple",
+      "ampfilaction blue",
+      "lapse blue",
+      "red reversal",
+      "reversal red"
+    ],
+    "textures_used": [
+      "rbxassetid://3995331885",
+      "http://www.roblox.com/asset/?id=11719595104",
+      "http://www.roblox.com/asset/?id=13566566854",
+      "rbxassetid://8084911316"
+    ],
+    "focus_attributes": [
+      "Grid4x4 OneShot Flipbooks",
+      "Double-ended Beam curve size transitions (CurveSize0 = -9.83, CurveSize1 = 8.43)",
+      "VelocityPerpendicular particle orientation with 0.10s-0.20s lifetime",
+      "RGB(193,94,255) luminous purple color gradients"
+    ],
+    "raw_snippet": "00: 0.70], [1.00: 0.70]})\n83.   [Model] Hollow purple\n84.     [Part] Part (Size = (1.00, 1.00, 1.00); Color = RGB(163,162,165); Material = Plastic; Transparency = 0.00)\n85.       [ParticleEmitter] cool lightning (Texture = \"rbxassetid://3995331885\"; Rate = 50.0; Lifetime = 0.10 to 0.10; Speed = 0.00 to 0.00; RotSpeed = -15.0 to 15.0; Rotation = -360.0 to 360.0; SpreadAngle = (0.0, 0.0); Acceleration = (0.0, 0.0, 0.0); Drag = 0.00; VelocityInheritance = 0.00; ZOffset = 1.00; LightEmission = 0.00; LightInfluence = 100.00; Orientation = FacingCamera; EmissionDirection = Top; Flipbook = None (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = false; Enabled = true; Color = {[0.00: RGB(246,149,255)], [1.00: RGB(246,149,255)]}; Size = {[0.00: 15.00], [1.00: 15.00]}; Transparency = {[0.00: 0.00], [1.00: 0.00]})\n86.       [ParticleEmitter] orb (Texture = \"rbxassetid://4509687978\"; Rate = 20.0; Lifetime = 0.30 to 0.30; Speed = 5.00 to 5.00; RotSpeed = 0.0 to 0.0; Rotation = 0.0 to 0.0; SpreadAngle = (0.0, 0.0); Acceleration = (\n\n00]})\n70. [Folder] Folder\n71.   [Model] ampfilaction blue\n72.     [Part] Part (Size = (1.00, 1.00, 1.00); Color = RGB(163,162,165); Material = Plastic; Transp",
+    "ai_synthesis": "### [CYCLE 1/5 ABSORBED: VOID SINGULARITY & FLIPBOOK CONVERGENCE]\nSuccessfully ingested models: **Hollow purple, ampfilaction blue, lapse blue, red reversal, reversal red**.\n\n- **Particle Geometry**: Mastered `Grid4x4 OneShot` flipbooks combined with dual-ended cubic Bezier Beams (`CurveSize0 = -9.83, CurveSize1 = 8.43`).\n- **Color & Glow**: Locked RGB(193, 94, 255) luminous spectrum with zero LightInfluence to preserve neon saturation.\n- **Emission Dynamics**: Lifetime strictly bounded between 0.10s-0.20s with high-frequency rates for continuous void appearance.\n- **Verified Primary Asset**: `rbxassetid://13780268621`.",
+    "chat_learnings_absorbed": 0,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 04:21:41.634324+00:00",
+    "uid": "test_feed_user_101"
+  },
+  "users/test_feed_user_101/records/STRK-BAT-002": {
+    "record_id": "STRK-BAT-002",
+    "cycle": 2,
+    "stage_name": "Cycle 2/5: High-Velocity Slashes & Cleave Domains",
+    "vfx_name": "Domain Slashes & Velocity Cleaves (Slash)",
+    "element": "Slash",
+    "metric_load": 100.0,
+    "status": "optimized",
+    "integrity_hash": "ae01f03635a9104c",
+    "primary_asset": "rbxassetid://18462751521",
+    "color_hex": "#ff3344",
+    "particle_count": 87,
+    "beam_count": 56,
+    "models_absorbed": [
+      "Sukuna",
+      "Anime"
+    ],
+    "textures_used": [
+      "rbxassetid://7417144556",
+      "rbxassetid://16669046762",
+      "rbxassetid://14595543880",
+      "rbxassetid://15041986460"
+    ],
+    "focus_attributes": [
+      "360-degree disc volume emitter shapes",
+      "High drag velocity decay (Drag = 22.00, Acceleration = (0, 20, 0))",
+      "Multi-angle perpendicular slicing bursts with 10.0 size scale",
+      "FacingCamera wind trails with loop flipbooks"
+    ],
+    "raw_snippet": "B(255,0,0); Shadows = false)\n16. [Part] Sukuna (Size = (30.00, 30.00, 30.00); Color = RGB(163,162,165); Material = Plastic; Transparency = 1.00)\n17.   [ParticleEmitter] Stars (Texture = \"rbxassetid://114699340835751\"; Rate = 4.0; Lifetime = 0.50 to 0.50; Speed = 0.00 to 0.00; RotSpeed = 0.0 to 0.0; Rotation = -360.0 to 360.0; SpreadAngle = (45.0, 45.0); Acceleration = (0.0, 0.0, 0.0); Drag = 0.00; VelocityInheritance = 0.00; ZOffset = 1.00; LightEmission = 0.00; LightInfluence = 0.00; Orientation = VelocityParallel; EmissionDirection = Top; Flipbook = Grid4x4 (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = true; Enabled = true; Color = {[0.00: RGB(255,255,255)], [1.00: RGB(255,255,255)]}; Size = {[0.00: 10.00], [0.13: 3.88], [0.34: 10.00], [0.76: 10.00], [0.89: 5.30], [1.00: 7.10]}; Transparency = {[0.00: 0.00], [1.00: 0.00]})\n18.   [ParticleEmitter] Spec1 (Texture = \"rbxassetid://18462751521\"; Rate = 20.0; Lifetime = 0.20 to 0.50; Speed = 0.10 to 0.10; RotSpeed = 0.0 to 0.0; Rotation = 0.0 to 0.0; SpreadAngle = (3\n\n.56: 0.97], [1.00: 1.00]})\n24. [Folder] Slash VFX\n25.   [Folder] Workspace\n26.     [Part] Slash (Size = (1.37, 13.63, 1.37); Color = RGB(163,162,165); Materia",
+    "ai_synthesis": "### [CYCLE 2/5 ABSORBED: HIGH-VELOCITY SLASHES & DOMAIN CLEAVE]\nSuccessfully ingested models: **Sukuna, Anime**.\n\n- **Cutting Mechanics**: Mastered multi-angle 360\u00b0 disc volumes using perpendicular facing orientations.\n- **Kinetic Drag**: Ingested high drag decay coefficients (`Drag = 22.00`) coupled with `Acceleration = (0, 20, 0)` for snap deceleration.\n- **Multi-Layer Slicing**: Combined `Slashes1` (long lifetime 2.0s) with `Slices1` (instantaneous burst 0.2s) for layered damage impact frames.\n- **Verified Primary Asset**: `rbxassetid://18462751521`.",
+    "chat_learnings_absorbed": 0,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 04:21:41.655095+00:00",
+    "uid": "test_feed_user_101"
+  },
+  "users/test_feed_user_101/records/STRK-BAT-003": {
+    "record_id": "STRK-BAT-003",
+    "cycle": 3,
+    "stage_name": "Cycle 3/5: High-Density Explosions & Heat Shockwaves",
+    "vfx_name": "Explosive Pyrotechnics & Thermal Shockwaves (Fire)",
+    "element": "Fire",
+    "metric_load": 100.0,
+    "status": "optimized",
+    "integrity_hash": "51b9d4b3a7c6dc16",
+    "primary_asset": "rbxassetid://9114223170",
+    "color_hex": "#ff6600",
+    "particle_count": 1844,
+    "beam_count": 6,
+    "models_absorbed": [
+      "Blue Explosion",
+      "Explosion2",
+      "Fireball",
+      "Aura_RedHeartFire",
+      "Auras"
+    ],
+    "textures_used": [
+      "rbxassetid://97706064767433",
+      "rbxassetid://76526429893064",
+      "rbxassetid://14641036736",
+      "rbxassetid://82187023569237"
+    ],
+    "focus_attributes": [
+      "1,460 multi-part ParticleEmitter clusters with spherical dispersion",
+      "PointLight synchronizers (Range = 8.0, Shadows = false, Brightness = 1.0)",
+      "High emission rates (Rate = 100.0, Speed = 50.0 to 100.0)",
+      "Multi-stage transparency keyframes ([0.0: 0.54], [0.46: 0.00], [1.0: 0.57])"
+    ],
+    "raw_snippet": "; Transparency = 0.00)\n10289.   [Model] Blue Explosion\n10290.     [MeshPart] Meshes/EXPLODE low_Cube (MeshId = \"rbxassetid://4933939180\"; TextureID = \"\"; Size = (14.51, 15.20, 15.38); Color = RGB(248,248,248); Material = Neon; Transparency = 0.00)\n10291.     [MeshPart] Meshes/EXPLODE low_Cube.001 (MeshId = \"rbxassetid://4933939521\"; TextureID = \"\"; Size = (15.30, 15.74, 16.07); Color = RGB(16,42,220); Material = Neon; Transparency = 0.00)\n10292.     [MeshPart] Meshes/EXPLODE low_Cube.002 (MeshId = \"rbxassetid://4933939707\"; TextureID = \"\"; Size = (16.27, 16.21, 16.77); Color = RGB(16,8,66); Material = Neon; Transparency = 0.00)\n10293.     [MeshPart] Meshes/EXPLODE low_Cube.003 (MeshId = \"rbxassetid://4933939915\"; TextureID = \"\"; Size = (14.97, 15.42, 15.63); Color = RGB(0,255,255); Material = Neon; Transparency = 0.00)\n10294.   [MeshPart] MeshPart (MeshId = \"rbxassetid://6071327170\"; TextureID = \"\"; Size = (10.69, 10.62, 10.48); Color = RGB(248,248,248); Material = Neon; Transparency = 0.00)\n10295.   [MeshPart] MeshPart (Mes\n\n: 0.00], [1.00: 0.00]})\n8498.   [Model] Explosion2\n8499.     [Part] Explosion2 (Size = (1.00, 1.00, 1.00); Color = RGB(163,162,165); Material = Plastic; Trans",
+    "ai_synthesis": "### [CYCLE 3/5 ABSORBED: HIGH-DENSITY EXPLOSIONS & THERMAL SHOCKWAVES]\nSuccessfully ingested models: **Blue Explosion, Explosion2, Fireball, Aura_RedHeartFire, Auras** (1,460+ emitters).\n\n- **Cluster Scaling**: Learned massive multi-emitter hierarchies bounded by synchronized PointLights (`Range = 8.0, Brightness = 1.0`).\n- **Shockwave Expansion**: Mastered non-linear transparency keyframes ([0.0: 0.54], [0.46: 0.00], [1.0: 0.57]) for realistic fiery expansion.\n- **Mobile Budgeting**: Partitioned explosion emitter lods to ensure 60fps frame rates on standard mobile clients.\n- **Verified Primary Asset**: `rbxassetid://9114223170`.",
+    "chat_learnings_absorbed": 0,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 04:21:41.677487+00:00",
+    "uid": "test_feed_user_101"
+  },
+  "users/test_feed_user_101/records/STRK-BAT-004": {
+    "record_id": "STRK-BAT-004",
+    "cycle": 4,
+    "stage_name": "Cycle 4/5: Hydrokinetic Torrents & Wind Vortices",
+    "vfx_name": "Fluid Hydrodynamics & Tornado Vortices (Aqua)",
+    "element": "Aqua",
+    "metric_load": 100.0,
+    "status": "optimized",
+    "integrity_hash": "ac02191c310da574",
+    "primary_asset": "rbxassetid://4991873131",
+    "color_hex": "#00d4ff",
+    "particle_count": 268,
+    "beam_count": 267,
+    "models_absorbed": [
+      "WindBig",
+      "WindV2",
+      "Aura_WaterBubbleTrio"
+    ],
+    "textures_used": [
+      "rbxassetid://15741295345",
+      "rbxassetid://11026658044",
+      "rbxassetid://11995386251",
+      "rbxassetid://8271975883"
+    ],
+    "focus_attributes": [
+      "240-beam dual attachment ribbon vortex systems",
+      "Triple-vortex water bubble streams with mist textures (rbxassetid://2520762076)",
+      "Texture speed rotational animation (TextureSpeed = 2.00, FaceCamera = true)",
+      "VelocityInheritance and dampening for mobile 60fps stability"
+    ],
+    "raw_snippet": "LIGHT GOLDEN BLAST\n9184.       [Model] WindBig\n9185.         [Part] bottomstuff (Size = (0.06, 3.06, 3.06); Color = RGB(163,162,165); Material = Plastic; Transparency = 1.00)\n9186.           [Attachment] Center (Position = (0.00, 0.00, 0.00))\n9187.             [ParticleEmitter] StipeAir (Texture = \"rbxassetid://11291913149\"; Rate = 25.0; Lifetime = 1.00 to 1.00; Speed = 1.22 to 12.22; RotSpeed = -250.0 to -250.0; Rotation = -180.0 to 180.0; SpreadAngle = (5.0, 5.0); Acceleration = (0.0, 0.0, 0.0); Drag = 0.00; VelocityInheritance = 0.00; ZOffset = 0.00; LightEmission = 1.00; LightInfluence = 0.00; Orientation = VelocityPerpendicular; EmissionDirection = Right; Flipbook = None (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = true; Enabled = true; Color = {[0.00: RGB(255,85,0)], [1.00: RGB(255,85,0)]}; Size = {[0.00: 0.00], [1.00: 37.29]}; Transparency = {[0.00: 1.00], [0.10: 0.07], [1.00: 1.00]})\n9188.             [ParticleEmitter] Air (Texture = \"rbxassetid://13780268621\"; Rate = 30.0; Lifetime = 2.00 to 2.00; Spee\n\n: 0.87], [1.00: 1.00]})\n8869.   [Model] WindV2\n8870.     [MeshPart] Part (MeshId = \"rbxassetid://7351745872\"; TextureID = \"\"; Size = (13.30, 5.00, 13.00); Colo",
+    "ai_synthesis": "### [CYCLE 4/5 ABSORBED: HYDROKINETIC TORRENTS & WIND VORTICES]\nSuccessfully ingested models: **WindBig, WindV2, Aura_WaterBubbleTrio** (240+ beams).\n\n- **Continuous Ribbons**: Mastered high-segment dual-beam spiral attachments (`Segments = 50, TextureSpeed = 2.00`).\n- **Hydro Mist**: Integrated multi-layer mist textures (`rbxassetid://2520762076`) with velocity inheritance to follow moving player characters.\n- **Vortex Aerodynamics**: Synthesized expanding centripetal acceleration profiles for realistic tornado displacement.\n- **Verified Primary Asset**: `rbxassetid://4991873131`.",
+    "chat_learnings_absorbed": 0,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 04:21:41.698521+00:00",
+    "uid": "test_feed_user_101"
+  },
+  "users/test_feed_user_101/records/STRK-BAT-005": {
+    "record_id": "STRK-BAT-005",
+    "cycle": 5,
+    "stage_name": "Cycle 5/5: Lightning Storms, Electro & 404 Glitch Rifts",
+    "vfx_name": "Electric Discharge & Quantum Glitch Rifts (Electro)",
+    "element": "Electro",
+    "metric_load": 100.0,
+    "status": "optimized",
+    "integrity_hash": "1a794af1748068c9",
+    "primary_asset": "rbxassetid://3270017",
+    "color_hex": "#00ff66",
+    "particle_count": 127,
+    "beam_count": 4,
+    "models_absorbed": [
+      "Electro Vfx",
+      "Aura_TimeKillingA",
+      "RNG-Aura-03",
+      "DelawareSmash",
+      "power drop aura"
+    ],
+    "textures_used": [
+      "rbxassetid://14687560696",
+      "rbxassetid://7417145436",
+      "rbxassetid://6770889554",
+      "rbxassetid://15640022727"
+    ],
+    "focus_attributes": [
+      "Branching lightning ParticleEmitters (rbxassetid://126275989641021, 125214381397274)",
+      "High-frequency star particles (Rate = 71.0, Speed = 89.52)",
+      "Torus dial mesh geometry (rbxassetid://3270017) with rotational timeline collapses",
+      "Unified mastery synthesis across all 14,666 instances and 95 models"
+    ],
+    "raw_snippet": ": 0.12], [1.00: 1.00]})\n9838.   [Model] Electro Vfx\n9839.     [Part] Electro vfx (Size = (2.00, 2.00, 2.00); Color = RGB(163,162,165); Material = Plastic; Transparency = 0.80)\n9840.       [Attachment] Attachment (Position = (0.00, 0.00, 0.00))\n9841.         [ParticleEmitter] ParticleEmitter (Texture = \"rbxassetid://1315202524\"; Rate = 20.0; Lifetime = 0.25 to 0.50; Speed = 5.00 to 50.00; RotSpeed = 0.0 to 0.0; Rotation = 90.0 to 90.0; SpreadAngle = (360.0, 360.0); Acceleration = (0.0, 0.0, 0.0); Drag = 5.00; VelocityInheritance = 0.00; ZOffset = 0.00; LightEmission = 0.00; LightInfluence = 0.00; Orientation = VelocityParallel; EmissionDirection = Top; Flipbook = None (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = false; Enabled = true; Color = {[0.00: RGB(61,155,255)], [1.00: RGB(61,155,255)]}; Size = {[0.00: 2.00], [1.00: 0.00]}; Transparency = {[0.00: 0.00], [1.00: 0.00]})\n9842.         [ParticleEmitter] ParticleEmitter (Texture = \"http://www.roblox.com/asset/?id=13571103636\"; Rate = 1.0; Lifetime = 0.50 to 1.00\n\nc; Transparency = 0.00)\n7141.   [Model] Aura_TimeKillingA\n7142.     [Part] HumanoidRootPart (Size = (2.00, 2.00, 1.00); Color = RGB(163,162,165); Material = P",
+    "ai_synthesis": "### [CYCLE 5/5 ABSORBED: LIGHTNING STORMS & UNIFIED MASTER CATALOG]\nSuccessfully ingested models: **Electro Vfx, Aura_TimeKillingA, RNG-Aura-03, DelawareSmash, power drop aura**.\n\n- **Electric Arc Jitter**: Mastered high-frequency jitter emissions (`Rate = 71.0, Speed = 89.52`) with zero drag and randomized rotation.\n- **Time Dial Geometry**: Integrated Torus dial collapse geometry (`rbxassetid://3270017`) for temporal shockwave pulses.\n- **UNIFIED KNOWLEDGE STATE**: Total 14,666 instances, 95 models, and 3,160 textures fully indexed into Stroke Neural Memory.\n- **AI Status**: Ready for autonomous script generation, ParticleEmitter tuning, and direct Luau compilation!\n- **Continuous Chat Distillation Integration**:\n  * *God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'*: Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.\n  * *God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'*: Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.\n",
+    "chat_learnings_absorbed": 3,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 04:21:41.720056+00:00",
+    "uid": "test_feed_user_101"
+  },
+  "users/test_mem_uid_999": {
+    "uid": "test_mem_uid_999",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-14T13:00:43.727538+00:00"
+  },
+  "users/legacy_user@stroke.ai": {
+    "email": "legacy_user@stroke.ai",
+    "password": "legacy_plaintext_secret_123",
+    "password_hash": "$pbkdf2$hash_value",
+    "otp_code": "987654",
+    "database_fed": true
+  },
+  "users/legacy_user@stroke.ai/records/STRK-BAT-001": {
+    "record_id": "STRK-BAT-001",
+    "vfx_name": "Legacy Blast",
+    "status": "optimized"
+  },
+  "users/migrated_dev_uid_777": {
+    "uid": "migrated_dev_uid_777",
+    "email": "legacy_user@stroke.ai",
+    "display_name": null,
+    "database_fed": true,
+    "github_connected": false,
+    "github_username": null,
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "quota_bytes": 104857600,
+    "migrated_from_email": "legacy_user@stroke.ai",
+    "migrated_at": "2026-11-15T04:21:41.905139+00:00",
+    "created_at": "2026-11-15T04:21:41.905139+00:00",
+    "updated_at": "2026-11-15T04:21:41.905139+00:00"
+  },
+  "users/test_mem_uid_scale_105": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T04:21:41.898378+00:00"
+  },
+  "users/test_mem_uid_999/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/migrated_dev_uid_777/records/STRK-BAT-001": {
+    "record_id": "STRK-BAT-001",
+    "vfx_name": "Legacy Blast",
+    "status": "optimized",
+    "uid": "migrated_dev_uid_777"
+  },
+  "users/test_mem_uid_1794661272828": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-14T13:01:12.833658+00:00",
+    "uid": "test_mem_uid_1794661272828",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794661272837": {
+    "uid": "test_mem_uid_1794661272837",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-14T13:01:12.839309+00:00"
+  },
+  "users/test_mem_uid_1794661272837/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794661295847": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-14T13:01:35.852158+00:00",
+    "uid": "test_mem_uid_1794661295847",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794661295855": {
+    "uid": "test_mem_uid_1794661295855",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-14T13:01:35.857445+00:00"
+  },
+  "users/test_mem_uid_1794661295855/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794661810395": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-14T13:10:10.400422+00:00",
+    "uid": "test_mem_uid_1794661810395",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794661810404": {
+    "uid": "test_mem_uid_1794661810404",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-14T13:10:10.406199+00:00"
+  },
+  "users/test_mem_uid_1794661810404/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/victim@stroke.ai": {
+    "email": "victim@stroke.ai",
+    "github_token": "gAAAAABq-TM_fD6RqTsjH13VNnOzxozf_Hb6gr5ad8O2UINVc3QhRJ0OkP2XseBUvhm6QmS6etE6TXurBAGnAx6uOWoBGMCAJzzkgLyBA5l3NMIJCRI5yJQ="
+  },
+  "users/verified_auth_user_1": {
+    "uid": "verified_auth_user_1",
+    "github_token": null
+  },
+  "users/oauth_dev_user_42": {
+    "uid": "oauth_dev_user_42",
+    "github_token": "gAAAAABq-TM_O_0quR0h0iqSIb14uFEeWq81VeEh3UT77uTpPeSu4maEAlKSjJw-TLoSa3m2_x3nkoXuBEHFiAYOpeBXRsyXrteGDkUbKVe-33tHr5O84GY=",
+    "updated_at": "2026-11-15T04:21:19.858289+00:00"
+  },
+  "users/test_uid_9999": {
+    "uid": "test_uid_9999",
+    "github_token": "gAAAAABq-TM_H4O2ShchXzbjx2BzAKVZChz2uLBjb-YdkJF9OOWFXjbAly3T6RLmT5CVWz1Xld14JOZhpdhB_SbJ7YM-NjyRW95yx5Gl-7m1_8vMb4BOO2djcu0nWpw8aHfpGIjpGWef",
+    "updated_at": "2026-11-15T04:21:19.863732+00:00"
+  },
+  "users/test_mem_uid_1794661951187": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-14T13:12:31.193230+00:00",
+    "uid": "test_mem_uid_1794661951187",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794661951197": {
+    "uid": "test_mem_uid_1794661951197",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-14T13:12:31.198885+00:00"
+  },
+  "users/test_mem_uid_1794661951197/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794662016203": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-14T13:13:36.208326+00:00",
+    "uid": "test_mem_uid_1794662016203",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794662016212": {
+    "uid": "test_mem_uid_1794662016212",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-14T13:13:36.214300+00:00"
+  },
+  "users/test_mem_uid_1794662016212/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794662118475": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-14T13:15:18.480349+00:00",
+    "uid": "test_mem_uid_1794662118475",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794662118484": {
+    "uid": "test_mem_uid_1794662118484",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-14T13:15:18.486165+00:00"
+  },
+  "users/test_mem_uid_1794662118484/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794706875046": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T01:41:15.052462+00:00",
+    "uid": "test_mem_uid_1794706875046",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794706875057": {
+    "uid": "test_mem_uid_1794706875057",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T01:41:15.058710+00:00"
+  },
+  "users/test_mem_uid_1794706875057/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794707239905": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T01:47:19.911355+00:00",
+    "uid": "test_mem_uid_1794707239905",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794707239915": {
+    "uid": "test_mem_uid_1794707239915",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T01:47:19.917054+00:00"
+  },
+  "users/test_mem_uid_1794707239915/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794710377850": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T02:39:37.856623+00:00",
+    "uid": "test_mem_uid_1794710377850",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794710377860": {
+    "uid": "test_mem_uid_1794710377860",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T02:39:37.863388+00:00"
+  },
+  "users/test_mem_uid_1794710377860/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794711053507": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T02:50:53.512287+00:00",
+    "uid": "test_mem_uid_1794711053507",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794711053516": {
+    "uid": "test_mem_uid_1794711053516",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T02:50:53.518303+00:00"
+  },
+  "users/test_mem_uid_1794711053516/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794712286784": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T03:11:26.789925+00:00",
+    "uid": "test_mem_uid_1794712286784",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794712286793": {
+    "uid": "test_mem_uid_1794712286793",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T03:11:26.795471+00:00"
+  },
+  "users/test_mem_uid_1794712286793/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794713027118": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T03:23:47.124520+00:00",
+    "uid": "test_mem_uid_1794713027118",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794713027130": {
+    "uid": "test_mem_uid_1794713027130",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T03:23:47.132720+00:00"
+  },
+  "users/test_mem_uid_1794713027130/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794713103402": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T03:25:03.408440+00:00",
+    "uid": "test_mem_uid_1794713103402",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794713103413": {
+    "uid": "test_mem_uid_1794713103413",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T03:25:03.414823+00:00"
+  },
+  "users/test_mem_uid_1794713103413/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_mem_uid_1794713156679": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T03:25:56.685745+00:00",
+    "uid": "test_mem_uid_1794713156679",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794713156692": {
+    "uid": "test_mem_uid_1794713156692",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T03:25:56.694119+00:00"
+  },
+  "users/test_mem_uid_1794713156692/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test_feed_user_101/feed_state/current": {
+    "uid": "test_feed_user_101",
+    "active_cycle": 5,
+    "completed_cycles": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "is_fully_fed": true,
+    "last_synthesis": "### [CYCLE 5/5 ABSORBED: LIGHTNING STORMS & UNIFIED MASTER CATALOG]\nSuccessfully ingested models: **Electro Vfx, Aura_TimeKillingA, RNG-Aura-03, DelawareSmash, power drop aura**.\n\n- **Electric Arc Jitter**: Mastered high-frequency jitter emissions (`Rate = 71.0, Speed = 89.52`) with zero drag and randomized rotation.\n- **Time Dial Geometry**: Integrated Torus dial collapse geometry (`rbxassetid://3270017`) for temporal shockwave pulses.\n- **UNIFIED KNOWLEDGE STATE**: Total 14,666 instances, 95 models, and 3,160 textures fully indexed into Stroke Neural Memory.\n- **AI Status**: Ready for autonomous script generation, ParticleEmitter tuning, and direct Luau compilation!\n- **Continuous Chat Distillation Integration**:\n  * *God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'*: Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.\n  * *God-Tier Electro Mastery: 'GodTier_Electro_Create_a_purple_lightning_VF'*: Distilled top-tier Electro kinematics with 0 texture assets. Active in Elemental Worlds index.\n",
+    "last_updated": "2026-11-15T04:21:41.617379+00:00"
+  },
+  "users/test_mem_uid_1794716501889": {
+    "memory_bytes_used_estimate": 0,
+    "memory_count": 0,
+    "updated_at": "2026-11-15T04:21:41.894178+00:00",
+    "uid": "test_mem_uid_1794716501889",
+    "email": null,
+    "quota_bytes": 104857600
+  },
+  "users/test_mem_uid_1794716501899": {
+    "uid": "test_mem_uid_1794716501899",
+    "memory_bytes_used_estimate": 50000,
+    "memory_count": 50,
+    "updated_at": "2026-11-15T04:21:41.901087+00:00"
+  },
+  "users/test_mem_uid_1794716501899/memory/MEM-FAIL-01": {
+    "byte_size_estimate": 1000
+  },
+  "users/test@stroke.ai/records/STRK-BAT-001": {
+    "record_id": "STRK-BAT-001",
+    "cycle": 1,
+    "stage_name": "Cycle 1/5: Void Singularity & Flipbook Convergence",
+    "vfx_name": "Void / Space-Time Convergence (Void)",
+    "element": "Void",
+    "status": "ingested",
+    "integrity_hash": "e9de0e5f045ddaee6e1863e0e6f9f832c936486fff8cd7dba79715a58ceb0238",
+    "primary_asset": "rbxassetid://13780268621",
+    "color_hex": "#c15eff",
+    "particle_count": 13,
+    "beam_count": 0,
+    "models_absorbed": [
+      "Hollow purple",
+      "ampfilaction blue",
+      "lapse blue",
+      "red reversal",
+      "reversal red"
+    ],
+    "textures_used": [
+      "rbxassetid://3995331885",
+      "http://www.roblox.com/asset/?id=13566566854",
+      "http://www.roblox.com/asset/?id=13851504868",
+      "rbxassetid://4509687978"
+    ],
+    "focus_attributes": [
+      "Grid4x4 OneShot Flipbooks",
+      "Double-ended Beam curve size transitions (CurveSize0 = -9.83, CurveSize1 = 8.43)",
+      "VelocityPerpendicular particle orientation with 0.10s-0.20s lifetime",
+      "RGB(193,94,255) luminous purple color gradients"
+    ],
+    "raw_snippet": "00: 0.70], [1.00: 0.70]})\n83.   [Model] Hollow purple\n84.     [Part] Part (Size = (1.00, 1.00, 1.00); Color = RGB(163,162,165); Material = Plastic; Transparency = 0.00)\n85.       [ParticleEmitter] cool lightning (Texture = \"rbxassetid://3995331885\"; Rate = 50.0; Lifetime = 0.10 to 0.10; Speed = 0.00 to 0.00; RotSpeed = -15.0 to 15.0; Rotation = -360.0 to 360.0; SpreadAngle = (0.0, 0.0); Acceleration = (0.0, 0.0, 0.0); Drag = 0.00; VelocityInheritance = 0.00; ZOffset = 1.00; LightEmission = 0.00; LightInfluence = 100.00; Orientation = FacingCamera; EmissionDirection = Top; Flipbook = None (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = false; Enabled = true; Color = {[0.00: RGB(246,149,255)], [1.00: RGB(246,149,255)]}; Size = {[0.00: 15.00], [1.00: 15.00]}; Transparency = {[0.00: 0.00], [1.00: 0.00]})\n86.       [ParticleEmitter] orb (Texture = \"rbxassetid://4509687978\"; Rate = 20.0; Lifetime = 0.30 to 0.30; Speed = 5.00 to 5.00; RotSpeed = 0.0 to 0.0; Rotation = 0.0 to 0.0; SpreadAngle = (0.0, 0.0); Acceleration = (\n\n00]})\n70. [Folder] Folder\n71.   [Model] ampfilaction blue\n72.     [Part] Part (Size = (1.00, 1.00, 1.00); Color = RGB(163,162,165); Material = Plastic; Transp",
+    "ai_synthesis": "### [CYCLE 1/5 INGESTED: VOID SINGULARITY & FLIPBOOK CONVERGENCE]\nIngested models: **Hollow purple, ampfilaction blue, lapse blue, red reversal, reversal red**.\n\n- **Particle Geometry**: `Grid4x4 OneShot` flipbooks with cubic Bezier Beams (`CurveSize0 = -9.83, CurveSize1 = 8.43`).\n- **Color & Glow**: RGB(193, 94, 255) luminous spectrum with zero LightInfluence for neon saturation.\n- **Emission Dynamics**: Lifetime 0.10s-0.20s with high-frequency rates.\n- **Primary Asset**: `rbxassetid://13780268621`.\n- **Continuous Chat Distillation Integration**:\n  * *Hollow Purple Bezier Arc Deceleration*: Dual-curve beam configuration with CurveSize0=-9.83 and CurveSize1=8.43 achieves seamless singularity convergence without clipping camera frustum.\n",
+    "chat_learnings_absorbed": 1,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 05:04:48.478163+00:00"
+  },
+  "users/test@stroke.ai/records/STRK-BAT-002": {
+    "record_id": "STRK-BAT-002",
+    "cycle": 2,
+    "stage_name": "Cycle 2/5: High-Velocity Slashes & Cleave Domains",
+    "vfx_name": "Domain Slashes & Velocity Cleaves (Slash)",
+    "element": "Slash",
+    "status": "ingested",
+    "integrity_hash": "aa957100d3fce255b2d0ffa075a3a5c1b1694992327eae647ef77a29f0a1b4bd",
+    "primary_asset": "rbxassetid://18462751521",
+    "color_hex": "#ff3344",
+    "particle_count": 87,
+    "beam_count": 56,
+    "models_absorbed": [
+      "Sukuna",
+      "Anime"
+    ],
+    "textures_used": [
+      "rbxassetid://8466767701",
+      "http://www.roblox.com/asset/?id=5310883966",
+      "http://www.roblox.com/asset/?id=12390063093",
+      "rbxassetid://17086063752"
+    ],
+    "focus_attributes": [
+      "360-degree disc volume emitter shapes",
+      "High drag velocity decay (Drag = 22.00, Acceleration = (0, 20, 0))",
+      "Multi-angle perpendicular slicing bursts with 10.0 size scale",
+      "FacingCamera wind trails with loop flipbooks"
+    ],
+    "raw_snippet": "B(255,0,0); Shadows = false)\n16. [Part] Sukuna (Size = (30.00, 30.00, 30.00); Color = RGB(163,162,165); Material = Plastic; Transparency = 1.00)\n17.   [ParticleEmitter] Stars (Texture = \"rbxassetid://114699340835751\"; Rate = 4.0; Lifetime = 0.50 to 0.50; Speed = 0.00 to 0.00; RotSpeed = 0.0 to 0.0; Rotation = -360.0 to 360.0; SpreadAngle = (45.0, 45.0); Acceleration = (0.0, 0.0, 0.0); Drag = 0.00; VelocityInheritance = 0.00; ZOffset = 1.00; LightEmission = 0.00; LightInfluence = 0.00; Orientation = VelocityParallel; EmissionDirection = Top; Flipbook = Grid4x4 (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = true; Enabled = true; Color = {[0.00: RGB(255,255,255)], [1.00: RGB(255,255,255)]}; Size = {[0.00: 10.00], [0.13: 3.88], [0.34: 10.00], [0.76: 10.00], [0.89: 5.30], [1.00: 7.10]}; Transparency = {[0.00: 0.00], [1.00: 0.00]})\n18.   [ParticleEmitter] Spec1 (Texture = \"rbxassetid://18462751521\"; Rate = 20.0; Lifetime = 0.20 to 0.50; Speed = 0.10 to 0.10; RotSpeed = 0.0 to 0.0; Rotation = 0.0 to 0.0; SpreadAngle = (3\n\n.56: 0.97], [1.00: 1.00]})\n24. [Folder] Slash VFX\n25.   [Folder] Workspace\n26.     [Part] Slash (Size = (1.37, 13.63, 1.37); Color = RGB(163,162,165); Materia",
+    "ai_synthesis": "### [CYCLE 2/5 INGESTED: HIGH-VELOCITY SLASHES & DOMAIN CLEAVE]\nIngested models: **Sukuna, Anime**.\n\n- **Cutting Mechanics**: Multi-angle 360\u00b0 disc volumes with perpendicular orientations.\n- **Kinetic Drag**: High drag decay (`Drag = 22.00`) with `Acceleration = (0, 20, 0)` for snap deceleration.\n- **Multi-Layer Slicing**: Slashes combined with instantaneous burst slices for layered damage frames.\n- **Primary Asset**: `rbxassetid://18462751521`.\n- **Continuous Chat Distillation Integration**:\n  * *Sukuna 360 Cleave Drag Deceleration*: Applying Drag=22.0 coupled with instantaneous 0.2s burst lifetimes prevents disc particles from outrunning the character hitbox during dashes.\n",
+    "chat_learnings_absorbed": 1,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 05:04:48.498344+00:00"
+  },
+  "users/test@stroke.ai/records/STRK-BAT-003": {
+    "record_id": "STRK-BAT-003",
+    "cycle": 3,
+    "stage_name": "Cycle 3/5: High-Density Explosions & Heat Shockwaves",
+    "vfx_name": "Explosive Pyrotechnics & Thermal Shockwaves (Fire)",
+    "element": "Fire",
+    "status": "ingested",
+    "integrity_hash": "8dfd285e9acc58a23e081f72e09e4fb047a78938cd17e60284e25846fcb19f41",
+    "primary_asset": "rbxassetid://9114223170",
+    "color_hex": "#ff6600",
+    "particle_count": 1844,
+    "beam_count": 0,
+    "models_absorbed": [
+      "Blue Explosion",
+      "Explosion2",
+      "Fireball",
+      "Aura_RedHeartFire",
+      "Auras"
+    ],
+    "textures_used": [
+      "rbxassetid://16503783638",
+      "rbxassetid://96784879550395",
+      "rbxassetid://16845391847",
+      "rbxassetid://84018475156366"
+    ],
+    "focus_attributes": [
+      "1,460 multi-part ParticleEmitter clusters with spherical dispersion",
+      "PointLight synchronizers (Range = 8.0, Shadows = false, Brightness = 1.0)",
+      "High emission rates (Rate = 100.0, Speed = 50.0 to 100.0)",
+      "Multi-stage transparency keyframes ([0.0: 0.54], [0.46: 0.00], [1.0: 0.57])"
+    ],
+    "raw_snippet": "; Transparency = 0.00)\n10289.   [Model] Blue Explosion\n10290.     [MeshPart] Meshes/EXPLODE low_Cube (MeshId = \"rbxassetid://4933939180\"; TextureID = \"\"; Size = (14.51, 15.20, 15.38); Color = RGB(248,248,248); Material = Neon; Transparency = 0.00)\n10291.     [MeshPart] Meshes/EXPLODE low_Cube.001 (MeshId = \"rbxassetid://4933939521\"; TextureID = \"\"; Size = (15.30, 15.74, 16.07); Color = RGB(16,42,220); Material = Neon; Transparency = 0.00)\n10292.     [MeshPart] Meshes/EXPLODE low_Cube.002 (MeshId = \"rbxassetid://4933939707\"; TextureID = \"\"; Size = (16.27, 16.21, 16.77); Color = RGB(16,8,66); Material = Neon; Transparency = 0.00)\n10293.     [MeshPart] Meshes/EXPLODE low_Cube.003 (MeshId = \"rbxassetid://4933939915\"; TextureID = \"\"; Size = (14.97, 15.42, 15.63); Color = RGB(0,255,255); Material = Neon; Transparency = 0.00)\n10294.   [MeshPart] MeshPart (MeshId = \"rbxassetid://6071327170\"; TextureID = \"\"; Size = (10.69, 10.62, 10.48); Color = RGB(248,248,248); Material = Neon; Transparency = 0.00)\n10295.   [MeshPart] MeshPart (Mes\n\n: 0.00], [1.00: 0.00]})\n8498.   [Model] Explosion2\n8499.     [Part] Explosion2 (Size = (1.00, 1.00, 1.00); Color = RGB(163,162,165); Material = Plastic; Trans",
+    "ai_synthesis": "### [CYCLE 3/5 INGESTED: HIGH-DENSITY EXPLOSIONS & THERMAL SHOCKWAVES]\nIngested models: **Blue Explosion, Explosion2, Fireball, Aura_RedHeartFire, Auras** (1844 emitters).\n\n- **Cluster Scaling**: Multi-emitter hierarchies bounded by synchronized PointLights (`Range = 8.0, Brightness = 1.0`).\n- **Shockwave Expansion**: Non-linear transparency keyframes for realistic fiery expansion.\n- **Mobile Budgeting**: Partitioned explosion emitter lods for mobile performance.\n- **Primary Asset**: `rbxassetid://9114223170`.\n- **Continuous Chat Distillation Integration**:\n  * *1,460-Emitter Blue Explosion Mobile LOD*: Partitioning explosion emitters into primary shockwave (30%) and ambient sparks (70%) preserves 60 FPS on low-end mobile devices while maintaining visual density.\n",
+    "chat_learnings_absorbed": 1,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 05:04:48.519761+00:00"
+  },
+  "users/test@stroke.ai/records/STRK-BAT-004": {
+    "record_id": "STRK-BAT-004",
+    "cycle": 4,
+    "stage_name": "Cycle 4/5: Hydrokinetic Torrents & Wind Vortices",
+    "vfx_name": "Fluid Hydrodynamics & Tornado Vortices (Aqua)",
+    "element": "Aqua",
+    "status": "ingested",
+    "integrity_hash": "9e7f38e62d60b4ddb6ac42dc43c496be312a2279d5879868949df9fb3044f845",
+    "primary_asset": "rbxassetid://4991873131",
+    "color_hex": "#00d4ff",
+    "particle_count": 268,
+    "beam_count": 267,
+    "models_absorbed": [
+      "WindBig",
+      "WindV2",
+      "Aura_WaterBubbleTrio"
+    ],
+    "textures_used": [
+      "rbxassetid://12423938107",
+      "rbxassetid://13726398701",
+      "rbxassetid://13894904991",
+      "rbxassetid://13001442706"
+    ],
+    "focus_attributes": [
+      "240-beam dual attachment ribbon vortex systems",
+      "Triple-vortex water bubble streams with mist textures (rbxassetid://2520762076)",
+      "Texture speed rotational animation (TextureSpeed = 2.00, FaceCamera = true)",
+      "VelocityInheritance and dampening for mobile 60fps stability"
+    ],
+    "raw_snippet": "LIGHT GOLDEN BLAST\n9184.       [Model] WindBig\n9185.         [Part] bottomstuff (Size = (0.06, 3.06, 3.06); Color = RGB(163,162,165); Material = Plastic; Transparency = 1.00)\n9186.           [Attachment] Center (Position = (0.00, 0.00, 0.00))\n9187.             [ParticleEmitter] StipeAir (Texture = \"rbxassetid://11291913149\"; Rate = 25.0; Lifetime = 1.00 to 1.00; Speed = 1.22 to 12.22; RotSpeed = -250.0 to -250.0; Rotation = -180.0 to 180.0; SpreadAngle = (5.0, 5.0); Acceleration = (0.0, 0.0, 0.0); Drag = 0.00; VelocityInheritance = 0.00; ZOffset = 0.00; LightEmission = 1.00; LightInfluence = 0.00; Orientation = VelocityPerpendicular; EmissionDirection = Right; Flipbook = None (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = true; Enabled = true; Color = {[0.00: RGB(255,85,0)], [1.00: RGB(255,85,0)]}; Size = {[0.00: 0.00], [1.00: 37.29]}; Transparency = {[0.00: 1.00], [0.10: 0.07], [1.00: 1.00]})\n9188.             [ParticleEmitter] Air (Texture = \"rbxassetid://13780268621\"; Rate = 30.0; Lifetime = 2.00 to 2.00; Spee\n\n: 0.87], [1.00: 1.00]})\n8869.   [Model] WindV2\n8870.     [MeshPart] Part (MeshId = \"rbxassetid://7351745872\"; TextureID = \"\"; Size = (13.30, 5.00, 13.00); Colo",
+    "ai_synthesis": "### [CYCLE 4/5 INGESTED: HYDROKINETIC TORRENTS & WIND VORTICES]\nIngested models: **WindBig, WindV2, Aura_WaterBubbleTrio** (267 beams).\n\n- **Continuous Ribbons**: Dual-beam spiral attachments (`Segments = 50, TextureSpeed = 2.00`).\n- **Hydro Mist**: Multi-layer mist textures with velocity inheritance following moving characters.\n- **Vortex Aerodynamics**: Expanding centripetal acceleration profiles for realistic tornado displacement.\n- **Primary Asset**: `rbxassetid://4991873131`.\n- **Continuous Chat Distillation Integration**:\n  * *Water Bubble Trio Mist Velocity Inheritance*: Setting VelocityInheritance=0.65 on bubble emitters locks the fluid trail directly to the caster's RootPart during high-speed character navigation.\n",
+    "chat_learnings_absorbed": 1,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 05:04:48.539928+00:00"
+  },
+  "users/test@stroke.ai/records/STRK-BAT-005": {
+    "record_id": "STRK-BAT-005",
+    "cycle": 5,
+    "stage_name": "Cycle 5/5: Lightning Storms, Electro & 404 Glitch Rifts",
+    "vfx_name": "Electric Discharge & Quantum Glitch Rifts (Electro)",
+    "element": "Electro",
+    "status": "ingested",
+    "integrity_hash": "86be8bf01aef91a896e5ec36818686b3ab9dd4e43c18354c31ab23fef57f7e1b",
+    "primary_asset": "rbxassetid://3270017",
+    "color_hex": "#00ff66",
+    "particle_count": 127,
+    "beam_count": 4,
+    "models_absorbed": [
+      "Electro Vfx",
+      "Aura_TimeKillingA",
+      "RNG-Aura-03",
+      "DelawareSmash",
+      "power drop aura"
+    ],
+    "textures_used": [
+      "rbxassetid://14919880888",
+      "rbxassetid://15211281419",
+      "rbxasset://textures/face.png",
+      "rbxassetid://12505672712"
+    ],
+    "focus_attributes": [
+      "Branching lightning ParticleEmitters (rbxassetid://126275989641021, 125214381397274)",
+      "High-frequency star particles (Rate = 71.0, Speed = 89.52)",
+      "Torus dial mesh geometry (rbxassetid://3270017) with rotational timeline collapses",
+      "Unified mastery synthesis across all available instances and models"
+    ],
+    "raw_snippet": ": 0.12], [1.00: 1.00]})\n9838.   [Model] Electro Vfx\n9839.     [Part] Electro vfx (Size = (2.00, 2.00, 2.00); Color = RGB(163,162,165); Material = Plastic; Transparency = 0.80)\n9840.       [Attachment] Attachment (Position = (0.00, 0.00, 0.00))\n9841.         [ParticleEmitter] ParticleEmitter (Texture = \"rbxassetid://1315202524\"; Rate = 20.0; Lifetime = 0.25 to 0.50; Speed = 5.00 to 50.00; RotSpeed = 0.0 to 0.0; Rotation = 90.0 to 90.0; SpreadAngle = (360.0, 360.0); Acceleration = (0.0, 0.0, 0.0); Drag = 5.00; VelocityInheritance = 0.00; ZOffset = 0.00; LightEmission = 0.00; LightInfluence = 0.00; Orientation = VelocityParallel; EmissionDirection = Top; Flipbook = None (Mode: Loop); Shape = Box (Style: Volume); LockedToPart = false; Enabled = true; Color = {[0.00: RGB(61,155,255)], [1.00: RGB(61,155,255)]}; Size = {[0.00: 2.00], [1.00: 0.00]}; Transparency = {[0.00: 0.00], [1.00: 0.00]})\n9842.         [ParticleEmitter] ParticleEmitter (Texture = \"http://www.roblox.com/asset/?id=13571103636\"; Rate = 1.0; Lifetime = 0.50 to 1.00\n\nc; Transparency = 0.00)\n7141.   [Model] Aura_TimeKillingA\n7142.     [Part] HumanoidRootPart (Size = (2.00, 2.00, 1.00); Color = RGB(163,162,165); Material = P",
+    "ai_synthesis": "### [CYCLE 5/5 INGESTED: LIGHTNING STORMS & UNIFIED MASTER CATALOG]\nIngested models: **Electro Vfx, Aura_TimeKillingA, RNG-Aura-03, DelawareSmash, power drop aura**.\n\n- **Electric Arc Jitter**: High-frequency emissions with zero drag and randomized rotation.\n- **Time Dial Geometry**: Torus dial collapse geometry (`rbxassetid://3270017`) for temporal shockwave pulses.\n- **Indexed Knowledge State**: 14666 instances, 95 models, and 3005 textures indexed.\n- **Status**: RAG parameters indexed for autonomous Luau script generation.\n- **Continuous Chat Distillation Integration**:\n  * *Quantum Lightning Arc Jitter & Rotation*: Randomizing particle rotation speed (-360 to 360 deg/sec) with high emission bursts mimics hyper-fast electric arc discharge paths.\n",
+    "chat_learnings_absorbed": 1,
+    "source": "AyanshShrivastava/elemental-worlds (vfx_data.json & vfx_dump.txt)",
+    "created_at": "2026-11-15 05:04:48.560381+00:00"
+  },
+  "users/test@stroke.ai": {
+    "database_fed": true
+  }
+}

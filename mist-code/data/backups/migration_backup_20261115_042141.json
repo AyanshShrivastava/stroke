@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-11-15T04:21:41.903574+00:00",
+  "backup_version": "stroke_v1_migration",
+  "local_chat_sessions": {
+    "user@domain.com": [
+      {
+        "session_id": "sess-dt-test",
+        "title": "Datetime Test",
+        "timestamp": "2026-11-15 03:26:16.679763+00:00",
+        "created_at": "2026-11-15 08:56:16.679794",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ]
+      }
+    ]
+  },
+  "firestore_email_records": {
+    "legacy_user@stroke.ai": {
+      "profile": {
+        "email": "legacy_user@stroke.ai",
+        "database_fed": true
+      },
+      "chats": [],
+      "records": [
+        {
+          "record_id": "STRK-BAT-001",
+          "vfx_name": "Legacy Blast",
+          "status": "optimized"
+        }
+      ],
+      "memory": []
+    },
+    "victim@stroke.ai": {
+      "profile": {
+        "email": "victim@stroke.ai",
+        "github_token": "gAAAAABq-TM_fD6RqTsjH13VNnOzxozf_Hb6gr5ad8O2UINVc3QhRJ0OkP2XseBUvhm6QmS6etE6TXurBAGnAx6uOWoBGMCAJzzkgLyBA5l3NMIJCRI5yJQ="
+      },
+      "chats": [],
+      "records": [],
+      "memory": []
+    }
+  }
+}

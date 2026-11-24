@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mist-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Workers Static Assets: serves the compiled Vite frontend from dist/
+  "assets": {
+    "directory": "../dist",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "single-page-application"
+  },
+
+  // Cloudflare R2 bucket binding for published website artifacts
+  "r2_buckets": [
+    {
+      "binding": "PUBLISHED_BUCKET",
+      "bucket_name": "mist-published-sites"
+    }
+  ],
+
+  // Workers Routes: handles apex mist.me and all wildcard subdomains (*.mist-sites.com)
+  "routes": [
+    {
+      "pattern": "mist.me/*",
+      "zone_name": "mist.me"
+    },
+    {
+      "pattern": "*.mist-sites.com/*",
+      "zone_name": "mist-sites.com"
+    }
+  ],
+
+  // Environment variables
+  "vars": {
+    "APEX_DOMAIN": "mist.me",
+    // Canonical wildcard publishing domain for published sites origin isolation
+    "PUBLISH_DOMAIN": "mist-sites.com",
+    "HEROKU_API_ORIGIN": "https://mist-control-plane-api.herokuapp.com"
+  }
+}

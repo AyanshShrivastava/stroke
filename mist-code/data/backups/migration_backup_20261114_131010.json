@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-11-14T13:10:10.408384+00:00",
+  "backup_version": "stroke_v1_migration",
+  "local_chat_sessions": {
+    "user@domain.com": [
+      {
+        "session_id": "sess-dt-test",
+        "title": "Datetime Test",
+        "timestamp": "2026-11-14 13:01:48.312656+00:00",
+        "created_at": "2026-11-14 18:31:48.312663",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ]
+      }
+    ]
+  },
+  "firestore_email_records": {
+    "legacy_user@stroke.ai": {
+      "profile": {
+        "email": "legacy_user@stroke.ai",
+        "database_fed": true
+      },
+      "chats": [],
+      "records": [
+        {
+          "record_id": "STRK-BAT-001",
+          "vfx_name": "Legacy Blast",
+          "status": "optimized"
+        }
+      ],
+      "memory": []
+    }
+  }
+}

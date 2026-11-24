@@ -1,0 +1,6 @@
+{
+  "name": "Mist — Ideas into websites.",
+  "description": "AI-powered website builder where users describe an idea and Mist turns it into a complete, editable, exportable, and deployable React, TypeScript, and Tailwind CSS website.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

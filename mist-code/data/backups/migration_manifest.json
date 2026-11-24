@@ -1,0 +1,422 @@
+[
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_142301.json",
+    "timestamp": "20261124_142301",
+    "sha256": "1b9d6ff77943d754a30f0667977f89fdc1afc5302c06b5dc5305eab15c6dd7af",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_123916.json",
+    "timestamp": "20261124_123916",
+    "sha256": "d21b647e077c36599b745f28440a8bf42abd8c23515d232f26a5f1311cf275ce",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_123650.json",
+    "timestamp": "20261124_123650",
+    "sha256": "6e1a6369cd13fa51680397efe6a3907d08c05bce3492ae7f44a33e092a4b8af2",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_123538.json",
+    "timestamp": "20261124_123538",
+    "sha256": "7820cbd08c09b1cbd1b25f7fef8c2f4b2a4faca6d2ab58ea37a3db7d5b9acf6d",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_122844.json",
+    "timestamp": "20261124_122844",
+    "sha256": "d8b641edc5514ab2efe3b626dafa844ba3c7f4597964a1f128af79f63041221f",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_122359.json",
+    "timestamp": "20261124_122359",
+    "sha256": "23366d614868a4332525a9f9d58de5581da4da5228905c421118a05b6317f1a1",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_105259.json",
+    "timestamp": "20261124_105259",
+    "sha256": "0106bac16e12c856e1c3b99d8ca180a75a7d54ccca4ec1ddee254b57d36db078",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_103659.json",
+    "timestamp": "20261124_103659",
+    "sha256": "6e3dc354340e7f12ad06c800edbe9a5f60f4facb1f25bda7456de50c963ab8d7",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_102908.json",
+    "timestamp": "20261124_102908",
+    "sha256": "4e6cbb219eefe38938c4e41fd7542cebb7216c0853f3571a6f72b426b0151c89",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_102836.json",
+    "timestamp": "20261124_102836",
+    "sha256": "720a4a48b080aa73a7d8f372453fc7944f012139e4efa042b82a148c71cf2535",
+    "local_users_count": 1,
+    "firestore_email_users_count": 0
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_101630.json",
+    "timestamp": "20261124_101630",
+    "sha256": "cd92c46479d55a9ef19a740297462e157ad9e79c2125d88f06ede845d6d5bf5a",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_101217.json",
+    "timestamp": "20261124_101217",
+    "sha256": "71821338232d1c24173bd76e5f223d0a6a17c1ac7003b3c4d796f873733432a5",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261124_095629.json",
+    "timestamp": "20261124_095629",
+    "sha256": "feee6a31f6a127a22db36eab2bf48db443f7c6e96baeaa9d658156b4ab45fb03",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_154316.json",
+    "timestamp": "20261116_154316",
+    "sha256": "a8de1e676fd57178ac597815dcf20831285f0ad552a931ac58325493c4995117",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_153859.json",
+    "timestamp": "20261116_153859",
+    "sha256": "42d1f22b0219987c8dc56647e103c8698ba1aeed15d2811cc49965fe832d23e5",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_153030.json",
+    "timestamp": "20261116_153030",
+    "sha256": "2d8e693333d94f900a8d213013412556a247d706301b1d52bfcacaeafcadf14a",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_150422.json",
+    "timestamp": "20261116_150422",
+    "sha256": "69ccc38a0294c4c1940e4cca7d443e32b66dea302545210958a56d429846deec",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_150100.json",
+    "timestamp": "20261116_150100",
+    "sha256": "209573c23f27467fcdd4af7651b6725bcf01747c8de832eecb61105123bad44d",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_104656.json",
+    "timestamp": "20261116_104656",
+    "sha256": "5b44bc79eeaa7115e28f44bbf0ffaf0e61275231c0ae6e1c2372ae40b7fb2820",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_091657.json",
+    "timestamp": "20261116_091657",
+    "sha256": "c9209af466893aa6b869f698c580bbc2d17cf106ef1a5176b5135c0e6c1d2274",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_091319.json",
+    "timestamp": "20261116_091319",
+    "sha256": "068926e835600725850d1d9d35d9d33c5fa44ab7a1f9c4fee252fb775844a26a",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_090253.json",
+    "timestamp": "20261116_090253",
+    "sha256": "8cd53be753eb0f2127b6ec31366add61c64615311271e1319f0fc09d9a5212b3",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261116_083732.json",
+    "timestamp": "20261116_083732",
+    "sha256": "7d4afe28bf5a352486d5ad5d0152d5f10674de5e14cb420cdaccba3b9cfe9407",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_105107.json",
+    "timestamp": "20261115_105107",
+    "sha256": "5781ea4d77c3c2dd9672f0a4ba4301c61d8a5a610357a72f17ffa9961b060ce3",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_104922.json",
+    "timestamp": "20261115_104922",
+    "sha256": "0d1b455d5a8fcc8e19c33c16cec8d368cdc5026b5f973e4c099049f6a98493a3",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_102102.json",
+    "timestamp": "20261115_102102",
+    "sha256": "54f0155d6276814176f5558d807c7653eed700503421e848ce2d45293a929726",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_101522.json",
+    "timestamp": "20261115_101522",
+    "sha256": "1c72e8822d6637a85dee4f2fc1ab6411ccd23478255aee57d679dc93eb9ddec2",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_100728.json",
+    "timestamp": "20261115_100728",
+    "sha256": "72d0cf197f59ad713ad46c06074307e1d39ed283d1ff7cac7bed793ed462eeac",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_095430.json",
+    "timestamp": "20261115_095430",
+    "sha256": "b42d4a3579531b03288534fc5b0b9acd8c5b8d571abc5f7945598f2919059f27",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_093003.json",
+    "timestamp": "20261115_093003",
+    "sha256": "0485b1d4d5f9eeac03ee67cefba9b1acb8ffb3f6bc5b9a7602e6a18b820c1f5e",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_091138.json",
+    "timestamp": "20261115_091138",
+    "sha256": "b73b9fe2807eff890fbe0372f500e8483b9afdbaedf88bd6ee29e1c4e8cdc1f6",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_090838.json",
+    "timestamp": "20261115_090838",
+    "sha256": "9a3b885a289c519941227fddd456b2b428b8181a82dfd76434ee02b0fd5dc2c5",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_084944.json",
+    "timestamp": "20261115_084944",
+    "sha256": "a14d6e0c49c2cad59101b7b93606bbd7f2a5f147cb63c159f88ca2c988f0d071",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_083703.json",
+    "timestamp": "20261115_083703",
+    "sha256": "d75e8b532936de56de473739ad418d07ed4386b4adb43b774b27cf3b53391059",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_082143.json",
+    "timestamp": "20261115_082143",
+    "sha256": "54f69500d636a74e1e23a65894a82f6c51087e06d5658fa709d57b19cecc4ba2",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_075710.json",
+    "timestamp": "20261115_075710",
+    "sha256": "16e6e57b1aefa8078f0b887a2f28c64888af2d7b2ef18af842132d21705f9534",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_074329.json",
+    "timestamp": "20261115_074329",
+    "sha256": "0868d59f1dc86496db38721dbd503a813d68c18a22f41e575d5204a6c4736c05",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_074201.json",
+    "timestamp": "20261115_074201",
+    "sha256": "3381bcdc77a8369f0476c5de4879346a1227b62de756cc7aa534370a34114850",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_072713.json",
+    "timestamp": "20261115_072713",
+    "sha256": "1b5435dc81cffccf6910012c77d26b0eea14b1f6010fe6bb628fce333c2b07a3",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_072252.json",
+    "timestamp": "20261115_072252",
+    "sha256": "6c4ffec83029cf95f19b5906d225798160aca1b227a5b0806add0107fe3b0e2e",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_060508.json",
+    "timestamp": "20261115_060508",
+    "sha256": "455cd5ee6041ab5032a53e1936bef5caa65cc4cd1171c293a1e448212d7e7866",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_055933.json",
+    "timestamp": "20261115_055933",
+    "sha256": "ef92479e63e8ec22d32efd641a59f8aa424357abc7713a33fdbfceab52f2c546",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_052501.json",
+    "timestamp": "20261115_052501",
+    "sha256": "20fbfe19865f16a64b534fccce23b316e8bf9e89c1625f0238b7c6554fad94e4",
+    "local_users_count": 1,
+    "firestore_email_users_count": 3
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_042141.json",
+    "timestamp": "20261115_042141",
+    "sha256": "6c1a9a1d68f4e01a01965f5420d988fd070a976e320be492d9afe5ce4daf873c",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_032556.json",
+    "timestamp": "20261115_032556",
+    "sha256": "7dd18caf35ef8e708097df0d0449fc1bf001e577d68ce8f054e5e9c74d220614",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_032503.json",
+    "timestamp": "20261115_032503",
+    "sha256": "6c689920b313d11f6329ce6322d80b7f7756ee54885d75082eaf98cace7e7a76",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_032347.json",
+    "timestamp": "20261115_032347",
+    "sha256": "9e5d7dd71bb563b2cd83ea26fb2f6e13b1ba9f1c457073a2162837d5b2f25c18",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_031126.json",
+    "timestamp": "20261115_031126",
+    "sha256": "4a1d9867ceed37dca6f3db495583beb95871e2423592649b4b7a6ba3d6c904a7",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_025053.json",
+    "timestamp": "20261115_025053",
+    "sha256": "ab3998f67280ad7be5cfa3b71813950a7749917ebdf3789af2e3bcecf8b9ca9f",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_023937.json",
+    "timestamp": "20261115_023937",
+    "sha256": "862a2dc4b6f201f9d77e22bf477ae04bbd8939be243a9c436188ce7d7f2244e5",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_014719.json",
+    "timestamp": "20261115_014719",
+    "sha256": "9cdea8b1819907a75e04ffd6489d05f4a681637e65095d2f08c22b3a3b561d9a",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261115_014115.json",
+    "timestamp": "20261115_014115",
+    "sha256": "94ca5405c71bd9bacc1f13c3476d441b9ac0fab3f1ffc90605a85c1fc6c48835",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_131518.json",
+    "timestamp": "20261114_131518",
+    "sha256": "09f8d8a832a74c31317188af1dcbc0059fcc7cb7dd5813fc0ec7f6676f679067",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_131336.json",
+    "timestamp": "20261114_131336",
+    "sha256": "2d12dc9017c6c6c439f982b3ee53a051062cb7a50d9662149cd9beae01fd8da4",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_131231.json",
+    "timestamp": "20261114_131231",
+    "sha256": "aeb0e605b25fbf21c77f443c7f4cfb40fb9446328511757ca0fe019fddd1c12d",
+    "local_users_count": 1,
+    "firestore_email_users_count": 2
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_131010.json",
+    "timestamp": "20261114_131010",
+    "sha256": "844bd4dcac4eb99aaa1771640cad0a232e89e0e5b550335bc653eee24be655b1",
+    "local_users_count": 1,
+    "firestore_email_users_count": 1
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_130135.json",
+    "timestamp": "20261114_130135",
+    "sha256": "d29150dcf8e4e0b4c4a1f1c7de75c739f4c0d4c89884e7fe250bc7a2af4dfc03",
+    "local_users_count": 1,
+    "firestore_email_users_count": 1
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_130112.json",
+    "timestamp": "20261114_130112",
+    "sha256": "1f094d784cb08c8f0e5d37795e5a640ff04a8917463fd8369d730bec3c7ff696",
+    "local_users_count": 1,
+    "firestore_email_users_count": 1
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_130043.json",
+    "timestamp": "20261114_130043",
+    "sha256": "df489391e747591f30d7a118f1d38ee097f3cbb4b09aefeb05a6bb6e0b3f2cb9",
+    "local_users_count": 1,
+    "firestore_email_users_count": 1
+  },
+  {
+    "backup_file": "/Users/ayansh/Desktop/stroke/data/backups/migration_backup_20261114_125835.json",
+    "timestamp": "20261114_125835",
+    "sha256": "e819c3969c3cab30ada7935a0f12ebc3f9bcc24a61209cf2dd3285bdeb056b03",
+    "local_users_count": 1,
+    "firestore_email_users_count": 0
+  }
+]

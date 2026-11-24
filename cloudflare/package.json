@@ -1,0 +1,18 @@
+{
+  "name": "mist-cloudflare-edge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker edge router for Mist: static assets, API proxying, and R2 published sites",
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test src/index.test.ts",
+    "lint": "tsc --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "wrangler": "^3.111.0"
+  }
+}

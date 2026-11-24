@@ -1,0 +1,467 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Geist", system-ui, -apple-system, sans-serif;
+  --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+
+  code, pre, textarea.font-mono, .font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---------- Mist design system: calm surfaces + slowly shifting "mist" gradients ----------
+   Every gradient reads from --mist-c1..c5. Those colours are built from one animated hue
+   (--mist-hue), so all gradients across the app drift through the colour wheel together,
+   very slowly (one full cycle every 90s). */
+@property --mist-hue {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+:root {
+  --mist-hue: 0;
+  --mist-c1: oklch(0.72 0.15 calc(var(--mist-hue) + 195)); /* teal */
+  --mist-c2: oklch(0.68 0.17 calc(var(--mist-hue) + 250)); /* periwinkle */
+  --mist-c3: oklch(0.70 0.18 calc(var(--mist-hue) + 310)); /* orchid */
+  --mist-c4: oklch(0.76 0.15 calc(var(--mist-hue) + 20));  /* coral */
+  --mist-c5: oklch(0.84 0.14 calc(var(--mist-hue) + 75));  /* amber */
+  /* legacy names still used by components */
+  --mist-aurora-1: var(--mist-c1);
+  --mist-aurora-2: var(--mist-c2);
+  --mist-aurora-3: var(--mist-c3);
+  --mist-aurora-4: var(--mist-c4);
+  --mist-aurora-5: var(--mist-c5);
+  --mist-canvas: #f7f6f2;
+  --mist-ink: #121214;
+  animation: mistHueCycle 90s linear infinite;
+}
+.dark {
+  --mist-canvas: #09090b;
+  --mist-ink: #f4f4f5;
+}
+
+@keyframes mistHueCycle {
+  from { --mist-hue: 0; }
+  to { --mist-hue: 360; }
+}
+
+h1, h2 { letter-spacing: -0.04em; }
+
+.mist-ambient-canvas {
+  background-color: var(--mist-canvas);
+  transition: background-color 0.3s ease, color 0.25s ease;
+}
+
+/* Fine film grain so large gradients never band */
+.mist-grain { position: relative; }
+.mist-grain::after {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  opacity: 0.18; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+}
+
+/* Drifting fog blobs: three soft orbs that slowly orbit behind a section */
+.mist-hero-aurora { position: relative; isolation: isolate; }
+.mist-hero-aurora::before,
+.mist-hero-aurora::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.55;
+}
+.mist-hero-aurora::before {
+  width: 520px; height: 520px; top: -120px; right: -80px;
+  background: radial-gradient(circle at 30% 30%, var(--mist-c3), transparent 65%),
+              radial-gradient(circle at 70% 70%, var(--mist-c1), transparent 60%);
+  animation: mistOrbA 26s ease-in-out infinite alternate;
+}
+.mist-hero-aurora::after {
+  width: 440px; height: 440px; bottom: -140px; left: -100px;
+  background: radial-gradient(circle at 60% 40%, var(--mist-c4), transparent 62%),
+              radial-gradient(circle at 30% 70%, var(--mist-c5), transparent 60%);
+  animation: mistOrbB 32s ease-in-out infinite alternate;
+}
+.dark .mist-hero-aurora::before, .dark .mist-hero-aurora::after { opacity: 0.4; }
+@keyframes mistOrbA { to { transform: translate3d(-90px, 60px, 0) scale(1.15); } }
+@keyframes mistOrbB { to { transform: translate3d(110px, -50px, 0) scale(0.9); } }
+
+/* Animated mesh used for preview frames, CTA band and project thumbnails */
+.mist-mesh {
+  background:
+    radial-gradient(60% 80% at 0% 0%, var(--mist-c1), transparent 60%),
+    radial-gradient(60% 80% at 100% 0%, var(--mist-c3), transparent 60%),
+    radial-gradient(70% 90% at 100% 100%, var(--mist-c4), transparent 60%),
+    radial-gradient(70% 90% at 0% 100%, var(--mist-c2), transparent 60%),
+    var(--mist-c5);
+}
+
+.mist-gradient-text {
+  background-image: linear-gradient(100deg, var(--mist-c1), var(--mist-c2) 30%, var(--mist-c3) 60%, var(--mist-c4) 85%, var(--mist-c5));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mist-composer-shell {
+  background: #ffffff;
+  border-radius: 20px !important;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.8) inset,
+    0 24px 48px -28px color-mix(in oklab, var(--mist-c2) 70%, transparent),
+    0 0 0 1px rgba(18, 18, 20, 0.07);
+}
+.dark .mist-composer-shell {
+  background: #121215;
+  box-shadow:
+    0 24px 60px -30px color-mix(in oklab, var(--mist-c3) 55%, transparent),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.mist-surface-card {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1px rgba(18, 18, 20, 0.06), 0 10px 28px -20px rgba(18, 18, 20, 0.25);
+}
+.dark .mist-surface-card {
+  background: #111113;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 40px -24px rgba(0, 0, 0, 0.9);
+}
+
+/* Primary action: gradient that also follows the slow hue cycle */
+.mist-primary-gradient {
+  background-image: linear-gradient(110deg, var(--mist-c2) 0%, var(--mist-c3) 45%, var(--mist-c4) 100%);
+  background-size: 180% 100%;
+  background-position: 0% 50%;
+  color: #fff;
+  box-shadow: 0 8px 22px -12px color-mix(in oklab, var(--mist-c3) 80%, transparent);
+  transition: background-position 0.6s ease, box-shadow 0.3s ease, transform 0.15s ease;
+}
+.mist-primary-gradient:hover { background-position: 100% 50%; }
+.mist-primary-gradient:active { transform: scale(0.98); }
+
+/* Gradient hairline border for highlighted cards */
+.mist-gradient-border {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(var(--mist-card-bg, #fff), var(--mist-card-bg, #fff)) padding-box,
+    linear-gradient(120deg, var(--mist-c1), var(--mist-c3), var(--mist-c5)) border-box;
+}
+.dark .mist-gradient-border { --mist-card-bg: #131316; }
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--mist-c2) 85%, transparent);
+  outline-offset: 2px;
+}
+
+@keyframes mistProgressShimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.mist-shimmer-bar {
+  animation: mistProgressShimmer 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.mist-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.mist-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mist-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(113, 113, 122, 0.28);
+  border-radius: 3px;
+}
+
+.mist-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.48);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Clerk Custom UI & Watermark Suppression ---------- */
+.cl-footer,
+.cl-footerAction,
+.cl-internal-b3fm6y,
+.cl-internal-1dauvpw,
+.cl-internal-18080wh,
+.cl-badge,
+.cl-attribution,
+[data-localization-key*="securedByClerk"],
+a[href*="clerk.com?utm_source"],
+a[href*="clerk.dev?utm_source"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Theme-adaptive Clerk Modal & Cards (Dark Mode) */
+.dark .cl-rootBox,
+.dark .cl-card,
+.dark .cl-modalContent,
+.dark [data-clerk-modal] {
+  color-scheme: dark !important;
+}
+
+.dark .cl-modalBackdrop {
+  background-color: rgba(0, 0, 0, 0.82) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.dark .cl-card {
+  background-color: #0d0f18 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85) !important;
+  color: #f8fafc !important;
+}
+
+.dark .cl-headerTitle {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.dark .cl-headerSubtitle {
+  color: #94a3b8 !important;
+}
+
+.dark .cl-socialButtonsBlockButton,
+.dark .cl-socialButtonsBlockButton *,
+.dark .cl-socialButtonsBlockButtonText,
+.dark .cl-socialButtonsIconButton,
+.dark .cl-button {
+  color: #ffffff !important;
+}
+
+.dark .cl-socialButtonsBlockButton {
+  background-color: #161924 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark .cl-socialButtonsBlockButton:hover,
+.dark .cl-socialButtonsIconButton:hover {
+  background-color: #1f2433 !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+.dark .cl-socialButtonsBlockButtonText {
+  color: #f8fafc !important;
+  font-weight: 600 !important;
+}
+
+.dark .cl-socialButtonsIconButton {
+  background-color: #161924 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.dark .cl-dividerLine {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dark .cl-dividerText {
+  color: #64748b !important;
+  font-weight: 600 !important;
+}
+
+.dark .cl-formFieldLabel {
+  color: #cbd5e1 !important;
+  font-weight: 500 !important;
+}
+
+.dark .cl-formFieldInput,
+.dark .cl-input,
+.dark input.cl-input,
+.dark input.cl-formFieldInput,
+.dark input[name="identifier"] {
+  background-color: #161924 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.dark .cl-formFieldInput:focus,
+.dark .cl-input:focus,
+.dark input.cl-input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+}
+
+.dark .cl-formFieldInput::placeholder,
+.dark .cl-input::placeholder,
+.dark input.cl-input::placeholder {
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b !important;
+}
+
+/* Light Mode Clerk overrides */
+html:not(.dark) .cl-rootBox,
+html:not(.dark) .cl-card,
+html:not(.dark) .cl-modalContent,
+html:not(.dark) [data-clerk-modal] {
+  color-scheme: light !important;
+}
+
+html:not(.dark) .cl-modalBackdrop {
+  background-color: rgba(18, 18, 20, 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+html:not(.dark) .cl-card {
+  background-color: #ffffff !important;
+  color: #121214 !important;
+  border: 1px solid rgba(18, 18, 20, 0.08) !important;
+  box-shadow: 0 20px 48px -12px rgba(18, 18, 20, 0.18) !important;
+}
+
+html:not(.dark) .cl-headerTitle {
+  color: #121214 !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) .cl-headerSubtitle,
+html:not(.dark) .cl-dividerText {
+  color: #71717a !important;
+}
+
+html:not(.dark) .cl-socialButtonsBlockButton,
+html:not(.dark) .cl-socialButtonsIconButton,
+html:not(.dark) .cl-formFieldInput,
+html:not(.dark) .cl-input,
+html:not(.dark) input[name="identifier"] {
+  background-color: #f7f6f2 !important;
+  border: 1px solid rgba(18, 18, 20, 0.12) !important;
+  color: #121214 !important;
+  -webkit-text-fill-color: #121214 !important;
+}
+
+html:not(.dark) .cl-socialButtonsBlockButton *,
+html:not(.dark) .cl-socialButtonsBlockButtonText {
+  color: #121214 !important;
+}
+
+html:not(.dark) .cl-formFieldLabel {
+  color: #3f3f46 !important;
+}
+
+.cl-formButtonPrimary {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #7c3aed 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+}
+
+.cl-formButtonPrimary:hover {
+  opacity: 0.94 !important;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5) !important;
+}
+
+/* ======================================================================
+   Mist Polish Layer — Premium Typography, Surfaces, Motion, and Focus
+   ====================================================================== */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--mist-c2) 32%, transparent);
+}
+
+:where(button, a, [role="button"], [role="tab"], [role="menuitem"], summary) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:where(button, [role="button"]):not(:disabled):active {
+  transform: translateY(0.5px) scale(0.985);
+}
+
+:where(button, input, textarea, select):disabled {
+  cursor: not-allowed;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+  transition: border-color 160ms ease, box-shadow 200ms ease, background-color 160ms ease;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--mist-c2) 22%, transparent),
+              0 0 0 1px color-mix(in oklab, var(--mist-c2) 70%, transparent);
+}
+
+.mist-glass {
+  background: color-mix(in oklab, #ffffff 75%, transparent);
+  backdrop-filter: blur(18px) saturate(1.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  border: 1px solid rgba(18, 18, 20, 0.07);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 12px 32px -18px rgba(18, 18, 20, 0.25);
+}
+
+.dark .mist-glass {
+  background: color-mix(in oklab, #121215 72%, transparent);
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -20px rgba(0, 0, 0, 0.85);
+}
+
+@keyframes mistDialogIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+:where([role="dialog"], [aria-modal="true"]) {
+  animation: mistDialogIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}

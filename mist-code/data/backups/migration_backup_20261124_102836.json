@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-11-24T10:28:36.851498+00:00",
+  "backup_version": "stroke_v1_migration",
+  "local_chat_sessions": {
+    "user@domain.com": [
+      {
+        "session_id": "sess-dt-test",
+        "title": "Datetime Test",
+        "timestamp": "2026-11-15 04:54:17.706934+00:00",
+        "created_at": "2026-11-15 10:24:17.706939",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ]
+      }
+    ]
+  },
+  "firestore_email_records": {}
+}
