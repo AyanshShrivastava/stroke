@@ -138,6 +138,9 @@ def read_file(
     target = workspace_service.validate_path_access(file_path)
     if not target.exists():
         raise FileNotFoundError(f"File not found: {target}")
+    if target.is_symlink():
+        # Prevent TOCTOU symlink substitution races
+        raise workspace_service.WorkspaceSecurityError(f"Symlink traversal denied: '{target}' cannot be accessed directly as a symlink.")
     if not target.is_file():
         raise IsADirectoryError(f"Path is a directory, not a file: {target}")
 
@@ -349,8 +352,15 @@ def search_files(
             truncated = True
             break
 
-        # Filter hidden directories
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        # Filter hidden directories and unapproved symlink targets
+        if follow_symlinks:
+            dirs[:] = [
+                d for d in dirs
+                if not d.startswith(".")
+                and workspace_service.is_path_approved(str((Path(root) / d).resolve()))
+            ]
+        else:
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
         for f in files:
             if f.startswith("."):
                 continue
@@ -412,7 +422,15 @@ def search_in_files(
             truncated = True
             break
 
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        # Filter hidden directories and unapproved symlink targets
+        if follow_symlinks:
+            dirs[:] = [
+                d for d in dirs
+                if not d.startswith(".")
+                and workspace_service.is_path_approved(str((Path(root) / d).resolve()))
+            ]
+        else:
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
         for f in files:
             if f.startswith("."):
                 continue
@@ -733,7 +751,15 @@ def inspect_workspace(workspace_path: str) -> Dict[str, Any]:
             truncated = True
             break
 
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        # Filter hidden directories and unapproved symlink targets
+        if follow_symlinks:
+            dirs[:] = [
+                d for d in dirs
+                if not d.startswith(".")
+                and workspace_service.is_path_approved(str((Path(root) / d).resolve()))
+            ]
+        else:
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
         total_dirs += len(dirs)
         for f in files:
             if f.startswith("."):

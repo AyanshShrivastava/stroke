@@ -32,6 +32,9 @@ from desktop import (
     probe_stroke_health,
     verify_desktop_health,
     find_available_port,
+    validate_desktop_navigation_url,
+    apply_pywebview_security_policies,
+    audit_desktop_security,
     BackendSupervisor,
     _atexit_cleanup,
     DEFAULT_START_PORT,
@@ -294,13 +297,86 @@ class TestDesktopPackagingOptions:
         assert "All packaging options and read-only location checks PASSED" in proc.stdout
 
 
+class TestDesktopSecurityAndSandboxRestrictions:
+    """Tests security boundaries, loopback URL enforcement, remote debug disabling, and shell=True audit."""
+
+    def test_validate_desktop_navigation_url_accepts_loopback(self):
+        """Verifies valid loopback HTTP URLs are accepted."""
+        assert validate_desktop_navigation_url("http://127.0.0.1:8501", allowed_port=8501) is True
+        assert validate_desktop_navigation_url("http://localhost:8501", allowed_port=8501) is True
+        assert validate_desktop_navigation_url("http://127.0.0.1:8520/health", allowed_port=8520) is True
+
+    def test_validate_desktop_navigation_url_rejects_disallowed_schemes_and_hosts(self):
+        """Verifies local file schemes, javascript, remote IPs, and mismatched ports are strictly blocked."""
+        # Local file schemes (must be blocked)
+        assert validate_desktop_navigation_url("file:///etc/passwd") is False
+        assert validate_desktop_navigation_url("file://C:/Windows/System32") is False
+
+        # Arbitrary protocols
+        assert validate_desktop_navigation_url("javascript:alert(1)") is False
+        assert validate_desktop_navigation_url("data:text/html,<h1>evil</h1>") is False
+        assert validate_desktop_navigation_url("blob:http://127.0.0.1/1234") is False
+
+        # Remote / external / private IPs outside loopback
+        assert validate_desktop_navigation_url("http://google.com") is False
+        assert validate_desktop_navigation_url("http://192.168.1.100:8501") is False
+        assert validate_desktop_navigation_url("http://10.0.0.1:8501") is False
+        assert validate_desktop_navigation_url("http://169.254.169.254/latest/meta-data") is False
+
+        # Port mismatch
+        assert validate_desktop_navigation_url("http://127.0.0.1:9000", allowed_port=8501) is False
+
+        # Malformed / empty
+        assert validate_desktop_navigation_url("") is False
+        assert validate_desktop_navigation_url(None) is False
+
+    def test_apply_pywebview_security_policies(self):
+        """Verifies PyWebView settings block file URLs, remote debug port, and unauthorized downloads."""
+        mock_webview = MagicMock()
+        mock_webview.settings = {
+            "ALLOW_FILE_URLS": True,
+            "REMOTE_DEBUGGING_PORT": 9222,
+            "ALLOW_DOWNLOADS": True,
+        }
+        res = apply_pywebview_security_policies(mock_webview)
+        assert mock_webview.settings["ALLOW_FILE_URLS"] is False
+        assert mock_webview.settings["REMOTE_DEBUGGING_PORT"] is None
+        assert mock_webview.settings["ALLOW_DOWNLOADS"] is False
+        assert res["allow_file_urls_blocked"] is True
+        assert res["remote_debug_disabled"] is True
+
+    def test_desktop_source_audit_no_shell_true(self):
+        """Scans desktop.py AST to ensure zero Call nodes invoke shell=True."""
+        import ast
+        desktop_path = os.path.join(_REPO_ROOT, "desktop.py")
+        with open(desktop_path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=desktop_path)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "shell" and getattr(keyword.value, "value", None) is True:
+                        pytest.fail(f"Disallowed shell=True found at line {node.lineno} in desktop.py")
+
+    def test_audit_desktop_security_report(self):
+        """Verifies audit_desktop_security generates a clean, secure posture report."""
+        report = audit_desktop_security(port=8501)
+        assert report["status"] == "secure"
+        assert report["shell_execution_safe"] is True
+        assert report["loopback_navigation_enforced"] is True
+        assert report["file_schemes_blocked"] is True
+        assert report["remote_hosts_blocked"] is True
+        assert report["remote_debug_disabled"] is True
+
+
 class TestDesktopSubprocessVerifyCLI:
     """Verifies invoking desktop.py --verify from command line."""
 
     def test_desktop_verify_cli_command(self):
-        """Executes desktop.py --verify and confirms clean pass and zero exit code."""
+        """Executes desktop.py --verify and confirms clean pass, security audit, and zero exit code."""
         cmd = [sys.executable, os.path.join(_REPO_ROOT, "desktop.py"), "--verify"]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
         assert proc.returncode == 0
         assert "Desktop health verification check: PASSED" in proc.stdout
+        assert "Desktop security audit: SECURE" in proc.stdout
         assert "Backend shutdown complete" in proc.stdout

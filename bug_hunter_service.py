@@ -942,6 +942,10 @@ class FrontendBuildDiagnostic:
             }, []
 
         # Full build execution
+        resolved_root = Path(os.path.realpath(str(root_dir)))
+        if not terminal_service.is_allowed_workspace_root(str(resolved_root)):
+            raise PermissionError(f"Frontend build execution target '{resolved_root}' is outside approved workspace roots.")
+
         env = os.environ.copy()
         node_bin = os.path.expanduser("~/.local/node/bin")
         if os.path.exists(node_bin):

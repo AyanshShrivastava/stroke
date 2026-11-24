@@ -454,11 +454,26 @@ def build_minimal_mcp_env(custom_env: Optional[Dict[str, str]] = None) -> Dict[s
     if os.path.exists(local_node_bin) and local_node_bin not in current_path:
         env["PATH"] = f"{local_node_bin}{os.pathsep}{current_path}"
 
-    # Merge decrypted custom env
+    # Merge decrypted custom env safely (blocking process injection & secret override)
+    DANGEROUS_INJECTION_KEYS = {
+        "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH", "PYTHONPATH",
+        "PYTHONHOME", "NODE_OPTIONS", "STROKE_INTERNAL_SECRET"
+    }
+
     if custom_env:
         decrypted = McpSecretVault.decrypt_dict(custom_env)
         for k, v in decrypted.items():
-            env[k] = v
+            clean_k = str(k).strip()
+            if not clean_k or any(c in clean_k for c in ("\r", "\n", "\0", "=")):
+                continue
+            if clean_k.upper() in DANGEROUS_INJECTION_KEYS:
+                logger.warning(f"[McpEnv] Blocked dangerous process injection variable: '{clean_k}'")
+                continue
+            if any(c in str(v) for c in ("\r", "\n", "\0")):
+                logger.warning(f"[McpEnv] Stripped control characters from env var '{clean_k}'")
+                v = str(v).replace("\r", "").replace("\n", "").replace("\0", "")
+            env[clean_k] = str(v)
 
     return env
 

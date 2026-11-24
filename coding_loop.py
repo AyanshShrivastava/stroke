@@ -1129,15 +1129,19 @@ class ProjectInspectionEngine:
 
         # 1. First inspect files explicitly mentioned in the goal
         for f_name in goal_spec.target_files:
-            cand = ws / f_name
-            if cand.exists() and cand.is_file():
-                try:
+            try:
+                cand = (ws / f_name).resolve()
+                if ws not in cand.parents and cand != ws:
+                    continue
+                import workspace_service
+                workspace_service.validate_path_access(str(cand), allow_app_data=True)
+                if cand.exists() and cand.is_file():
                     p_rel = str(cand.relative_to(ws))
                     if p_rel not in seen_paths:
                         seen_paths.add(p_rel)
                         inspected.append(cls._inspect_single_file(cand, ws, goal_spec.target_language))
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
         # 2. Use Project Context Intelligence to retrieve the most relevant files for the user goal
         if not inspected:
@@ -1337,6 +1341,16 @@ class ControlledChangeManager:
                 relative_path=relative_path,
                 action="skipped",
                 error=f"Security error: path {relative_path} resolves outside workspace."
+            )
+
+        import workspace_service
+        try:
+            workspace_service.validate_path_access(str(target), allow_app_data=True)
+        except Exception as se:
+            return FileChangeResult(
+                relative_path=relative_path,
+                action="skipped",
+                error=f"Workspace security error: {se}"
             )
 
         # 1. Conflict detection (Preserve user changes)

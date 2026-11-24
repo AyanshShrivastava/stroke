@@ -795,23 +795,6 @@ async def get_email_config(user: AuthenticatedUser = Depends(get_current_user)):
     }
 
 
-@app.get("/auth/email-config", tags=["Authentication"])
-async def get_email_config():
-    """Returns current outbound email configuration status (Resend / SMTP)."""
-    resend_key = os.environ.get("RESEND_API_KEY", "").strip()
-    masked_key = ""
-    if resend_key:
-        masked_key = resend_key[:6] + "..." + resend_key[-4:] if len(resend_key) > 10 else "configured"
-    
-    return {
-        "status": "success",
-        "resend_configured": bool(resend_key),
-        "resend_key_masked": masked_key,
-        "email_from": os.environ.get("EMAIL_FROM", "Stroke AI <onboarding@resend.dev>"),
-        "smtp_configured": bool(os.environ.get("SMTP_HOST"))
-    }
-
-
 @app.post("/auth/email-config", tags=["Authentication"])
 async def update_email_config(payload: EmailConfigRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """Updates and permanently persists Resend API key and sender configuration in memory and .env."""
@@ -1101,19 +1084,35 @@ class SaveAuthConfigPayload(BaseModel):
 async def save_auth_config(payload: SaveAuthConfigPayload):
     """
     POST /auth/config
-    Persists user-configured client Firebase settings to user app data.
+    Persists user-configured client Firebase settings to user app data with strict parameter validation.
     """
     stored = _get_stored_firebase_config()
     if payload.apiKey is not None:
-        stored["apiKey"] = payload.apiKey.strip()
+        key = payload.apiKey.strip()
+        if any(c in key for c in ("\r", "\n", "\0")) or len(key) > 256:
+            raise HTTPException(status_code=400, detail="Invalid Firebase API key.")
+        stored["apiKey"] = key
     if payload.projectId is not None:
-        stored["projectId"] = payload.projectId.strip()
+        p_id = payload.projectId.strip()
+        if not re.match(r"^[a-zA-Z0-9_\-]{1,128}$", p_id):
+            raise HTTPException(status_code=400, detail="Invalid Firebase project ID format.")
+        stored["projectId"] = p_id
     if payload.appId is not None:
-        stored["appId"] = payload.appId.strip()
+        a_id = payload.appId.strip()
+        if not re.match(r"^[0-9a-zA-Z:_\-]{1,128}$", a_id):
+            raise HTTPException(status_code=400, detail="Invalid Firebase app ID format.")
+        stored["appId"] = a_id
     if payload.storageBucket is not None:
-        stored["storageBucket"] = payload.storageBucket.strip()
+        bucket = payload.storageBucket.strip()
+        if not re.match(r"^[a-zA-Z0-9_\-\.]{1,256}$", bucket):
+            raise HTTPException(status_code=400, detail="Invalid Firebase storage bucket format.")
+        stored["storageBucket"] = bucket
     if payload.emulatorHost is not None:
-        stored["emulatorHost"] = payload.emulatorHost.strip()
+        emu = payload.emulatorHost.strip()
+        # Strictly restrict emulator host to loopback address (prevent SSRF)
+        if not re.match(r"^(localhost|127\.0\.0\.1|\[::1\]):[0-9]{1,5}$", emu):
+            raise HTTPException(status_code=400, detail="Emulator host must be a local loopback address (e.g. localhost:9099).")
+        stored["emulatorHost"] = emu
 
     config_file = paths_service.get_app_data_dir() / "firebase_client_config.json"
     try:
@@ -4463,9 +4462,15 @@ async def verify_terminal_access(
     """
     # Early path & parameter security validation for diagnostics, filesystem, and model endpoints
     req_path = request.url.path
-    if req_path.startswith("/diagnostics/") or req_path.startswith("/fs/"):
+    if (
+        req_path.startswith("/diagnostics/")
+        or req_path.startswith("/fs/")
+        or req_path.startswith("/files/")
+        or req_path.startswith("/coding/")
+    ):
         target_candidate = (
             request.query_params.get("workspace_path")
+            or request.query_params.get("workspace")
             or request.query_params.get("path")
             or request.query_params.get("dir")
             or request.query_params.get("dir_path")
@@ -4479,6 +4484,7 @@ async def verify_terminal_access(
                     b_json = json.loads(body_bytes)
                     target_candidate = (
                         b_json.get("workspace_path")
+                        or b_json.get("workspace")
                         or b_json.get("path")
                         or b_json.get("dir")
                         or b_json.get("dir_path")
@@ -4489,10 +4495,11 @@ async def verify_terminal_access(
 
         if target_candidate:
             import workspace_service
-            if ".." in str(target_candidate):
+            cand_str = str(target_candidate)
+            if ".." in cand_str or "/." in cand_str or "\\." in cand_str:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace traversal forbidden.")
             try:
-                workspace_service.validate_path_access(str(target_candidate))
+                workspace_service.validate_path_access(cand_str)
             except (workspace_service.WorkspaceSecurityError, PermissionError) as pe:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
 
@@ -4878,6 +4885,7 @@ async def stream_terminal_output_query_endpoint(
 # ==============================================================================
 
 @app.post("/fs/list", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/list", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_list_endpoint(payload: FsListPayload):
     """Lists files and directories inside an approved workspace."""
     try:
@@ -4894,6 +4902,7 @@ async def fs_list_endpoint(payload: FsListPayload):
 
 
 @app.get("/fs/list", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.get("/files/list", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_list_get_endpoint(
     dir: Optional[str] = Query(None),
     dir_path: Optional[str] = Query(None),
@@ -4917,6 +4926,7 @@ async def fs_list_get_endpoint(
 
 
 @app.post("/fs/read", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/read", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_read_endpoint(payload: FsReadPayload):
     """Reads content from an approved user file with optional line range."""
     try:
@@ -4930,6 +4940,7 @@ async def fs_read_endpoint(payload: FsReadPayload):
 
 
 @app.get("/fs/read", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.get("/files/read", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_read_get_endpoint(
     path: Optional[str] = Query(None),
     file_path: Optional[str] = Query(None),
@@ -4958,6 +4969,7 @@ class FsWritePayload(BaseModel):
 
 
 @app.post("/fs/write", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/write", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_write_endpoint(payload: FsWritePayload):
     """POST /fs/write: Writes content to a file in an approved workspace."""
     target_file = payload.path or payload.file_path
@@ -4976,6 +4988,7 @@ async def fs_write_endpoint(payload: FsWritePayload):
 
 
 @app.post("/fs/read-multiple", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/read-multiple", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_read_multiple_endpoint(payload: FsReadMultiplePayload):
     """Reads multiple files in an approved workspace simultaneously."""
     try:
@@ -4987,6 +5000,7 @@ async def fs_read_multiple_endpoint(payload: FsReadMultiplePayload):
 
 
 @app.post("/fs/create", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/create", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_create_endpoint(payload: FsCreatePayload):
     """Creates a new file in an approved workspace."""
     try:
@@ -5005,6 +5019,7 @@ async def fs_create_endpoint(payload: FsCreatePayload):
 
 
 @app.post("/fs/edit", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/edit", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_edit_endpoint(payload: FsEditPayload):
     """Safely edits an existing file with automatic pre-modification version backup."""
     try:
@@ -5023,6 +5038,7 @@ async def fs_edit_endpoint(payload: FsEditPayload):
 
 
 @app.post("/fs/create-dir", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/create-dir", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_create_dir_endpoint(payload: FsCreateDirPayload):
     """Creates a directory in an approved workspace."""
     try:
@@ -5034,6 +5050,7 @@ async def fs_create_dir_endpoint(payload: FsCreateDirPayload):
 
 
 @app.post("/fs/search", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/search", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_search_endpoint(payload: FsSearchPayload):
     """Searches for files matching a filename wildcard pattern."""
     try:
@@ -5049,6 +5066,7 @@ async def fs_search_endpoint(payload: FsSearchPayload):
 
 
 @app.post("/fs/search-content", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/search-content", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_search_content_endpoint(payload: FsSearchContentPayload):
     """Searches inside file contents across an approved workspace."""
     try:
@@ -5066,6 +5084,7 @@ async def fs_search_content_endpoint(payload: FsSearchContentPayload):
 
 
 @app.post("/fs/inspect", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/inspect", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_inspect_endpoint(payload: FsInspectPayload):
     """Retrieves deep metadata, SHA-256 hash, and backup count for a file."""
     try:
@@ -5079,6 +5098,7 @@ async def fs_inspect_endpoint(payload: FsInspectPayload):
 
 
 @app.post("/fs/apply-patch", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/apply-patch", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_apply_patch_endpoint(payload: FsPatchPayload):
     """Applies a unified diff patch to an existing file with automatic backup."""
     try:
@@ -5090,6 +5110,7 @@ async def fs_apply_patch_endpoint(payload: FsPatchPayload):
 
 
 @app.post("/fs/diff", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/diff", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_diff_endpoint(payload: FsDiffPayload):
     """Generates a unified diff comparing current file content against proposed content."""
     try:
@@ -5101,6 +5122,7 @@ async def fs_diff_endpoint(payload: FsDiffPayload):
 
 
 @app.post("/fs/inspect-workspace", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
+@app.post("/files/inspect-workspace", dependencies=[Depends(verify_terminal_access)], tags=["User File System"])
 async def fs_inspect_workspace_endpoint(payload: Optional[FsSearchPayload] = None):
     """Generates an architectural overview of an approved workspace."""
     try:
@@ -5488,7 +5510,7 @@ def _validate_diagnostic_workspace(workspace_path: Optional[str]) -> Path:
         target_str = terminal_service.DEFAULT_WORKSPACE
 
     # Reject directory traversal sequences
-    if ".." in target_str.replace("\\", "/").split("/"):
+    if ".." in target_str:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Diagnostic workspace '{target_str}' contains forbidden traversal sequences."

@@ -23,6 +23,7 @@ import sys
 import time
 import json
 import socket
+import asyncio
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -489,6 +490,115 @@ class TestDosProtection(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 413)
         self.assertIn("exceeds 50 MB limit", resp.json()["detail"])
+
+
+class TestPhase2SecurityHardening(unittest.TestCase):
+    """Exhaustively verifies Phase 2 security hardening, token checks, and SSRF/traversal prevention."""
+
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_01_token_missing_exp_rejected(self):
+        """Tokens without 'exp' claim are strictly rejected."""
+        mock_claims = {
+            "uid": "valid_user_1",
+            "sub": "valid_user_1",
+            "user_id": "valid_user_1",
+            "aud": auth_service.get_firebase_project_id(),
+            "iss": f"https://securetoken.google.com/{auth_service.get_firebase_project_id()}"
+        }
+        with patch("google.oauth2.id_token.verify_firebase_token", return_value=mock_claims):
+            with self.assertRaises(ValueError) as ctx:
+                auth_service.verify_firebase_id_token("dummy_token")
+            self.assertIn("expiration claim", str(ctx.exception))
+
+    def test_02_token_future_iat_rejected(self):
+        """Tokens issued more than 5 minutes in the future are rejected."""
+        mock_claims = {
+            "uid": "valid_user_1",
+            "sub": "valid_user_1",
+            "user_id": "valid_user_1",
+            "aud": auth_service.get_firebase_project_id(),
+            "iss": f"https://securetoken.google.com/{auth_service.get_firebase_project_id()}",
+            "exp": time.time() + 3600,
+            "iat": time.time() + 1000
+        }
+        with patch("google.oauth2.id_token.verify_firebase_token", return_value=mock_claims):
+            with self.assertRaises(ValueError) as ctx:
+                auth_service.verify_firebase_id_token("dummy_token")
+            self.assertIn("future", str(ctx.exception).lower())
+
+    def test_03_token_subject_mismatch_rejected(self):
+        """Tokens where 'user_id' and 'sub' claims mismatch are rejected."""
+        mock_claims = {
+            "uid": "alice",
+            "sub": "alice",
+            "user_id": "bob",
+            "aud": auth_service.get_firebase_project_id(),
+            "iss": f"https://securetoken.google.com/{auth_service.get_firebase_project_id()}",
+            "exp": time.time() + 3600
+        }
+        with patch("google.oauth2.id_token.verify_firebase_token", return_value=mock_claims):
+            with self.assertRaises(ValueError) as ctx:
+                auth_service.verify_firebase_id_token("dummy_token")
+            self.assertIn("subject mismatch", str(ctx.exception).lower())
+
+    def test_04_auth_config_payload_validation(self):
+        """POST /auth/config rejects non-loopback emulatorHost and invalid project IDs."""
+        res_bad_host = self.client.post("/auth/config", json={"emulatorHost": "evil.attacker.com:9099"})
+        self.assertEqual(res_bad_host.status_code, 400)
+        self.assertIn("loopback", res_bad_host.json()["detail"].lower())
+
+        res_bad_proj = self.client.post("/auth/config", json={"projectId": "../../etc/passwd"})
+        self.assertEqual(res_bad_proj.status_code, 400)
+        self.assertIn("invalid firebase project id", res_bad_proj.json()["detail"].lower())
+
+    def test_05_files_endpoints_require_auth_and_reject_traversal(self):
+        """The /files/* endpoints enforce authentication and reject path traversal."""
+        # Unauthenticated request rejected with 401
+        res = self.client.post("/files/list", json={"dir_path": "."})
+        self.assertEqual(res.status_code, 401)
+
+        # Authenticated with internal secret, but with traversal rejected with 403
+        headers = {"X-Stroke-Token": "test_internal_secret"}
+        with patch.dict(os.environ, {"STROKE_INTERNAL_SECRET": "test_internal_secret"}):
+            res_trav = self.client.post(
+                "/files/read",
+                json={"file_path": "../../../../etc/passwd"},
+                headers=headers
+            )
+            self.assertEqual(res_trav.status_code, 403)
+
+    def test_06_mcp_bridge_health_probe_rejects_ssrf(self):
+        """check_server_health in mcp_bridge rejects cloud metadata and private network URLs."""
+        import mcp_bridge
+        is_live = asyncio.run(mcp_bridge.check_server_health("http://169.254.169.254/latest/meta-data/"))
+        self.assertFalse(is_live)
+
+    def test_07_mcp_env_blocks_dangerous_injection_keys(self):
+        """build_minimal_mcp_env strips LD_PRELOAD, DYLD_INSERT_LIBRARIES and secret keys."""
+        dirty_custom = {
+            "LD_PRELOAD": "/lib/evil.so",
+            "DYLD_INSERT_LIBRARIES": "/lib/evil.dylib",
+            "STROKE_INTERNAL_SECRET": "leaked_secret",
+            "CLEAN_CUSTOM_VAR": "clean_value"
+        }
+        env = build_minimal_mcp_env(dirty_custom)
+        self.assertNotIn("LD_PRELOAD", env)
+        self.assertNotIn("DYLD_INSERT_LIBRARIES", env)
+        self.assertNotIn("STROKE_INTERNAL_SECRET", env)
+        self.assertEqual(env.get("CLEAN_CUSTOM_VAR"), "clean_value")
+
+    def test_08_coding_loop_validates_path_access_before_read(self):
+        """ControlledChangeManager.apply_change rejects unapproved paths with workspace error."""
+        from coding_loop import ControlledChangeManager
+        res = ControlledChangeManager.apply_change(
+            workspace_path="/tmp",
+            relative_path="test_file.txt",
+            new_content="print('hello')"
+        )
+        self.assertEqual(res.action, "skipped")
+        self.assertIn("security error", res.error.lower())
 
 
 if __name__ == "__main__":

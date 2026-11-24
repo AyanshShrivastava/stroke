@@ -72,7 +72,13 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None, check
 
     token = token.strip()
     target_project_id = (project_id or get_firebase_project_id()).strip()
+    # Strip leading Bearer if provided in raw token
+    if token.startswith("Bearer "):
+        token = token[7:].strip()
+
     should_check_revoked = check_revoked or (os.getenv("STROKE_AUTH_CHECK_REVOKED", "0").lower() in ("1", "true", "yes"))
+
+    claims = None
 
     # Case A: Local Firebase Auth Emulator is configured
     emulator_host = os.getenv("FIREBASE_AUTH_EMULATOR_HOST") or FIREBASE_AUTH_EMULATOR_HOST
@@ -82,41 +88,40 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None, check
             from firebase_admin import auth as admin_auth
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(options={"projectId": target_project_id})
-            decoded = admin_auth.verify_id_token(token, check_revoked=should_check_revoked)
-            return decoded
+            claims = admin_auth.verify_id_token(token, check_revoked=should_check_revoked)
         except Exception as exc:
             raise ValueError(f"Firebase Emulator token verification failed: {exc}")
 
     # Case B: Standard Desktop / Server Token Verification via Google's Public Certificates
-    claims = None
-    if should_check_revoked:
-        try:
-            import firebase_admin
-            from firebase_admin import auth as admin_auth
-            if firebase_admin._apps:
-                claims = admin_auth.verify_id_token(token, check_revoked=True)
-                return claims
-        except Exception as revoke_exc:
-            raise ValueError(f"Token verification or revocation check failed: {revoke_exc}")
+    if claims is None:
+        if should_check_revoked:
+            try:
+                import firebase_admin
+                from firebase_admin import auth as admin_auth
+                if firebase_admin._apps:
+                    claims = admin_auth.verify_id_token(token, check_revoked=True)
+            except Exception as revoke_exc:
+                raise ValueError(f"Token verification or revocation check failed: {revoke_exc}")
 
-    try:
-        claims = google.oauth2.id_token.verify_firebase_token(
-            token,
-            _google_auth_request,
-            audience=target_project_id,
-            clock_skew_in_seconds=10
-        )
-    except Exception as primary_exc:
-        # Fallback check: if firebase-admin has ADC or credentials initialized, attempt admin verification
+    if claims is None:
         try:
-            import firebase_admin
-            from firebase_admin import auth as admin_auth
-            if firebase_admin._apps:
-                claims = admin_auth.verify_id_token(token, check_revoked=should_check_revoked)
-            else:
-                raise primary_exc
-        except Exception:
-            raise ValueError(f"Token verification failed: {primary_exc}")
+            claims = google.oauth2.id_token.verify_firebase_token(
+                token,
+                _google_auth_request,
+                audience=target_project_id,
+                clock_skew_in_seconds=10
+            )
+        except Exception as primary_exc:
+            # Fallback check: if firebase-admin has ADC or credentials initialized, attempt admin verification
+            try:
+                import firebase_admin
+                from firebase_admin import auth as admin_auth
+                if firebase_admin._apps:
+                    claims = admin_auth.verify_id_token(token, check_revoked=should_check_revoked)
+                else:
+                    raise primary_exc
+            except Exception:
+                raise ValueError(f"Token verification failed: {primary_exc}")
 
     if not isinstance(claims, dict):
         raise ValueError("Decoded token claims must be a dictionary.")
@@ -125,6 +130,12 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None, check
     uid = claims.get("user_id") or claims.get("sub") or claims.get("uid")
     if not uid or not isinstance(uid, str) or not uid.strip():
         raise ValueError("Token missing valid subject (UID).")
+
+    # If both user_id and sub exist, verify they match
+    c_user_id = claims.get("user_id")
+    c_sub = claims.get("sub")
+    if c_user_id and c_sub and c_user_id != c_sub:
+        raise ValueError("Token subject mismatch: 'user_id' and 'sub' claims do not match.")
 
     # Validate audience
     aud = claims.get("aud")
@@ -139,8 +150,37 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None, check
 
     # Validate expiration
     exp = claims.get("exp")
-    if exp and time.time() > float(exp):
-        raise ValueError("Firebase ID token has expired.")
+    if exp is None:
+        raise ValueError("Token missing expiration claim ('exp').")
+    try:
+        exp_float = float(exp)
+        if time.time() > exp_float:
+            raise ValueError("Firebase ID token has expired.")
+    except (TypeError, ValueError) as exc:
+        if "expired" in str(exc):
+            raise
+        raise ValueError(f"Invalid token expiration claim: {exc}")
+
+    # Validate issued-at and auth_time against unreasonable clock skew (> 5 min in future)
+    iat = claims.get("iat")
+    if iat is not None:
+        try:
+            if float(iat) > time.time() + 300:
+                raise ValueError("Token issued in the future ('iat').")
+        except (TypeError, ValueError) as exc:
+            if "future" in str(exc):
+                raise
+            raise ValueError(f"Invalid token issued-at claim: {exc}")
+
+    auth_time = claims.get("auth_time")
+    if auth_time is not None:
+        try:
+            if float(auth_time) > time.time() + 300:
+                raise ValueError("Token auth_time is in the future.")
+        except (TypeError, ValueError) as exc:
+            if "future" in str(exc):
+                raise
+            raise ValueError(f"Invalid token auth_time claim: {exc}")
 
     return claims
 

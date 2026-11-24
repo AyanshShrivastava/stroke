@@ -1008,12 +1008,14 @@ class StudioMcpSession:
                 self.transport = None
 
 
-async def check_server_health(url: str, timeout: float = 0.5) -> bool:
-    """Probes if an HTTP MCP server endpoint is actively listening."""
+async def check_server_health(url: str, timeout: float = 0.5, allow_local: bool = True) -> bool:
+    """Probes if an HTTP MCP server endpoint is actively listening with strict SSRF protection."""
     if not url or not url.startswith("http"):
         return False
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        from mcp_client import SsrfProtector
+        SsrfProtector.validate_url(url, allow_local=allow_local)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
             resp = await client.get(url)
             return resp.status_code < 500
     except Exception:

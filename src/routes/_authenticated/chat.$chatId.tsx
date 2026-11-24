@@ -758,4 +758,10 @@ function Rich({ text }: { text: string }) {
   return <div className="min-w-0 flex-1 space-y-2 text-sm leading-relaxed">{out}</div>;
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
