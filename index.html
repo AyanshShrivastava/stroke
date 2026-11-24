@@ -321,186 +321,257 @@
   <!-- ========================================================================= -->
   <div id="appWorkspace" class="hidden flex w-full h-full overflow-hidden relative">
 
-  <!-- ========================================================================= -->
-  <!-- LEFT SIDEBAR: Clean, Modern AI Layout (Collapsible)                       -->
-  <!-- ========================================================================= -->
-  <aside id="sidebar" class="w-64 glass-panel border-r border-brand-border flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-40 relative">
-    
-    <!-- Top Brand & Navigation -->
-    <div class="flex flex-col flex-1 overflow-hidden p-3 space-y-3">
+    <!-- Mobile Drawer Backdrop Overlay -->
+    <div id="sidebarMobileBackdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 hidden md:hidden transition-opacity duration-300"></div>
+
+    <!-- ========================================================================= -->
+    <!-- LEFT SIDEBAR: Lovable Dashboard Aesthetic (Collapsible & Mobile Drawer)   -->
+    <!-- ========================================================================= -->
+    <aside id="sidebar" class="fixed md:relative inset-y-0 left-0 z-50 w-72 md:w-64 glass-panel border-r border-brand-border flex flex-col justify-between flex-shrink-0 transition-transform md:transition-all duration-300 transform -translate-x-full md:translate-x-0">
       
-      <!-- Brand Header -->
-      <div class="flex items-center justify-between px-2 pt-1 pb-2 border-b border-brand-border">
-        <div class="flex items-center space-x-2">
-          <div class="w-7 h-7 rounded-lg bg-brand-accent/10 border border-brand-accent/40 flex items-center justify-center font-bold text-xs text-brand-accent glow-text">
-            S
+      <!-- Top Brand & Navigation -->
+      <div class="flex flex-col flex-1 overflow-hidden p-3 space-y-3">
+        
+        <!-- Brand Header: Lovable Style App Mark & Workspace Dropdown -->
+        <div class="flex items-center justify-between px-1 pt-1 pb-2 border-b border-brand-border">
+          <div class="flex items-center space-x-2 min-w-0">
+            <!-- Lovable-style vibrant squircle icon -->
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-rose-500 via-violet-500 to-blue-500 p-0.5 shadow-md shadow-violet-500/20 flex items-center justify-center flex-shrink-0">
+              <div class="w-full h-full bg-[#121215] rounded-[10px] flex items-center justify-center">
+                <svg viewBox="0 0 32 32" fill="none" class="w-4 h-4 text-white">
+                  <path d="M23 5H12a6 6 0 0 0 0 12h8a5 5 0 0 1 0 10H7" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+                  <path d="m9 22 14-12" stroke="url(#strokeGradMini)" stroke-width="3" stroke-linecap="round" />
+                  <defs>
+                    <linearGradient id="strokeGradMini" x1="9" y1="22" x2="23" y2="10" gradientUnits="userSpaceOnUse">
+                      <stop stop-color="#3b82f6" />
+                      <stop offset="0.5" stop-color="#8b5cf6" />
+                      <stop offset="1" stop-color="#ec4899" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+            <!-- Workspace Dropdown Trigger -->
+            <button id="workspaceDropdownBtn" class="flex items-center space-x-1.5 px-2 py-1 rounded-lg hover:bg-white/5 transition-colors text-left min-w-0 group" title="Workspace selector">
+              <span id="sidebarWorkspaceTitle" class="text-xs font-semibold text-white group-hover:text-zinc-200 truncate">Ayansh's Stroke</span>
+              <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:text-zinc-200 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
           </div>
-          <span class="font-sans font-bold text-base tracking-wide text-white">Stroke</span>
-          <span class="text-[10px] px-1.5 py-0.5 rounded border border-brand-accent/30 bg-brand-accent/5 text-brand-accent">2.5</span>
-        </div>
-        <div class="flex items-center space-x-1">
-          <button id="searchChatsBtn" class="p-1.5 rounded-md hover:bg-white/5 text-brand-muted hover:text-brand-accent transition-colors" title="Search chats">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          </button>
-          <button id="collapseSidebarBtn" class="p-1.5 rounded-md hover:bg-white/5 text-brand-muted hover:text-white transition-colors" title="Collapse sidebar">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
-          </button>
-        </div>
-      </div>
 
-      <!-- Zero Administrator / Non-Elevated Verification Row -->
-      <div id="elevationStatusRow" class="px-2.5 py-1.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 text-[10px] font-mono flex items-center justify-between" title="Stroke Non-Administrator Verification">
-        <span class="flex items-center space-x-1.5">
-          <span id="elevationStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          <span id="elevationStatusText" class="text-emerald-400 font-medium">Standard User</span>
-        </span>
-        <span class="text-[9px] text-brand-muted uppercase">No Root</span>
-      </div>
-
-      <!-- Action: + New Chat -->
-      <button id="newChatBtn" class="w-full py-2 px-3 rounded-lg bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/40 text-white font-medium text-xs flex items-center justify-between transition-all glow-button group">
-        <span class="flex items-center space-x-2">
-          <svg class="w-3.5 h-3.5 text-brand-accent group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-          <span>New chat</span>
-        </span>
-        <span class="text-[10px] text-brand-muted font-mono">Cmd+K</span>
-      </button>
-
-      <!-- Navigation Tools -->
-      <nav class="space-y-1 text-xs">
-        <button id="openMcpHubBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
-          <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-            <span>MCP Servers</span>
-          </span>
-          <span id="mcpConnectedCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">Connected</span>
-        </button>
-
-        <div id="sidebarTerminalRow" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:bg-white/5 transition-colors cursor-default" title="Stroke private internal background terminal">
-          <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-brand-muted group-hover:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            <span>Terminal</span>
-          </span>
-          <span id="sidebarTerminalBadge" class="flex items-center space-x-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">
-            <span id="sidebarTerminalDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span id="sidebarTerminalStatus">Idle</span>
-          </span>
-        </div>
-
-        <!-- Workspaces (Non-destructive File System & Native OS Folder Picker) -->
-        <button id="openWorkspacesBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-brand-accent hover:bg-white/5 transition-colors group">
-          <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-            <span>Workspaces</span>
-          </span>
-          <span id="workspacesCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono">1</span>
-        </button>
-
-        <!-- Backups & Safe Version Recovery -->
-        <button id="openBackupsBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-cyan-400 hover:bg-white/5 transition-colors group">
-          <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-brand-muted group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span>Backups</span>
-          </span>
-          <span id="backupsCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/30 font-mono">Safe</span>
-        </button>
-
-        <!-- Local GGUF Neural Models & Downloader -->
-        <button id="openModelsBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-brand-text hover:text-purple-400 hover:bg-white/5 transition-colors group">
-          <span class="flex items-center space-x-2.5">
-            <svg class="w-4 h-4 text-brand-muted group-hover:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-            <span>Models</span>
-          </span>
-          <span id="modelsStatusBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-purple-400/10 text-purple-400 border border-purple-400/30 font-mono">GGUF</span>
-        </button>
-
-        <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-md text-brand-text hover:text-white hover:bg-white/5 transition-colors">
-          <svg class="w-4 h-4 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          <span>Settings</span>
-        </button>
-      </nav>
-
-      <!-- Recents List Section with Search Filter -->
-      <div class="flex-1 overflow-y-auto pr-1 pt-2 space-y-1 flex flex-col">
-        <div class="flex items-center justify-between px-2.5 py-1">
-          <span class="text-[10px] uppercase font-bold tracking-wider text-brand-muted">Chats</span>
-        </div>
-
-        <!-- Chat Search Input Container -->
-        <div id="chatSearchContainer" class="hidden px-2 pb-1.5">
-          <div class="relative flex items-center">
-            <input id="chatSearchInput" type="text" placeholder="Filter chats..." class="w-full bg-brand-card border border-brand-border focus:border-brand-accent rounded-md px-2.5 py-1 text-xs text-white placeholder-brand-muted focus:outline-none font-sans pl-7 pr-6">
-            <svg class="w-3.5 h-3.5 text-brand-muted absolute left-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <button id="clearChatSearchBtn" class="hidden text-brand-muted hover:text-white absolute right-2 text-xs p-0.5" title="Clear search">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          <div class="flex items-center space-x-1">
+            <button id="searchChatsBtn" class="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Search chats">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </button>
+            <button id="collapseSidebarBtn" class="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Collapse sidebar">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
             </button>
           </div>
         </div>
 
-        <div id="recentChatsList" class="space-y-0.5 flex-1 overflow-y-auto">
-          <!-- Populated dynamically via loadUserChats() -->
+        <!-- Action: + New Chat Pill (Lovable Style) -->
+        <button id="newChatBtn" class="w-full py-2 px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/10 text-white font-medium text-xs flex items-center justify-between transition-all group shadow-sm cursor-pointer">
+          <span class="flex items-center space-x-2">
+            <svg class="w-3.5 h-3.5 text-zinc-300 group-hover:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <span>New</span>
+          </span>
+          <span class="text-[10px] text-zinc-400 font-mono">Cmd+K</span>
+        </button>
+
+        <!-- Primary Navigation List (Search, Projects, Connectors, Automations) -->
+        <nav class="space-y-0.5 text-xs">
+          <!-- Search trigger -->
+          <button id="sidebarSearchTriggerBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group cursor-pointer">
+            <svg class="w-4 h-4 text-zinc-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <span>Search</span>
+          </button>
+
+          <!-- Projects / Workspaces -->
+          <button id="openWorkspacesBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group cursor-pointer">
+            <span class="flex items-center space-x-2.5">
+              <svg class="w-4 h-4 text-zinc-400 group-hover:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+              <span>Projects</span>
+            </span>
+            <span id="workspacesCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">1</span>
+          </button>
+
+          <!-- Connectors (MCP Servers) -->
+          <button id="openMcpHubBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group cursor-pointer">
+            <span class="flex items-center space-x-2.5">
+              <svg class="w-4 h-4 text-zinc-400 group-hover:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <span>Connectors</span>
+            </span>
+            <span id="mcpConnectedCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-mono">Connected</span>
+          </button>
+
+          <!-- Automations / Terminal -->
+          <div id="sidebarTerminalRow" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer group" title="Stroke private internal background terminal">
+            <span class="flex items-center space-x-2.5">
+              <svg class="w-4 h-4 text-zinc-400 group-hover:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              <span>Automations</span>
+            </span>
+            <span id="sidebarTerminalBadge" class="flex items-center space-x-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono">
+              <span id="sidebarTerminalDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span id="sidebarTerminalStatus">Idle</span>
+            </span>
+          </div>
+
+          <!-- Backups Recovery -->
+          <button id="openBackupsBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group cursor-pointer">
+            <span class="flex items-center space-x-2.5">
+              <svg class="w-4 h-4 text-zinc-400 group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Backups</span>
+            </span>
+            <span id="backupsCountBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/10 text-cyan-400 border border-cyan-400/30 font-mono">Safe</span>
+          </button>
+
+          <!-- Neural Models -->
+          <button id="openModelsBtn" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group cursor-pointer">
+            <span class="flex items-center space-x-2.5">
+              <svg class="w-4 h-4 text-zinc-400 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <span>Models</span>
+            </span>
+            <span id="modelsStatusBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-400/10 text-indigo-400 border border-indigo-400/30 font-mono">GGUF</span>
+          </button>
+
+          <!-- Settings -->
+          <button id="openSettingsBtn" class="w-full flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
+            <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <!-- Lovable Section 1: Projects -->
+        <div class="pt-2 border-t border-brand-border space-y-1">
+          <div class="flex items-center justify-between px-2 py-1">
+            <span class="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Projects</span>
+          </div>
+          <div class="space-y-0.5 text-xs">
+            <button class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
+              <span class="flex items-center space-x-2 truncate">
+                <span class="w-2 h-2 rounded-sm bg-amber-500/80 flex-shrink-0"></span>
+                <span class="truncate">Mist UI Refresh</span>
+              </span>
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            </button>
+            <button class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
+              <span class="flex items-center space-x-2 truncate">
+                <span class="w-2 h-2 rounded-sm bg-blue-500/80 flex-shrink-0"></span>
+                <span class="truncate">Smart Fridge Inventory</span>
+              </span>
+            </button>
+            <button class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-zinc-300 hover:text-white hover:bg-white/5 transition-colors group text-left cursor-pointer">
+              <span class="flex items-center space-x-2 truncate">
+                <span class="w-2 h-2 rounded-sm bg-violet-500/80 flex-shrink-0"></span>
+                <span class="truncate">Forgewise Studio Companion</span>
+              </span>
+            </button>
+            <button id="viewAllProjectsBtn" class="w-full text-left px-2.5 py-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer">
+              View all
+            </button>
+          </div>
+        </div>
+
+        <!-- Lovable Section 2: Chats -->
+        <div class="flex-1 overflow-y-auto pr-1 pt-2 border-t border-brand-border space-y-1 flex flex-col min-h-0">
+          <div class="flex items-center justify-between px-2 py-1">
+            <span class="text-[10px] uppercase font-bold tracking-wider text-zinc-400">Chats</span>
+          </div>
+
+          <!-- Chat Search Input Container -->
+          <div id="chatSearchContainer" class="hidden px-1 pb-1.5">
+            <div class="relative flex items-center">
+              <input id="chatSearchInput" type="text" placeholder="Filter chats..." class="w-full bg-brand-card border border-brand-border focus:border-brand-accent rounded-lg px-2.5 py-1 text-xs text-white placeholder-zinc-500 focus:outline-none font-sans pl-7 pr-6">
+              <svg class="w-3.5 h-3.5 text-zinc-500 absolute left-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <button id="clearChatSearchBtn" class="hidden text-zinc-400 hover:text-white absolute right-2 text-xs p-0.5 cursor-pointer" title="Clear search">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="recentChatsList" class="space-y-0.5 flex-1 overflow-y-auto pr-1">
+            <!-- Populated dynamically via loadUserChats() -->
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Bottom Profile Row: Natural Free / Pro Tier -->
-    <div class="p-3 border-t border-brand-border bg-brand-surface relative">
-      <button id="userProfileBtn" class="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors text-left group">
-        <div class="flex items-center space-x-2.5 min-w-0">
-          <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent text-brand-accent font-bold text-xs flex items-center justify-center flex-shrink-0 glow-text">
-            ?
+      <!-- Lovable Bottom Feature Banner (from Image 2) -->
+      <div class="p-3 pt-0 space-y-2">
+        <div class="relative overflow-hidden rounded-xl p-3 bg-gradient-to-br from-zinc-900 to-zinc-950 border border-white/10 group cursor-pointer hover:border-white/20 transition-all">
+          <div class="flex items-center justify-between">
+            <div class="space-y-0.5 pr-2">
+              <div class="text-xs font-semibold text-white">Stroke Pro Studio</div>
+              <div class="text-[10px] text-zinc-400">Offline GGUF & Live Luau</div>
+            </div>
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-pink-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-pink-500/20 flex-shrink-0">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6.4-4.8-6.4 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
+            </div>
           </div>
-          <div class="min-w-0">
-            <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Sign In</div>
-            <div id="userTierLabel" class="text-[10px] text-brand-muted font-mono">Local Llama 3.2</div>
-          </div>
-        </div>
-        <svg class="w-4 h-4 text-brand-muted group-hover:text-brand-accent transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
-      </button>
-
-      <!-- User Profile Popover -->
-      <div id="profilePopover" class="hidden absolute bottom-20 left-3 right-3 bg-brand-card border border-brand-border rounded-xl p-2.5 shadow-2xl z-50 space-y-2">
-        <div class="px-2 py-1.5 border-b border-brand-border">
-          <div class="text-[10px] text-brand-muted uppercase">Signed In As</div>
-          <div id="popoverEmail" class="text-xs text-brand-accent truncate font-mono">Not signed in</div>
+          <div class="absolute -bottom-6 -right-6 w-16 h-16 bg-gradient-to-br from-rose-500/20 to-violet-600/20 rounded-full blur-xl pointer-events-none"></div>
         </div>
 
-        <!-- Mandatory Memory Display (Local Cache) -->
-        <div class="px-2 py-1.5 border-b border-brand-border space-y-1">
-          <div class="flex items-center justify-between text-[10px] font-mono">
-            <span class="text-brand-muted uppercase">VFX Database</span>
-            <span id="popoverCacheStatusBadge" class="text-brand-accent font-bold">Local Cache</span>
-          </div>
-          <div class="text-[11px] text-white flex items-center justify-between">
-            <span>VFX Kinematics</span>
-            <button id="rerunInjectionBtn" class="text-[10px] text-brand-accent hover:underline">Re-sync 5X</button>
+        <!-- User Profile Row -->
+        <div class="border-t border-brand-border pt-2 relative">
+          <button id="userProfileBtn" class="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/5 transition-colors text-left group cursor-pointer">
+            <div class="flex items-center space-x-2.5 min-w-0">
+              <div id="userAvatarCircle" class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-violet-600 border border-white/10 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 shadow-sm">
+                A
+              </div>
+              <div class="min-w-0">
+                <div id="userDisplayName" class="text-xs font-semibold text-white truncate">Ayansh</div>
+                <div id="userTierLabel" class="text-[10px] text-zinc-400 font-mono">Local Llama 3.2</div>
+              </div>
+            </div>
+            <svg class="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+          </button>
+
+          <!-- User Profile Popover -->
+          <div id="profilePopover" class="hidden absolute bottom-20 left-1 right-1 bg-brand-card border border-brand-border rounded-xl p-2.5 shadow-2xl z-50 space-y-2">
+            <div class="px-2 py-1.5 border-b border-brand-border">
+              <div class="text-[10px] text-zinc-400 uppercase">Signed In As</div>
+              <div id="popoverEmail" class="text-xs text-blue-400 truncate font-mono">Not signed in</div>
+            </div>
+
+            <div class="px-2 py-1.5 border-b border-brand-border space-y-1">
+              <div class="flex items-center justify-between text-[10px] font-mono">
+                <span class="text-zinc-400 uppercase">VFX Database</span>
+                <span id="popoverCacheStatusBadge" class="text-blue-400 font-bold">Local Cache</span>
+              </div>
+              <div class="text-[11px] text-white flex items-center justify-between">
+                <span>VFX Kinematics</span>
+                <button id="rerunInjectionBtn" class="text-[10px] text-blue-400 hover:underline cursor-pointer">Re-sync 5X</button>
+              </div>
+            </div>
+
+            <button id="popoverOpenSettingsBtn" class="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/5 flex items-center space-x-2 cursor-pointer">
+              <span>Settings</span>
+            </button>
+            <button id="authModalTriggerBtn" class="w-full text-left px-2 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-white/5 flex items-center space-x-2 cursor-pointer">
+              <span>Switch Account / Sign In</span>
+            </button>
+            <button id="logoutBtn" class="w-full text-left px-2 py-1.5 rounded-lg text-xs text-rose-400 hover:bg-rose-500/10 flex items-center space-x-2 cursor-pointer">
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
-
-        <button id="popoverOpenSettingsBtn" class="w-full text-left px-2 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center space-x-2">
-          <span>Settings</span>
-        </button>
-        <button id="authModalTriggerBtn" class="w-full text-left px-2 py-1.5 rounded text-xs text-brand-text hover:text-white hover:bg-white/5 flex items-center space-x-2">
-          <span>Switch Account / Sign In</span>
-        </button>
-        <button id="logoutBtn" class="w-full text-left px-2 py-1.5 rounded text-xs text-brand-danger hover:bg-red-500/10 flex items-center space-x-2">
-          <span>Sign Out</span>
-        </button>
       </div>
-    </div>
-  </aside>
+    </aside>
 
   <!-- ========================================================================= -->
   <!-- MAIN WORKSPACE: Clean Full-Screen AI Stream                               -->
   <!-- ========================================================================= -->
   <main class="flex-1 flex flex-col h-full bg-[#0b0b0d] relative overflow-hidden">
     
-    <!-- Top Header Bar (Mist Clean Header) -->
-    <header class="h-16 mist-header px-5 flex items-center justify-between flex-shrink-0 z-20">
+    <!-- Top Header Bar (Mist/Lovable Clean Header) -->
+    <header class="h-16 mist-header px-4 sm:px-6 flex items-center justify-between flex-shrink-0 z-20">
       
-      <!-- Left: Expand Sidebar + Single AI Model Indicator -->
-      <div class="flex items-center space-x-3">
-        <button id="expandSidebarBtn" class="hidden p-2 rounded-xl hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Open sidebar">
+      <!-- Left: Mobile Menu + Expand Sidebar + Single AI Model Indicator -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- Mobile hamburger menu button -->
+        <button id="mobileMenuBtn" class="md:hidden p-2 rounded-xl hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Toggle navigation">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+
+        <button id="expandSidebarBtn" class="hidden md:inline-flex p-2 rounded-xl hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Open sidebar">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
 
@@ -508,8 +579,21 @@
         <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] text-white font-sans font-medium text-xs border border-white/10 shadow-sm backdrop-blur-md">
           <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
           <span class="font-semibold">Llama 3.2</span>
-          <span class="text-[11px] text-zinc-400 font-mono font-normal">Metal Acceleration</span>
+          <span class="text-[11px] text-zinc-400 font-mono font-normal hidden sm:inline">Metal Acceleration</span>
         </div>
+      </div>
+
+      <!-- Center Pill: Add AI to your apps (Lovable Feature Pill from Image 2) -->
+      <div class="hidden lg:flex items-center">
+        <button id="topAiAppsPill" class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-xs text-zinc-300 transition-all shadow-sm backdrop-blur-md cursor-pointer group">
+          <span class="flex items-center -space-x-1">
+            <span class="w-4 h-4 rounded-full bg-blue-500/80 flex items-center justify-center text-[10px]">✨</span>
+            <span class="w-4 h-4 rounded-full bg-purple-500/80 flex items-center justify-center text-[10px]">⚙️</span>
+            <span class="w-4 h-4 rounded-full bg-pink-500/80 flex items-center justify-center text-[10px]">⚡</span>
+          </span>
+          <span class="text-white font-medium text-xs">Add AI to your apps</span>
+          <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </button>
       </div>
 
       <!-- Right: Terminal Status + Temporary Chat Button + MCP Pill -->
@@ -524,14 +608,15 @@
         <!-- Temporary Chat Toggle -->
         <button id="temporaryChatToggleBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.03] hover:border-amber-500/50 text-xs text-zinc-400 hover:text-white transition-all group cursor-pointer" title="Temporary chat: Excluded from chat history">
           <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
-          <span id="tempChatBtnText" class="font-medium">Temporary chat</span>
+          <span id="tempChatBtnText" class="font-medium hidden sm:inline">Temporary chat</span>
           <span id="tempChatIndicator" class="w-1.5 h-1.5 rounded-full bg-zinc-700"></span>
         </button>
 
         <!-- MCP Config Trigger -->
         <button id="openMcpHubTopBtn" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-xs text-blue-300 hover:text-white transition-colors cursor-pointer" title="Manage MCP servers via JSON config">
           <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-          <span class="font-mono text-[11px] font-medium">Roblox Studio MCP</span>
+          <span class="font-mono text-[11px] font-medium hidden sm:inline">Roblox Studio MCP</span>
+          <span class="font-mono text-[11px] font-medium sm:hidden">MCP</span>
         </button>
       </div>
     </header>
@@ -540,107 +625,170 @@
     <div id="tempChatBanner" class="hidden bg-amber-950/40 border-b border-amber-600/30 px-4 py-1.5 text-center text-xs text-amber-300 flex items-center justify-center space-x-2 z-10">
       <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
       <span><strong>Temporary chat active.</strong> Messages will not be saved to your account or used to train Stroke.</span>
-      <button id="turnOffTempChatBtn" class="underline hover:text-white font-bold ml-2">Turn off</button>
+      <button id="turnOffTempChatBtn" class="underline hover:text-white font-bold ml-2 cursor-pointer">Turn off</button>
     </div>
 
     <!-- Center Content: Empty Greeting State OR Chat Stream -->
-    <div id="chatScrollContainer" class="flex-1 overflow-y-auto px-4 py-6 flex flex-col items-center">
+    <div id="chatScrollContainer" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6 flex flex-col items-center">
       
-      <!-- EMPTY STATE: Natural Clean Greeting with Mist Aurora -->
-      <div id="emptyStateHero" class="my-auto max-w-2xl w-full flex flex-col items-center justify-center text-center space-y-7 pt-10 pb-6 transition-all mist-hero-aurora">
-        <!-- Top Title & Aura -->
-        <div class="space-y-2.5">
-          <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 font-sans mb-1 shadow-sm backdrop-blur-md">
-            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            <span class="text-white font-semibold">Stroke Studio</span>
-            <span class="text-zinc-500">•</span>
-            <span class="text-blue-400 font-mono">Autonomous Luau &amp; VFX</span>
+      <!-- EMPTY STATE: Natural Clean Greeting with Mist/Lovable Aurora (from Image 2) -->
+      <div id="emptyStateHero" class="my-auto max-w-4xl w-full flex flex-col items-center justify-center text-center pt-4 pb-8 transition-all mist-hero-aurora">
+        
+        <!-- Top Pill Badge (Image 2) -->
+        <div class="mb-5">
+          <button id="heroAiBadgeBtn" class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-xs text-zinc-300 transition-all shadow-sm backdrop-blur-md cursor-pointer group">
+            <span class="flex items-center -space-x-1">
+              <span class="w-4 h-4 rounded-full bg-blue-500/80 flex items-center justify-center text-[10px]">✨</span>
+              <span class="w-4 h-4 rounded-full bg-purple-500/80 flex items-center justify-center text-[10px]">⚙️</span>
+              <span class="w-4 h-4 rounded-full bg-pink-500/80 flex items-center justify-center text-[10px]">⚡</span>
+            </span>
+            <span class="text-white font-medium text-xs">Add AI to your apps</span>
+            <svg class="w-3.5 h-3.5 text-zinc-400 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </button>
+        </div>
+
+        <!-- Big Bold Title (Image 2: "What's the vision, Ayansh?") -->
+        <h1 id="heroGreetingTitle" class="text-4xl sm:text-6xl font-bold tracking-tight text-white font-sans text-center mb-8">
+          What's the vision, Ayansh?
+        </h1>
+
+        <!-- Floating Pill Composer (Image 1 & 2 Centerpiece) -->
+        <div class="w-full max-w-2xl mx-auto mb-5">
+          <div class="mist-composer-shell p-3 shadow-2xl transition-all duration-200">
+            <textarea id="heroPromptInput" rows="1" class="w-full bg-transparent text-white placeholder-zinc-500 text-sm sm:text-base resize-none focus:outline-none px-3 py-1.5 leading-relaxed font-sans" placeholder="Ask Lovable to plan a web app tha..."></textarea>
+            
+            <div class="flex items-center justify-between px-2 pt-2 border-t border-white/5 mt-1">
+              <div class="flex items-center space-x-1">
+                <button id="heroAttachBtn" type="button" class="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer" title="Attach code, files, or images">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                </button>
+              </div>
+              <div class="flex items-center space-x-2">
+                <button id="heroPlanBtn" type="button" class="px-3 py-1.5 rounded-full text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/5 border border-white/10 flex items-center space-x-1.5 transition-colors cursor-pointer">
+                  <span>Plan</span>
+                  <svg class="w-3 h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <button id="heroMicBtn" type="button" class="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer" title="Speech dictation">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                </button>
+                <button id="heroSendBtn" type="button" class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white flex items-center justify-center hover:opacity-90 transition-all shadow-md shadow-blue-500/25 cursor-pointer">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+                </button>
+              </div>
+            </div>
           </div>
-          <h1 class="text-3xl sm:text-5xl font-sans font-bold text-white tracking-tight">
-            What will you architect today?
-          </h1>
-          <p class="text-xs sm:text-sm text-zinc-400 max-w-lg mx-auto font-sans leading-relaxed">
-            Generate verified Luau systems, design cinematic Roblox visual effects, or connect directly to live Studio sessions with offline local AI.
-          </p>
         </div>
 
-        <!-- Interactive One-Tap Modes (Directly inspired by Mist design system) -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 w-full text-left">
-          <button data-prompt="Create a production-ready Roblox Luau system architecture with client-server networking, type checking, and modular service handlers." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
-            <div class="flex items-center space-x-2">
-              <div class="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-              </div>
-              <span class="font-semibold text-white text-xs group-hover:text-blue-400 transition-colors pointer-events-none">Luau Systems</span>
-            </div>
-            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">Client-server networking &amp; component state</p>
+        <!-- Quick Action Pills below the composer (Exact Match to Image 2) -->
+        <div class="flex flex-wrap items-center justify-center gap-2 max-w-2xl mx-auto mb-10">
+          <button data-prompt="Create a production-ready Roblox application architecture with client-server networking and UI state." class="prompt-chip px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-blue-500/30 text-xs text-zinc-300 hover:text-white transition-all flex items-center space-x-2 cursor-pointer shadow-sm group">
+            <svg class="w-4 h-4 text-blue-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <span class="pointer-events-none font-medium">Create an app</span>
           </button>
 
-          <button data-prompt="Generate a cinematic Roblox VFX spell with layered ParticleEmitters, Bezier motion curves, and sound synchronization." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
-            <div class="flex items-center space-x-2">
-              <div class="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-400 shrink-0">
-                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-              </div>
-              <span class="font-semibold text-white text-xs group-hover:text-violet-400 transition-colors pointer-events-none">Particle &amp; VFX</span>
-            </div>
-            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">Curves, emitter hierarchies &amp; shaders</p>
+          <button data-prompt="Generate a cinematic Roblox visual effect spell with layered ParticleEmitters and Bezier motion curves." class="prompt-chip px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-violet-500/30 text-xs text-zinc-300 hover:text-white transition-all flex items-center space-x-2 cursor-pointer shadow-sm group">
+            <svg class="w-4 h-4 text-violet-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <span class="pointer-events-none font-medium">Generate image</span>
           </button>
 
-          <button data-prompt="Architect an infinite procedural voxel terrain generator with 3D Perlin noise, biome distribution, and greedy meshing." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
-            <div class="flex items-center space-x-2">
-              <div class="w-7 h-7 rounded-lg bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-400 shrink-0">
-                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-              </div>
-              <span class="font-semibold text-white text-xs group-hover:text-pink-400 transition-colors pointer-events-none">Procedural World</span>
-            </div>
-            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">3D Perlin voxel, biomes &amp; spawning</p>
+          <button data-prompt="Generate a dynamic cutscene camera sequence in Luau with smooth tweening and particle triggers." class="prompt-chip px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-pink-500/30 text-xs text-zinc-300 hover:text-white transition-all flex items-center space-x-2 cursor-pointer shadow-sm group">
+            <svg class="w-4 h-4 text-pink-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <span class="pointer-events-none font-medium">Generate video</span>
           </button>
 
-          <button data-prompt="Audit my game security for RemoteEvent vulnerabilities, server validation gaps, and exploit surfaces." class="prompt-chip mist-mode-card p-3.5 flex flex-col justify-between min-h-[96px] cursor-pointer group">
-            <div class="flex items-center space-x-2">
-              <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-              </div>
-              <span class="font-semibold text-white text-xs group-hover:text-emerald-400 transition-colors pointer-events-none">Bug Hunter</span>
-            </div>
-            <p class="text-[11px] text-zinc-400 mt-2 leading-snug pointer-events-none">Honest Luau AST &amp; exploit audits</p>
+          <button data-prompt="Create a production-ready Roblox Luau system architecture with client-server networking, type checking, and modular service handlers." class="prompt-chip px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-emerald-500/30 text-xs text-zinc-300 hover:text-white transition-all flex items-center space-x-2 cursor-pointer shadow-sm group">
+            <svg class="w-4 h-4 text-emerald-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span class="pointer-events-none font-medium">Luau Systems</span>
+          </button>
+
+          <button data-prompt="Audit my game security for RemoteEvent vulnerabilities, server validation gaps, and exploit surfaces." class="prompt-chip px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-amber-500/30 text-xs text-zinc-300 hover:text-white transition-all flex items-center space-x-2 cursor-pointer shadow-sm group">
+            <svg class="w-4 h-4 text-amber-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            <span class="pointer-events-none font-medium">Bug Hunter</span>
           </button>
         </div>
 
-        <!-- Quick Prompt Chips -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left pt-1">
-          <button data-prompt="Script a smooth shockwave visual effect in Luau using dual Bezier curves with CurveSize0=-9.83." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-blue-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-blue-400 flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-              <span>Script a smooth shockwave in Luau</span>
+        <!-- Lower Section: Projects & Templates Card (Exact Match to Image 2) -->
+        <div class="w-full max-w-4xl mx-auto rounded-3xl bg-[#141416]/80 border border-white/10 p-5 sm:p-6 backdrop-blur-xl shadow-2xl text-left">
+          
+          <!-- Card Header & Filter Tabs -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/5 pb-4 mb-4">
+            <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <div class="relative flex items-center">
+                <input type="text" placeholder="Search" class="bg-white/5 border border-white/10 rounded-full px-3 py-1 text-xs text-white placeholder-zinc-500 focus:outline-none pl-7 w-28 sm:w-36">
+                <svg class="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              </div>
+              <button class="px-3 py-1 rounded-full bg-white/10 text-white font-medium text-xs border border-white/10 cursor-pointer">My projects</button>
+              <button class="px-3 py-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition-colors cursor-pointer">Recently viewed</button>
+              <button class="px-3 py-1 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition-colors cursor-pointer">Lovable templates</button>
             </div>
-            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">Dual Bezier curves with CurveSize0=-9.83</div>
-          </button>
+            <button class="text-xs text-zinc-400 hover:text-white transition-colors flex items-center space-x-1 cursor-pointer">
+              <span>Browse all</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+          </div>
 
-          <button data-prompt="Create a fast dash and slash attack visual effect in Luau with snap deceleration and Drag=22.0." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-violet-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-violet-400 flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879a3 3 0 11-4.242-4.242L12 12m0 0l-7-7m7 7l-7 7"/></svg>
-              <span>Create a dash and slash visual</span>
-            </div>
-            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">Snap deceleration with Drag=22.0</div>
-          </button>
+          <!-- Project Cards Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            
+            <!-- Card 1: Mist UI Refresh -->
+            <button data-prompt="Continue working on Mist UI Refresh: modern aurora aesthetics, rounded-3xl floating composer pill, and responsive navigation." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-amber-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
+              <div class="space-y-2">
+                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-violet-500/10 border border-white/5 flex items-center justify-center">
+                  <div class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></div>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold text-white group-hover:text-amber-400 transition-colors pointer-events-none">Mist UI Refresh</div>
+                  <div class="text-[10px] text-zinc-400 pointer-events-none">Edited 2m ago</div>
+                </div>
+              </div>
+              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Workspace Active</div>
+            </button>
 
-          <button data-prompt="Optimize Roblox particle emitters for mobile devices with LOD partitioning and strict 60 FPS budgets." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-pink-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-pink-400 flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg>
-              <span>Optimize particle emitters for mobile</span>
-            </div>
-            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">LOD partitioning and 60 FPS budgets</div>
-          </button>
+            <!-- Card 2: Smart Fridge Inventory -->
+            <button data-prompt="Inspect and develop the Smart Fridge Inventory Luau subsystem with inventory tracking, serialization, and real-time updates." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-blue-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
+              <div class="space-y-2">
+                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-blue-500/10 via-cyan-500/10 to-teal-500/10 border border-white/5 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors pointer-events-none">Smart Fridge Inventory</div>
+                  <div class="text-[10px] text-zinc-400 pointer-events-none">Edited 1h ago</div>
+                </div>
+              </div>
+              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Luau Service</div>
+            </button>
 
-          <button data-prompt="Animate a curved energy beam using Ribbon attachments, speed curves, and dynamic transparency." class="prompt-chip p-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:border-emerald-500/40 hover:bg-white/[0.06] transition-all text-xs group cursor-pointer">
-            <div class="font-semibold text-white group-hover:text-emerald-400 flex items-center space-x-2 pointer-events-none">
-              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
-              <span>Animate a curved energy beam</span>
-            </div>
-            <div class="text-[11px] text-zinc-400 mt-1 pointer-events-none">Ribbon attachments and speed curves</div>
-          </button>
+            <!-- Card 3: Forgewise Studio Companion -->
+            <button data-prompt="Connect to Roblox Studio via MCP and run the Forgewise Studio Companion plugin with live tree inspection." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-violet-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
+              <div class="space-y-2">
+                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-pink-500/10 border border-white/5 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold text-white group-hover:text-violet-400 transition-colors pointer-events-none">Forgewise Studio Companion</div>
+                  <div class="text-[10px] text-zinc-400 pointer-events-none">Edited yesterday</div>
+                </div>
+              </div>
+              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Roblox Studio MCP</div>
+            </button>
+
+            <!-- Card 4: Cinematic VFX Spell -->
+            <button data-prompt="Script a cinematic VFX spell in Luau with dual Bezier curves, particle speed scaling, and sound sync." class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-pink-500/40 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer">
+              <div class="space-y-2">
+                <div class="w-full h-12 rounded-xl bg-gradient-to-r from-pink-500/10 via-rose-500/10 to-red-500/10 border border-white/5 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+                </div>
+                <div>
+                  <div class="text-xs font-semibold text-white group-hover:text-pink-400 transition-colors pointer-events-none">Cinematic VFX Spell</div>
+                  <div class="text-[10px] text-zinc-400 pointer-events-none">Roblox VFX</div>
+                </div>
+              </div>
+              <div class="text-[9px] font-mono text-zinc-500 pointer-events-none">Bezier Kinematics</div>
+            </button>
+
+          </div>
         </div>
+
       </div>
 
       <!-- ACTIVE CHAT MESSAGES CONTAINER -->
@@ -1850,6 +1998,10 @@
         const capitalized = namePart.charAt(0).toUpperCase() + namePart.slice(1);
         if (userDisplayName) userDisplayName.textContent = capitalized;
         if (userAvatarCircle) userAvatarCircle.textContent = namePart.slice(0, 2).toUpperCase();
+        const heroGreetingTitle = document.getElementById('heroGreetingTitle');
+        if (heroGreetingTitle) heroGreetingTitle.textContent = "What's the vision, " + capitalized + "?";
+        const sidebarWorkspaceTitle = document.getElementById('sidebarWorkspaceTitle');
+        if (sidebarWorkspaceTitle) sidebarWorkspaceTitle.textContent = capitalized + "'s Stroke";
       } else {
         if (popoverEmail) popoverEmail.textContent = 'Not signed in';
         if (settingsEmail) settingsEmail.textContent = 'Not signed in';
@@ -1858,8 +2010,12 @@
         if (popoverLogoutBtn) popoverLogoutBtn.classList.add('hidden');
         if (authTriggerBtn) authTriggerBtn.innerHTML = '<span>Sign In / Switch Account</span>';
 
-        if (userDisplayName) userDisplayName.textContent = 'Sign In';
-        if (userAvatarCircle) userAvatarCircle.textContent = '?';
+        if (userDisplayName) userDisplayName.textContent = 'Ayansh';
+        if (userAvatarCircle) userAvatarCircle.textContent = 'A';
+        const heroGreetingTitle = document.getElementById('heroGreetingTitle');
+        if (heroGreetingTitle) heroGreetingTitle.textContent = "What's the vision, Ayansh?";
+        const sidebarWorkspaceTitle = document.getElementById('sidebarWorkspaceTitle');
+        if (sidebarWorkspaceTitle) sidebarWorkspaceTitle.textContent = "Ayansh's Stroke";
       }
     }
 
@@ -1908,15 +2064,95 @@
       openSettingsModal();
     });
 
-    // 2. Sidebar Collapse
-    collapseSidebarBtn.addEventListener('click', () => {
-      sidebar.classList.add('-ml-64');
-      expandSidebarBtn.classList.remove('hidden');
+    // 2. Responsive Sidebar (Desktop Collapse + Mobile Slide-Out Drawer)
+    function openSidebar() {
+      if (window.innerWidth < 768) {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        const backdrop = document.getElementById('sidebarMobileBackdrop');
+        if (backdrop) backdrop.classList.remove('hidden');
+      } else {
+        sidebar.classList.remove('-ml-64');
+        expandSidebarBtn.classList.add('hidden');
+      }
+    }
+
+    function closeSidebar() {
+      if (window.innerWidth < 768) {
+        sidebar.classList.add('-translate-x-full');
+        sidebar.classList.remove('translate-x-0');
+        const backdrop = document.getElementById('sidebarMobileBackdrop');
+        if (backdrop) backdrop.classList.add('hidden');
+      } else {
+        sidebar.classList.add('-ml-64');
+        expandSidebarBtn.classList.remove('hidden');
+      }
+    }
+
+    if (collapseSidebarBtn) collapseSidebarBtn.addEventListener('click', closeSidebar);
+    if (expandSidebarBtn) expandSidebarBtn.addEventListener('click', openSidebar);
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', openSidebar);
+    const sidebarMobileBackdrop = document.getElementById('sidebarMobileBackdrop');
+    if (sidebarMobileBackdrop) sidebarMobileBackdrop.addEventListener('click', closeSidebar);
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        sidebar.classList.remove('-translate-x-full', 'translate-x-0');
+        const backdrop = document.getElementById('sidebarMobileBackdrop');
+        if (backdrop) backdrop.classList.add('hidden');
+      }
     });
-    expandSidebarBtn.addEventListener('click', () => {
-      sidebar.classList.remove('-ml-64');
-      expandSidebarBtn.classList.add('hidden');
-    });
+
+    // 2b. Hero Pill Composer Synchronization (Image 1 & Image 2)
+    const heroPromptInput = document.getElementById('heroPromptInput');
+    const heroSendBtn = document.getElementById('heroSendBtn');
+    if (heroPromptInput && heroSendBtn) {
+      const syncAndSendHeroPrompt = () => {
+        const val = heroPromptInput.value.trim();
+        if (val) {
+          if (promptInput) {
+            promptInput.value = val;
+            heroPromptInput.value = '';
+            promptInput.style.height = 'auto';
+            promptInput.style.height = Math.min(promptInput.scrollHeight, 144) + 'px';
+          }
+          sendPrompt();
+        }
+      };
+
+      heroSendBtn.addEventListener('click', syncAndSendHeroPrompt);
+      heroPromptInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          syncAndSendHeroPrompt();
+        }
+      });
+
+      const heroAttachBtn = document.getElementById('heroAttachBtn');
+      if (heroAttachBtn && fileAttachmentInput) {
+        heroAttachBtn.addEventListener('click', () => fileAttachmentInput.click());
+      }
+      const heroMicBtn = document.getElementById('heroMicBtn');
+      if (heroMicBtn && micDictationBtn) {
+        heroMicBtn.addEventListener('click', () => micDictationBtn.click());
+      }
+      const heroPlanBtn = document.getElementById('heroPlanBtn');
+      if (heroPlanBtn && reasoningLevelBtn) {
+        heroPlanBtn.addEventListener('click', () => reasoningLevelBtn.click());
+      }
+    }
+
+    // 2c. Navigation & Feature Triggers
+    const topAiAppsPill = document.getElementById('topAiAppsPill');
+    const heroAiBadgeBtn = document.getElementById('heroAiBadgeBtn');
+    const viewAllProjectsBtn = document.getElementById('viewAllProjectsBtn');
+    const sidebarSearchTriggerBtn = document.getElementById('sidebarSearchTriggerBtn');
+
+    if (topAiAppsPill) topAiAppsPill.addEventListener('click', () => openMcpHubModal());
+    if (heroAiBadgeBtn) heroAiBadgeBtn.addEventListener('click', () => openMcpHubModal());
+    if (viewAllProjectsBtn && openWorkspacesBtn) viewAllProjectsBtn.addEventListener('click', () => openWorkspacesBtn.click());
+    if (sidebarSearchTriggerBtn && searchChatsBtn) sidebarSearchTriggerBtn.addEventListener('click', () => searchChatsBtn.click());
 
     // 3. Temporary Chat
     temporaryChatToggleBtn.addEventListener('click', () => {

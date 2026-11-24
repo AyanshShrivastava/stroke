@@ -138,10 +138,14 @@
 
 ## Running Test Battery
 
-Run the comprehensive unit test suite:
+Run the comprehensive unit and integration test suite:
 
 ```bash
-venv/bin/python -m unittest discover -s . -p "test_*.py"
+# Backend pytest suite (500+ tests: security, AI providers, MCP, local firestore, terminal)
+venv/bin/pytest -q
+
+# Reference frontend tests (Vitest)
+npm test
 ```
 
 ---
