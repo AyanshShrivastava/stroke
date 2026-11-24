@@ -72,6 +72,8 @@ class LocalDocumentSnapshot:
         """Retrieves a specific field value by name or dotted path (e.g. 'user.profile.name')."""
         if self._data is None:
             return default
+        if field_path in self._data:
+            return self._data[field_path]
         parts = field_path.split(".")
         val = self._data
         for p in parts:
@@ -179,10 +181,12 @@ class LocalQuery:
             def sort_key(item):
                 val = item[1].get(self.order_field)
                 if val is None:
-                    return ""
+                    return (0, 0)
+                if isinstance(val, (int, float)):
+                    return (1, val)
                 if isinstance(val, datetime):
-                    return val.isoformat()
-                return str(val)
+                    return (2, val.timestamp())
+                return (3, str(val))
             items.sort(key=sort_key, reverse=self.order_descending)
 
         if self.limit_count is not None:
@@ -332,12 +336,22 @@ class LocalFirestoreClient:
         return self._db
 
     def _atomic_write(self, db_state: Dict[str, Any]):
-        temp_path = f"{self.storage_path}.tmp.{os.getpid()}"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(db_state, f, indent=2, default=str)
-        os.replace(temp_path, self.storage_path)
-        self._last_mtime = os.path.getmtime(self.storage_path)
-        self._db = db_state
+        temp_path = f"{self.storage_path}.tmp.{os.getpid()}.{threading.get_ident()}"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(db_state, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self.storage_path)
+            self._last_mtime = os.path.getmtime(self.storage_path)
+            self._db = db_state
+        except Exception:
+            if os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except Exception:
+                    pass
+            raise
 
     def collection(self, name: str) -> LocalCollectionReference:
         return LocalCollectionReference(self, name)
@@ -474,10 +488,12 @@ class LocalFirestoreClient:
             with self._file_lock_ctx():
                 self._sync_read()
                 results = {}
-                prefix = f"{collection_path}/"
+                clean_path = collection_path.strip("/")
+                prefix = f"{clean_path}/"
                 for k, v in self._db.items():
-                    if k.startswith(prefix):
-                        sub = k[len(prefix):]
+                    norm_k = k.strip("/")
+                    if norm_k.startswith(prefix):
+                        sub = norm_k[len(prefix):]
                         if "/" not in sub:
                             results[sub] = v
                 return results

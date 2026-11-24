@@ -664,14 +664,16 @@
 
 
         <!-- Big Bold Title (Image 2: "What's the vision, Ayansh?") -->
-        <h1 id="heroGreetingTitle" class="text-4xl sm:text-6xl font-bold tracking-tight text-white font-sans text-center mb-8">
+        <h1 id="heroGreetingTitle" class="text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight text-white font-sans text-center mb-6 sm:mb-8">
           What's the vision, Ayansh?
         </h1>
 
         <!-- Floating Pill Composer (Image 1 & 2 Centerpiece) -->
         <div class="w-full max-w-2xl mx-auto mb-5">
           <div class="mist-composer-shell p-3 shadow-2xl transition-all duration-200">
-            <textarea id="heroPromptInput" rows="1" class="w-full bg-transparent text-white placeholder-zinc-500 text-sm sm:text-base resize-none focus:outline-none px-3 py-1.5 leading-relaxed font-sans" placeholder="Ask Lovable to plan a web app tha..."></textarea>
+            <!-- Hero Attachments Strip -->
+            <div id="heroAttachmentsPreviewStrip" class="hidden flex flex-wrap gap-2 pb-2 mb-2 border-b border-white/5"></div>
+            <textarea id="heroPromptInput" rows="1" class="w-full bg-transparent text-white placeholder-zinc-500 text-sm sm:text-base resize-none focus:outline-none px-3 py-1.5 leading-relaxed font-sans" placeholder="Ask Stroke to plan, code, or architect anything..."></textarea>
             
             <div class="flex items-center justify-between px-2 pt-2 border-t border-white/5 mt-1">
               <div class="flex items-center space-x-1">
@@ -721,7 +723,7 @@
                 <button id="heroMicBtn" type="button" class="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer" title="Speech dictation">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
                 </button>
-                <button id="heroSendBtn" type="button" class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white flex items-center justify-center hover:opacity-90 transition-all shadow-md shadow-blue-500/25 cursor-pointer">
+                <button id="heroSendBtn" type="button" class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white flex items-center justify-center hover:opacity-90 transition-all shadow-md shadow-blue-500/25 cursor-pointer" title="Send message (Enter)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
                 </button>
               </div>
@@ -730,7 +732,7 @@
         </div>
 
         <!-- Quick Action Pills (Exact Match to Image 2: Spacious 3-pill Layout) -->
-        <div class="flex items-center justify-center gap-2.5 max-w-xl mx-auto mb-10">
+        <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 max-w-xl mx-auto mb-8 sm:mb-10">
           <button data-prompt="Create a production-ready application architecture with clean modular components." class="prompt-chip px-4 py-2 rounded-full border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] hover:border-blue-500/30 text-xs text-zinc-300 hover:text-white transition-all flex items-center space-x-2 cursor-pointer shadow-sm group">
             <svg class="w-4 h-4 text-blue-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
             <span class="pointer-events-none font-medium">Create an app</span>
@@ -917,7 +919,7 @@
   <!-- ========================================================================= -->
   <!-- MODAL: COMMAND PALETTE (Raycast / Lovable Style ⌘K)                       -->
   <!-- ========================================================================= -->
-  <div id="commandPaletteModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start justify-center pt-24 px-4 font-sans select-none">
+  <div id="commandPaletteModal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start justify-center pt-16 sm:pt-24 px-3 sm:px-4 font-sans select-none">
     <div class="bg-[#16161a] border border-white/10 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden animate-scale-in">
       <!-- Palette Search Input -->
       <div class="flex items-center px-4 py-3 border-b border-white/5 space-x-3">
@@ -960,6 +962,10 @@
         <div class="flex items-center justify-between py-1.5 border-b border-white/5">
           <span class="text-zinc-300">Toggle Sidebar</span>
           <div class="flex items-center space-x-1 font-mono text-[10px]"><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">⌘B</kbd> <span class="text-zinc-500">or</span> <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">Ctrl+B</kbd></div>
+        </div>
+        <div class="flex items-center justify-between py-1.5 border-b border-white/5">
+          <span class="text-zinc-300">Toggle Terminal</span>
+          <div class="flex items-center space-x-1 font-mono text-[10px]"><kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">⌘J</kbd> <span class="text-zinc-500">or</span> <kbd class="px-2 py-0.5 rounded bg-white/10 border border-white/10 text-white">Ctrl+J</kbd></div>
         </div>
         <div class="flex items-center justify-between py-1.5 border-b border-white/5">
           <span class="text-zinc-300">Keyboard Shortcuts</span>
@@ -1032,7 +1038,7 @@ async function queryStroke(prompt) {
 }</pre>
       </div>
 
-      <div class="flex items-center justify-between pt-2">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2">
         <span class="text-[11px] text-zinc-400">Endpoint: <code class="text-blue-400">http://127.0.0.1:8501/v1/chat/completions</code></span>
         <button id="configureApiKeyFromSdkBtn" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold cursor-pointer transition-all">Configure BYOK Keys</button>
       </div>
@@ -1391,13 +1397,13 @@ async function queryStroke(prompt) {
   <div id="terminalModal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="bg-brand-card border border-brand-border rounded-2xl max-w-4xl w-full h-[75vh] flex flex-col p-5 shadow-2xl space-y-3 glow-box">
       <!-- Header -->
-      <div class="flex items-center justify-between border-b border-brand-border pb-3">
-        <div class="flex items-center space-x-3">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-brand-border pb-3">
+        <div class="flex flex-wrap items-center gap-2 sm:space-x-3">
           <div class="flex items-center space-x-1.5">
             <span id="terminalConsoleDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
             <h3 class="font-mono font-bold text-white text-sm">Terminal Streaming Console</h3>
           </div>
-          <select id="terminalSessionSelect" class="bg-black/60 border border-brand-border rounded-lg px-2.5 py-1 text-xs font-mono text-emerald-400 focus:outline-none">
+          <select id="terminalSessionSelect" class="bg-black/60 border border-brand-border rounded-lg px-2.5 py-1 text-xs font-mono text-emerald-400 focus:outline-none max-w-[140px] sm:max-w-xs truncate">
             <option value="">No Active Sessions</option>
           </select>
           <span id="terminalStateBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border">Idle</span>
@@ -2117,6 +2123,7 @@ async function queryStroke(prompt) {
       }
       setupSpeechEngines();
       loadMcpConfigJson();
+      setEmptyState(state.chatMessages.length === 0);
     });
 
     window.addEventListener('hashchange', checkMagicLinkCallback);
@@ -2248,6 +2255,9 @@ async function queryStroke(prompt) {
         sidebar.classList.remove('-translate-x-full', 'translate-x-0');
         const backdrop = document.getElementById('sidebarMobileBackdrop');
         if (backdrop) backdrop.classList.add('hidden');
+      } else {
+        sidebar.classList.remove('-ml-64');
+        expandSidebarBtn.classList.add('hidden');
       }
     });
 
@@ -2257,18 +2267,22 @@ async function queryStroke(prompt) {
     if (heroPromptInput && heroSendBtn) {
       const syncAndSendHeroPrompt = () => {
         const val = heroPromptInput.value.trim();
-        if (val) {
+        if (val || state.pendingAttachments.length > 0) {
           if (promptInput) {
             promptInput.value = val;
             heroPromptInput.value = '';
             promptInput.style.height = 'auto';
             promptInput.style.height = Math.min(promptInput.scrollHeight, 144) + 'px';
           }
-          sendPrompt();
+          submitUserPrompt();
         }
       };
 
       heroSendBtn.addEventListener('click', syncAndSendHeroPrompt);
+      heroPromptInput.addEventListener('input', () => {
+        heroPromptInput.style.height = 'auto';
+        heroPromptInput.style.height = Math.min(heroPromptInput.scrollHeight, 160) + 'px';
+      });
       heroPromptInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -2720,13 +2734,13 @@ async function queryStroke(prompt) {
 
       projectCardsGrid.innerHTML = items.map(it => `
         <button data-prompt="${escapeHtml(it.prompt)}" class="prompt-chip group rounded-2xl bg-[#18181b]/90 border border-white/10 hover:border-white/30 p-3.5 transition-all text-left flex flex-col justify-between h-36 cursor-pointer shadow-sm hover:shadow-lg">
-          <div class="space-y-2">
+          <div class="space-y-2 min-w-0 w-full">
             <div class="w-full h-12 rounded-xl bg-gradient-to-r ${it.gradient} border border-white/5 flex items-center justify-center">
               <div class="w-2.5 h-2.5 rounded-full ${it.dotClass} animate-pulse"></div>
             </div>
-            <div>
+            <div class="min-w-0">
               <div class="text-xs font-semibold text-white group-hover:text-blue-400 transition-colors pointer-events-none truncate">${escapeHtml(it.title)}</div>
-              <div class="text-[10px] text-zinc-400 pointer-events-none">${escapeHtml(it.time)}</div>
+              <div class="text-[10px] text-zinc-400 pointer-events-none truncate">${escapeHtml(it.time)}</div>
             </div>
           </div>
           <div class="flex items-center justify-between text-[9px] font-mono pointer-events-none">
@@ -2791,7 +2805,7 @@ async function queryStroke(prompt) {
       { id: 'cmd-reason-med', title: 'Set Reasoning: Medium (Balanced)', category: 'AI Depth', shortcut: 'Default', icon: 'M9.663 17h4.673M12 3v1', action: () => applyReasoningLevel('medium') },
       { id: 'cmd-hunt', title: 'Run Bug Hunter Exploit Audit', category: 'Diagnostics', shortcut: 'Security', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', action: () => {
         promptInput.value = 'Audit my game security for RemoteEvent vulnerabilities, server validation gaps, and exploit surfaces.';
-        sendPrompt();
+        submitUserPrompt();
       }},
       { id: 'cmd-sett', title: 'Settings & Identity Preferences', category: 'Preferences', shortcut: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z', action: () => openSettingsBtn.click() }
     ];
@@ -2834,7 +2848,7 @@ async function queryStroke(prompt) {
             <span class="truncate font-medium">${escapeHtml(cmd.title)}</span>
           </div>
           <div class="flex items-center space-x-2 text-[10px] font-mono text-zinc-500 flex-shrink-0 ml-2">
-            <span>${escapeHtml(cmd.category)}</span>
+            <span class="hidden sm:inline">${escapeHtml(cmd.category)}</span>
             <span class="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-zinc-400">${escapeHtml(cmd.shortcut)}</span>
           </div>
         </button>
@@ -2916,7 +2930,7 @@ async function queryStroke(prompt) {
       });
     }
 
-    // Global Command Palette Shortcut (⌘K / Ctrl+K), Shortcuts (⌘/), New Chat (⌘N), Sidebar (⌘B)
+    // Global Command Palette Shortcut (⌘K / Ctrl+K), Shortcuts (⌘/), New Chat (⌘N), Sidebar (⌘B), Terminal (⌘J)
     window.addEventListener('keydown', (e) => {
       // 1. Command Palette: ⌘K or Ctrl+K
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -2928,7 +2942,7 @@ async function queryStroke(prompt) {
         }
       }
       // 2. Keyboard Shortcuts: ⌘/ or Ctrl+/ or '?' (when not in input)
-      else if (((e.metaKey || e.ctrlKey) && e.key === '/') || (e.key === '?' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA')) {
+      else if (((e.metaKey || e.ctrlKey) && (e.key === '/' || e.key === '?' || e.code === 'Slash')) || (e.key === '?' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA')) {
         e.preventDefault();
         if (keyboardShortcutsModal && !keyboardShortcutsModal.classList.contains('hidden')) {
           closeShortcutsModal();
@@ -2936,8 +2950,8 @@ async function queryStroke(prompt) {
           openShortcutsModal();
         }
       }
-      // 3. New Chat: ⌘N or Ctrl+N (when not in browser native)
-      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n' && e.altKey) {
+      // 3. New Chat: ⌘N or Ctrl+N
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         newChatBtn.click();
       }
@@ -2948,6 +2962,16 @@ async function queryStroke(prompt) {
           openSidebar();
         } else {
           closeSidebar();
+        }
+      }
+      // 5. Toggle Terminal: ⌘J or Ctrl+J
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        const terminalModal = document.getElementById('terminalModal');
+        if (terminalModal && !terminalModal.classList.contains('hidden')) {
+          closeTerminalModal();
+        } else {
+          openTerminalModal();
         }
       }
     });
@@ -3496,9 +3520,14 @@ async function queryStroke(prompt) {
     }
 
     function renderAttachmentPreviews() {
+      const heroStrip = document.getElementById('heroAttachmentsPreviewStrip');
       if (state.pendingAttachments.length === 0) {
         attachmentsPreviewStrip.classList.add('hidden');
         attachmentsPreviewStrip.innerHTML = '';
+        if (heroStrip) {
+          heroStrip.classList.add('hidden');
+          heroStrip.innerHTML = '';
+        }
         if (!promptInput.value.trim()) {
           sendPromptBtn.disabled = true;
         }
@@ -3537,6 +3566,11 @@ async function queryStroke(prompt) {
         }
         attachmentsPreviewStrip.appendChild(chip);
       });
+
+      if (heroStrip) {
+        heroStrip.classList.remove('hidden');
+        heroStrip.innerHTML = attachmentsPreviewStrip.innerHTML;
+      }
 
       // Always enable send button when attachments are present
       sendPromptBtn.disabled = false;
@@ -4090,6 +4124,10 @@ async function queryStroke(prompt) {
     animatePlaceholder();
 
     // 9. Submit Prompt Handlers
+    function sendPrompt() {
+      return submitUserPrompt();
+    }
+
     async function submitUserPrompt() {
       const text = promptInput.value.trim();
       const currentAttachments = [...state.pendingAttachments];
@@ -4916,8 +4954,8 @@ async function queryStroke(prompt) {
           btn.setAttribute('data-title', chat.title || '');
           btn.setAttribute('data-session-id', chat.session_id || '');
           btn.innerHTML = `
-            <span class="truncate pr-2">${escapeHtml(chat.title || 'Conversation')}</span>
-            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity">Select</span>
+            <span class="min-w-0 flex-1 truncate pr-2">${escapeHtml(chat.title || 'Conversation')}</span>
+            <span class="text-[10px] text-brand-muted opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">Select</span>
           `;
           btn.addEventListener('click', () => {
             document.querySelectorAll('.chat-session-item').forEach(b => b.classList.remove('active', 'text-white', 'bg-white/5', 'border-l-2', 'border-brand-accent'));

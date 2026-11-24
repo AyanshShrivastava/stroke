@@ -2197,7 +2197,7 @@ async def chat_with_notes_ai(payload: NotesAiRequest, user: AuthenticatedUser = 
                 if t_name and ToolDispatcher.is_supported(t_name):
                     tool_invoked = True
                     tool_name = t_name
-                    res = await ToolDispatcher.dispatch_async(t_name, t_args)
+                    res = await ToolDispatcher.dispatch_async(t_name, t_args, caller_uid=user.uid)
                     if t_name == "web_search" and res.get("sources"):
                         sources = res.get("sources", [])
                     elif t_name == "search_vfx_database" and res.get("matches"):
@@ -4144,13 +4144,24 @@ async def chat_with_neural_ai_stream(payload: AiChatRequest, user: Authenticated
             logger.info("AI chat stream gracefully closed by client disconnect.")
             return
         except ai_provider_service.ProviderAuthenticationError as auth_err:
-            yield f"data: {json.dumps({'type': 'error', 'error': f'Authentication failed: {str(auth_err)}', 'error_type': 'auth'})}\n\n"
+            err_msg = f"Authentication failed: {str(auth_err)}"
+            yield f"data: {json.dumps({'type': 'error', 'error': err_msg, 'message': err_msg, 'error_type': 'auth', 'toast': {'type': 'error', 'title': 'Authentication Failed', 'message': err_msg}})}\n\n"
             yield "data: [DONE]\n\n"
         except ai_provider_service.ProviderRateLimitError as rl_err:
-            yield f"data: {json.dumps({'type': 'error', 'error': f'Rate limit reached: {str(rl_err)}', 'error_type': 'rate_limit'})}\n\n"
+            err_msg = f"Rate limit reached: {str(rl_err)}"
+            yield f"data: {json.dumps({'type': 'error', 'error': err_msg, 'message': err_msg, 'error_type': 'rate_limit', 'toast': {'type': 'warning', 'title': 'Rate Limit Exceeded', 'message': err_msg}})}\n\n"
+            yield "data: [DONE]\n\n"
+        except ai_provider_service.ProviderTimeoutError as timeout_err:
+            err_msg = f"Inference stream timed out: {str(timeout_err)}"
+            yield f"data: {json.dumps({'type': 'error', 'error': err_msg, 'message': err_msg, 'error_type': 'timeout', 'toast': {'type': 'error', 'title': 'Stream Timed Out', 'message': err_msg}})}\n\n"
+            yield "data: [DONE]\n\n"
+        except ai_provider_service.ProviderUnavailableError as unavail_err:
+            err_msg = f"AI Provider offline: {str(unavail_err)}"
+            yield f"data: {json.dumps({'type': 'error', 'error': err_msg, 'message': err_msg, 'error_type': 'unavailable', 'toast': {'type': 'error', 'title': 'Provider Offline', 'message': err_msg}})}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'error': str(exc), 'error_type': 'provider'})}\n\n"
+            err_msg = f"Inference stream error: {str(exc)}"
+            yield f"data: {json.dumps({'type': 'error', 'error': err_msg, 'message': err_msg, 'error_type': 'provider', 'toast': {'type': 'error', 'title': 'Inference Error', 'message': err_msg}})}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(

@@ -26,11 +26,13 @@ Security Architecture:
 
 import os
 import sys
+import time
 import json
 import uuid
 import base64
 import hashlib
 import logging
+import threading
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 from cryptography.fernet import Fernet
@@ -168,6 +170,7 @@ class CredentialsVault:
 
     def __init__(self, vault_path: Optional[str] = None):
         self.vault_path = Path(vault_path) if vault_path else None
+        self._lock = threading.RLock()
         self._keyring_available = False
         try:
             import keyring
@@ -183,56 +186,58 @@ class CredentialsVault:
 
     def _read_encrypted_vault_file(self) -> Dict[str, Any]:
         """Reads and decrypts the local encrypted vault file."""
-        vault_file = self.vault_path if self.vault_path else (_get_vault_dir() / VAULT_DATA_FILE)
-        if not vault_file.exists():
-            return {}
-
-        cipher = _get_or_create_cipher()
-        if not cipher:
-            return {}
-
-        try:
-            with open(vault_file, "rb") as f:
-                encrypted_bytes = f.read()
-            if not encrypted_bytes:
+        with self._lock:
+            vault_file = self.vault_path if self.vault_path else (_get_vault_dir() / VAULT_DATA_FILE)
+            if not vault_file.exists():
                 return {}
-            decrypted = cipher.decrypt(encrypted_bytes).decode("utf-8")
-            return json.loads(decrypted)
-        except Exception as exc:
-            logger.warning("Failed to decrypt local credentials vault: %s", exc)
-            return {}
+
+            cipher = _get_or_create_cipher()
+            if not cipher:
+                return {}
+
+            try:
+                with open(vault_file, "rb") as f:
+                    encrypted_bytes = f.read()
+                if not encrypted_bytes:
+                    return {}
+                decrypted = cipher.decrypt(encrypted_bytes).decode("utf-8")
+                return json.loads(decrypted)
+            except Exception as exc:
+                logger.warning("Failed to decrypt local credentials vault: %s", exc)
+                return {}
 
     def _write_encrypted_vault_file(self, data: Dict[str, Any]) -> bool:
         """Encrypts and atomically saves the local credentials vault file with 0600 permissions."""
-        cipher = _get_or_create_cipher()
-        if not cipher:
-            return False
+        with self._lock:
+            cipher = _get_or_create_cipher()
+            if not cipher:
+                return False
 
-        vault_file = self.vault_path if self.vault_path else (_get_vault_dir() / VAULT_DATA_FILE)
-        tmp_file = vault_file.with_suffix(".tmp")
+            vault_file = self.vault_path if self.vault_path else (_get_vault_dir() / VAULT_DATA_FILE)
+            tmp_file = vault_file.with_name(f"{vault_file.name}.{os.getpid()}.{threading.get_ident()}.tmp")
 
-        try:
-            payload_str = json.dumps(data)
-            encrypted = cipher.encrypt(payload_str.encode("utf-8"))
+            try:
+                payload_str = json.dumps(data)
+                encrypted = cipher.encrypt(payload_str.encode("utf-8"))
 
-            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-            mode = 0o600
-            fd = os.open(str(tmp_file), flags, mode)
-            with open(fd, "wb") as f:
-                f.write(encrypted)
-                f.flush()
-                os.fsync(f.fileno())
+                flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                mode = 0o600
+                fd = os.open(str(tmp_file), flags, mode)
+                with open(fd, "wb") as f:
+                    f.write(encrypted)
+                    f.flush()
+                    os.fsync(f.fileno())
 
-            os.replace(tmp_file, vault_file)
-            return True
-        except Exception as exc:
-            logger.error("Failed to write credentials vault: %s", exc)
-            if tmp_file.exists():
-                try:
-                    tmp_file.unlink()
-                except Exception:
-                    pass
-            return False
+                os.replace(tmp_file, vault_file)
+                return True
+            except Exception as exc:
+                logger.error("Failed to write credentials vault: %s", exc)
+                if tmp_file.exists():
+                    try:
+                        tmp_file.unlink()
+                    except Exception:
+                        pass
+                return False
 
     def store_credential(
         self,
@@ -262,15 +267,16 @@ class CredentialsVault:
                 logger.info("Keyring storage failed for %s, using encrypted vault: %s", provider, exc)
 
         # Always update local encrypted vault with metadata (and key as fallback)
-        vault_data = self._read_encrypted_vault_file()
-        user_block = vault_data.setdefault(user_id or "default", {})
-        prov_record = user_block.setdefault(provider, {})
-        prov_record["key"] = api_key
-        prov_record["updated_at"] = os.environ.get("MOCK_TIME", "") or str(int(os.path.getmtime(_get_vault_dir())))
-        if metadata:
-            prov_record["metadata"] = metadata
+        with self._lock:
+            vault_data = self._read_encrypted_vault_file()
+            user_block = vault_data.setdefault(user_id or "default", {})
+            prov_record = user_block.setdefault(provider, {})
+            prov_record["key"] = api_key
+            prov_record["updated_at"] = os.environ.get("MOCK_TIME", "") or str(int(os.path.getmtime(_get_vault_dir())))
+            if metadata:
+                prov_record["metadata"] = metadata
 
-        success_vault = self._write_encrypted_vault_file(vault_data)
+            success_vault = self._write_encrypted_vault_file(vault_data)
         return success_keyring or success_vault
 
     set_credential = store_credential
@@ -298,16 +304,17 @@ class CredentialsVault:
                 pass
 
         # 2. Encrypted Vault
-        vault_data = self._read_encrypted_vault_file()
-        user_block = vault_data.get(user_id) if user_id else None
-        prov_record = user_block.get(provider, {}) if user_block else {}
-        if prov_record.get("key"):
-            return prov_record["key"].strip()
-        # Fallback to default user block if not found under specific user_id
-        if user_id and "default" in vault_data:
-            default_record = vault_data.get("default", {}).get(provider, {})
-            if default_record.get("key"):
-                return default_record["key"].strip()
+        with self._lock:
+            vault_data = self._read_encrypted_vault_file()
+            user_block = vault_data.get(user_id) if user_id else None
+            prov_record = user_block.get(provider, {}) if user_block else {}
+            if prov_record.get("key"):
+                return prov_record["key"].strip()
+            # Fallback to default user block if not found under specific user_id
+            if user_id and "default" in vault_data:
+                default_record = vault_data.get("default", {}).get(provider, {})
+                if default_record.get("key"):
+                    return default_record["key"].strip()
 
         # 3. Environment Variable
         env_var = ENV_KEY_MAPPINGS.get(provider)
@@ -321,19 +328,21 @@ class CredentialsVault:
     def get_metadata(self, provider: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Returns non-sensitive metadata for a provider (e.g. custom base URL, model ID)."""
         provider = provider.strip().lower()
-        vault_data = self._read_encrypted_vault_file()
-        user_block = vault_data.get(user_id or "default", {})
-        prov_record = user_block.get(provider, {})
-        return dict(prov_record.get("metadata", {}))
+        with self._lock:
+            vault_data = self._read_encrypted_vault_file()
+            user_block = vault_data.get(user_id or "default", {})
+            prov_record = user_block.get(provider, {})
+            return dict(prov_record.get("metadata", {}))
 
     def set_metadata(self, provider: str, metadata: Dict[str, Any], user_id: Optional[str] = None) -> bool:
         """Updates non-sensitive metadata for a provider."""
         provider = provider.strip().lower()
-        vault_data = self._read_encrypted_vault_file()
-        user_block = vault_data.setdefault(user_id or "default", {})
-        prov_record = user_block.setdefault(provider, {})
-        prov_record["metadata"] = metadata
-        return self._write_encrypted_vault_file(vault_data)
+        with self._lock:
+            vault_data = self._read_encrypted_vault_file()
+            user_block = vault_data.setdefault(user_id or "default", {})
+            prov_record = user_block.setdefault(provider, {})
+            prov_record["metadata"] = metadata
+            return self._write_encrypted_vault_file(vault_data)
 
     def delete_credential(self, provider: str, user_id: Optional[str] = None) -> bool:
         """Deletes a credential from the OS keychain and local encrypted vault."""
@@ -347,11 +356,12 @@ class CredentialsVault:
             except Exception:
                 pass
 
-        vault_data = self._read_encrypted_vault_file()
-        user_block = vault_data.get(user_id or "default", {})
-        if provider in user_block:
-            del user_block[provider]
-            self._write_encrypted_vault_file(vault_data)
+        with self._lock:
+            vault_data = self._read_encrypted_vault_file()
+            user_block = vault_data.get(user_id or "default", {})
+            if provider in user_block:
+                del user_block[provider]
+                self._write_encrypted_vault_file(vault_data)
 
         return True
 
@@ -372,10 +382,11 @@ class CredentialsVault:
             except Exception:
                 pass
 
-        vault_data = self._read_encrypted_vault_file()
-        if user_id in vault_data:
-            del vault_data[user_id]
-            self._write_encrypted_vault_file(vault_data)
+        with self._lock:
+            vault_data = self._read_encrypted_vault_file()
+            if user_id in vault_data:
+                del vault_data[user_id]
+                self._write_encrypted_vault_file(vault_data)
 
         return True
 

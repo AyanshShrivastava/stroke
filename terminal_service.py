@@ -389,6 +389,14 @@ def evaluate_command_security(command: str, args: List[str], is_ai_initiated: bo
 
     # 8. Check Routine Allowed Commands
     if clean_cmd in SAFE_ROUTINE_COMMANDS:
+        if workspace_path and is_ai_initiated:
+            for a in args:
+                a_str = str(a).strip()
+                if a_str and not a_str.startswith("-"):
+                    if "/" in a_str or "\\" in a_str or a_str.startswith("..") or os.path.isabs(a_str):
+                        resolved_arg = os.path.realpath(os.path.join(workspace_path, a_str)) if not os.path.isabs(a_str) else os.path.realpath(a_str)
+                        if not (resolved_arg == workspace_path or resolved_arg.startswith(workspace_path + os.sep)):
+                            return SecurityDecision.DENIED, f"Argument '{a_str}' traverses outside designated workspace '{workspace_path}'."
         return SecurityDecision.ALLOWED, f"Approved routine development command: {clean_cmd}."
 
     # Default: Unknown commands require user authorization for safety
@@ -544,6 +552,18 @@ class TerminalSession:
                 "message": f"Session '{self.session_id}' is terminated and cannot execute new commands.",
                 "exit_code": 1,
                 "state": "terminated"
+            }
+
+        # Enforce authorized caller identity if caller_uid is provided
+        if caller_uid and self.owner_uid and self.owner_uid != "internal_daemon" and caller_uid != "internal_daemon" and caller_uid != self.owner_uid:
+            self._append_output("security", f"BLOCKED: Caller '{caller_uid}' does not own session '{self.session_id}' (owner: '{self.owner_uid}').")
+            self.last_exit_code = 126
+            return {
+                "session_id": self.session_id,
+                "status": "error",
+                "error": "access_denied",
+                "message": f"Access denied: Session '{self.session_id}' belongs to user '{self.owner_uid}', not '{caller_uid}'.",
+                "exit_code": 126
             }
         
         # Clamp timeout
@@ -752,6 +772,49 @@ class TerminalSession:
             found = shutil.which(command)
             if found:
                 cmd_path = found
+
+        # Workspace Isolation: If explicit path is provided, prevent unauthorized traversal outside workspace
+        if "/" in command or "\\" in command or os.path.isabs(command):
+            candidate_binary = os.path.realpath(os.path.join(self.cwd, command)) if not os.path.isabs(command) else os.path.realpath(command)
+            in_workspace = (candidate_binary == self.workspace_path or candidate_binary.startswith(self.workspace_path + os.sep))
+            clean_cmd_name = os.path.basename(command)
+            found_system_path = shutil.which(clean_cmd_name)
+            is_system_binary = (
+                candidate_binary == sys.executable
+                or candidate_binary == os.path.realpath(sys.executable)
+                or (found_system_path is not None and os.path.realpath(found_system_path) == candidate_binary)
+                or any(candidate_binary.startswith(d + os.sep) for d in (
+                    "/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin",
+                    "/Library/Developer", "/System/Library", "/Library/Frameworks",
+                    "/System", "/usr/sbin", "/sbin",
+                    "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)"
+                ))
+            )
+            if not in_workspace and not is_system_binary:
+                self._append_output("security", f"BLOCKED: Binary path '{command}' traverses outside workspace boundary.")
+                self.last_exit_code = 126
+                record = {
+                    "command": command,
+                    "args": clean_args,
+                    "cwd": self.cwd,
+                    "exit_code": 126,
+                    "duration_ms": 0.0,
+                    "state": "failed",
+                    "timestamp": time.time(),
+                    "timed_out": False,
+                    "is_background": False
+                }
+                self.execution_history.append(record)
+                return {
+                    "session_id": self.session_id,
+                    "status": "error",
+                    "error": "workspace_traversal_denied",
+                    "message": f"Execution denied: Binary '{command}' traverses outside designated workspace '{self.workspace_path}'.",
+                    "exit_code": 126,
+                    "state": "failed"
+                }
+            if in_workspace and os.path.exists(candidate_binary):
+                cmd_path = candidate_binary
 
         # Validate Authorization and Security Policy
         if _approval_record is not None:
@@ -2217,7 +2280,13 @@ class ToolDispatcher:
         return objs
 
     @classmethod
-    async def dispatch_async(cls, tool_name: str, arguments: Optional[Any] = None) -> Dict[str, Any]:
+    async def dispatch_async(
+        cls,
+        tool_name: str,
+        arguments: Optional[Any] = None,
+        caller_uid: Optional[str] = None,
+        is_internal: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """Asynchronously routes tool call across terminal, web search, VFX, and MCP bridges."""
         args: Dict[str, Any] = {}
         if isinstance(arguments, dict):
@@ -2230,12 +2299,14 @@ class ToolDispatcher:
                 args = {}
 
         name = tool_name.strip()
+        eff_caller = caller_uid or args.get("caller_uid") or args.get("uid") or "internal_daemon"
+        eff_internal = is_internal if is_internal is not None else (eff_caller == "internal_daemon")
 
         try:
             # 1. Terminal Tools
             if name in ("terminal_create_session", "create_terminal"):
                 ws = args.get("workspace_path") or args.get("workspace") or args.get("cwd") or args.get("path")
-                return TerminalManager.terminal_create_session(workspace_path=ws)
+                return TerminalManager.terminal_create_session(workspace_path=ws, caller_uid=eff_caller, is_internal=eff_internal)
 
             elif name in ("terminal_run", "run_command"):
                 session_id = args.get("session_id") or args.get("id") or ""
@@ -2244,10 +2315,10 @@ class ToolDispatcher:
                 timeout_sec = args.get("timeout_sec", DEFAULT_TIMEOUT_SEC)
                 is_bg = args.get("is_background", False)
                 sess = TerminalManager.get_session(session_id) if session_id else None
-                caller_uid = args.get("caller_uid") or args.get("uid") or (sess.owner_uid if sess else "internal_daemon")
+                cmd_caller = caller_uid or args.get("caller_uid") or args.get("uid") or (sess.owner_uid if sess else eff_caller)
                 is_ai = bool(args.get("is_ai_initiated", True))
                 if not session_id:
-                    created_sess = TerminalManager.terminal_create_session(caller_uid=caller_uid)
+                    created_sess = TerminalManager.terminal_create_session(caller_uid=cmd_caller, is_internal=eff_internal)
                     session_id = created_sess["session_id"]
                 return TerminalManager.terminal_run(
                     session_id=session_id,
@@ -2255,7 +2326,8 @@ class ToolDispatcher:
                     arguments=cmd_args,
                     timeout_sec=timeout_sec,
                     is_background=is_bg,
-                    caller_uid=caller_uid,
+                    caller_uid=cmd_caller,
+                    is_internal=eff_internal,
                     is_ai_initiated=is_ai
                 )
 
@@ -2264,12 +2336,12 @@ class ToolDispatcher:
                 approved = bool(args.get("approved", False))
                 record = _APPROVAL_REGISTRY.get(approval_id)
                 default_uid = record.uid if record else "ai_agent"
-                caller_uid = args.get("caller_uid") or args.get("uid") or default_uid
+                appr_caller = caller_uid or args.get("caller_uid") or args.get("uid") or default_uid
                 return TerminalManager.respond_to_approval(
                     approval_id=approval_id,
                     approved=approved,
-                    caller_uid=caller_uid,
-                    is_internal=(caller_uid == "internal_daemon")
+                    caller_uid=appr_caller,
+                    is_internal=(appr_caller == "internal_daemon" or eff_internal)
                 )
 
             elif name in ("terminal_read_output", "read_terminal_output"):
@@ -2277,26 +2349,26 @@ class ToolDispatcher:
                 tail = args.get("tail_lines") or args.get("tail") or args.get("lines") or args.get("limit")
                 if isinstance(tail, str) and tail.isdigit():
                     tail = int(tail)
-                return TerminalManager.terminal_read_output(session_id=session_id, tail_lines=tail)
+                return TerminalManager.terminal_read_output(session_id=session_id, tail_lines=tail, caller_uid=eff_caller, is_internal=eff_internal)
 
             elif name in ("terminal_get_status", "get_terminal_status"):
                 session_id = args.get("session_id") or args.get("id") or ""
-                return TerminalManager.terminal_get_status(session_id=session_id)
+                return TerminalManager.terminal_get_status(session_id=session_id, caller_uid=eff_caller, is_internal=eff_internal)
 
             elif name in ("terminal_get_history", "get_terminal_history"):
                 session_id = args.get("session_id") or args.get("id") or ""
-                return TerminalManager.get_terminal_history(session_id=session_id)
+                return TerminalManager.get_terminal_history(session_id=session_id, caller_uid=eff_caller, is_internal=eff_internal)
 
             elif name in ("terminal_stop", "stop_terminal"):
                 session_id = args.get("session_id") or args.get("id") or ""
-                return TerminalManager.terminal_stop(session_id=session_id)
+                return TerminalManager.terminal_stop(session_id=session_id, caller_uid=eff_caller, is_internal=eff_internal)
 
             elif name in ("terminal_restart", "restart_terminal"):
                 session_id = args.get("session_id") or args.get("id") or ""
-                return TerminalManager.terminal_restart(session_id=session_id)
+                return TerminalManager.terminal_restart(session_id=session_id, caller_uid=eff_caller, is_internal=eff_internal)
 
             elif name in ("terminal_list_sessions", "list_terminals"):
-                return {"terminals": TerminalManager.terminal_list_sessions()}
+                return {"terminals": TerminalManager.terminal_list_sessions(caller_uid=eff_caller, is_internal=eff_internal)}
 
             # 2. Live Web Search Tool
             elif name in cls.WEB_SEARCH_TOOLS:

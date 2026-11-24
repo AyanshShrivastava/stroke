@@ -953,41 +953,43 @@ class GroqProvider(BaseAiProvider):
                     },
                     json=payload
                 ) as res:
-                    if res.status_code == 401:
-                        raise ProviderAuthenticationError(
-                            "Groq authentication failed (HTTP 401): Invalid API key.",
-                            provider="groq",
-                            model=model_id
-                        )
-                    elif res.status_code == 403:
-                        raise ProviderPermissionError(
-                            f"Groq permission denied (HTTP 403)",
-                            provider="groq",
-                            model=model_id
-                        )
-                    elif res.status_code == 429:
-                        retry_header = res.headers.get("retry-after")
-                        retry_sec = float(retry_header) if retry_header and retry_header.isdigit() else None
-                        raise ProviderRateLimitError(
-                            "Groq rate limit reached (HTTP 429). Try switching models or check your Groq limits.",
-                            provider="groq",
-                            model=model_id,
-                            retry_after_sec=retry_sec
-                        )
-                    elif res.status_code >= 500:
-                        raise ProviderServiceError(
-                            f"Groq service error (HTTP {res.status_code})",
-                            provider="groq",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
-                    elif res.status_code != 200:
-                        raise ProviderError(
-                            f"Groq stream request failed (HTTP {res.status_code})",
-                            provider="groq",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
+                    if res.status_code != 200:
+                        err_body = (await res.aread()).decode("utf-8", errors="replace")
+                        if res.status_code == 401:
+                            raise ProviderAuthenticationError(
+                                "Groq authentication failed (HTTP 401): Invalid API key.",
+                                provider="groq",
+                                model=model_id
+                            )
+                        elif res.status_code == 403:
+                            raise ProviderPermissionError(
+                                f"Groq permission denied (HTTP 403): {err_body[:160]}",
+                                provider="groq",
+                                model=model_id
+                            )
+                        elif res.status_code == 429:
+                            retry_header = res.headers.get("retry-after")
+                            retry_sec = float(retry_header) if retry_header and retry_header.isdigit() else None
+                            raise ProviderRateLimitError(
+                                f"Groq rate limit reached (HTTP 429): {err_body[:160]}. Try switching models or check your Groq limits.",
+                                provider="groq",
+                                model=model_id,
+                                retry_after_sec=retry_sec
+                            )
+                        elif res.status_code >= 500:
+                            raise ProviderServiceError(
+                                f"Groq service error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="groq",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
+                        else:
+                            raise ProviderError(
+                                f"Groq stream request failed (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="groq",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
 
                     async for line in res.aiter_lines():
                         line = line.strip()
@@ -1035,6 +1037,8 @@ class GroqProvider(BaseAiProvider):
                                 )
         except httpx.TimeoutException:
             raise ProviderTimeoutError(f"Groq stream timed out for model '{model_id}'", "groq", model_id)
+        except (httpx.ConnectError, httpx.NetworkError, httpx.RemoteProtocolError, httpx.ReadError) as net_err:
+            raise ProviderUnavailableError(f"Groq network connection failed: {net_err}", "groq", model_id)
         except asyncio.CancelledError:
             raise
 
@@ -1307,38 +1311,40 @@ class GeminiProvider(BaseAiProvider):
                     },
                     json=payload
                 ) as res:
-                    if res.status_code == 400 and "API_KEY_INVALID" in res.text:
-                        raise ProviderAuthenticationError(
-                            "Google Gemini authentication failed (HTTP 400): Invalid API key.",
-                            provider="gemini",
-                            model=model_id
-                        )
-                    elif res.status_code == 403:
-                        raise ProviderPermissionError(
-                            f"Gemini access denied (HTTP 403)",
-                            provider="gemini",
-                            model=model_id
-                        )
-                    elif res.status_code == 429:
-                        raise ProviderRateLimitError(
-                            f"Gemini quota exceeded (HTTP 429)",
-                            provider="gemini",
-                            model=model_id
-                        )
-                    elif res.status_code >= 500:
-                        raise ProviderServiceError(
-                            f"Google Gemini service error (HTTP {res.status_code})",
-                            provider="gemini",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
-                    elif res.status_code != 200:
-                        raise ProviderError(
-                            f"Google Gemini API error (HTTP {res.status_code})",
-                            provider="gemini",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
+                    if res.status_code != 200:
+                        err_body = (await res.aread()).decode("utf-8", errors="replace")
+                        if res.status_code == 400 and "API_KEY_INVALID" in err_body:
+                            raise ProviderAuthenticationError(
+                                "Google Gemini authentication failed (HTTP 400): Invalid API key.",
+                                provider="gemini",
+                                model=model_id
+                            )
+                        elif res.status_code == 403:
+                            raise ProviderPermissionError(
+                                f"Gemini access denied (HTTP 403): {err_body[:160]}",
+                                provider="gemini",
+                                model=model_id
+                            )
+                        elif res.status_code == 429:
+                            raise ProviderRateLimitError(
+                                f"Gemini quota exceeded (HTTP 429): {err_body[:160]}",
+                                provider="gemini",
+                                model=model_id
+                            )
+                        elif res.status_code >= 500:
+                            raise ProviderServiceError(
+                                f"Google Gemini service error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="gemini",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
+                        else:
+                            raise ProviderError(
+                                f"Google Gemini API error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="gemini",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
 
                     async for line in res.aiter_lines():
                         line = line.strip()
@@ -1382,6 +1388,8 @@ class GeminiProvider(BaseAiProvider):
                                     )
         except httpx.TimeoutException:
             raise ProviderTimeoutError(f"Gemini stream timed out for model '{model_id}'", "gemini", model_id)
+        except (httpx.ConnectError, httpx.NetworkError, httpx.RemoteProtocolError, httpx.ReadError) as net_err:
+            raise ProviderUnavailableError(f"Gemini network connection failed: {net_err}", "gemini", model_id)
         except asyncio.CancelledError:
             raise
 
@@ -1563,38 +1571,40 @@ class OpenRouterProvider(BaseAiProvider):
                     },
                     json=payload
                 ) as res:
-                    if res.status_code == 401:
-                        raise ProviderAuthenticationError(
-                            "OpenRouter authentication failed (HTTP 401): Invalid API key.",
-                            provider="openrouter",
-                            model=model_id
-                        )
-                    elif res.status_code == 402:
-                        raise ProviderRateLimitError(
-                            "OpenRouter credit exhausted (HTTP 402): Please add credits to your OpenRouter account.",
-                            provider="openrouter",
-                            model=model_id
-                        )
-                    elif res.status_code == 429:
-                        raise ProviderRateLimitError(
-                            "OpenRouter rate limit reached (HTTP 429)",
-                            provider="openrouter",
-                            model=model_id
-                        )
-                    elif res.status_code >= 500:
-                        raise ProviderServiceError(
-                            f"OpenRouter upstream service error (HTTP {res.status_code})",
-                            provider="openrouter",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
-                    elif res.status_code != 200:
-                        raise ProviderError(
-                            f"OpenRouter stream error (HTTP {res.status_code})",
-                            provider="openrouter",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
+                    if res.status_code != 200:
+                        err_body = (await res.aread()).decode("utf-8", errors="replace")
+                        if res.status_code == 401:
+                            raise ProviderAuthenticationError(
+                                "OpenRouter authentication failed (HTTP 401): Invalid API key.",
+                                provider="openrouter",
+                                model=model_id
+                            )
+                        elif res.status_code == 402:
+                            raise ProviderRateLimitError(
+                                "OpenRouter credit exhausted (HTTP 402): Please add credits to your OpenRouter account.",
+                                provider="openrouter",
+                                model=model_id
+                            )
+                        elif res.status_code == 429:
+                            raise ProviderRateLimitError(
+                                f"OpenRouter rate limit reached (HTTP 429): {err_body[:160]}",
+                                provider="openrouter",
+                                model=model_id
+                            )
+                        elif res.status_code >= 500:
+                            raise ProviderServiceError(
+                                f"OpenRouter upstream service error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="openrouter",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
+                        else:
+                            raise ProviderError(
+                                f"OpenRouter stream error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="openrouter",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
 
                     async for line in res.aiter_lines():
                         line = line.strip()
@@ -1642,6 +1652,8 @@ class OpenRouterProvider(BaseAiProvider):
                                 )
         except httpx.TimeoutException:
             raise ProviderTimeoutError(f"OpenRouter stream timed out for model '{model_id}'", "openrouter", model_id)
+        except (httpx.ConnectError, httpx.NetworkError, httpx.RemoteProtocolError, httpx.ReadError) as net_err:
+            raise ProviderUnavailableError(f"OpenRouter network connection failed: {net_err}", "openrouter", model_id)
         except asyncio.CancelledError:
             raise
 
@@ -1851,32 +1863,34 @@ class RemoteOpenAiCompatibleProvider(BaseAiProvider):
                     },
                     json=payload
                 ) as res:
-                    if res.status_code == 401:
-                        raise ProviderAuthenticationError(
-                            f"{self.provider_name.capitalize()} authentication failed (HTTP 401): Invalid API key.",
-                            provider=self.provider_name,
-                            model=model_id
-                        )
-                    elif res.status_code == 429:
-                        raise ProviderRateLimitError(
-                            f"{self.provider_name.capitalize()} rate limit or quota exceeded (HTTP 429)",
-                            provider=self.provider_name,
-                            model=model_id
-                        )
-                    elif res.status_code >= 500:
-                        raise ProviderServiceError(
-                            f"{self.provider_name.capitalize()} server error (HTTP {res.status_code})",
-                            provider=self.provider_name,
-                            model=model_id,
-                            status_code=res.status_code
-                        )
-                    elif res.status_code != 200:
-                        raise ProviderError(
-                            f"{self.provider_name.capitalize()} stream error (HTTP {res.status_code})",
-                            provider=self.provider_name,
-                            model=model_id,
-                            status_code=res.status_code
-                        )
+                    if res.status_code != 200:
+                        err_body = (await res.aread()).decode("utf-8", errors="replace")
+                        if res.status_code == 401:
+                            raise ProviderAuthenticationError(
+                                f"{self.provider_name.capitalize()} authentication failed (HTTP 401): Invalid API key.",
+                                provider=self.provider_name,
+                                model=model_id
+                            )
+                        elif res.status_code == 429:
+                            raise ProviderRateLimitError(
+                                f"{self.provider_name.capitalize()} rate limit or quota exceeded (HTTP 429): {err_body[:160]}",
+                                provider=self.provider_name,
+                                model=model_id
+                            )
+                        elif res.status_code >= 500:
+                            raise ProviderServiceError(
+                                f"{self.provider_name.capitalize()} server error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider=self.provider_name,
+                                model=model_id,
+                                status_code=res.status_code
+                            )
+                        else:
+                            raise ProviderError(
+                                f"{self.provider_name.capitalize()} stream error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider=self.provider_name,
+                                model=model_id,
+                                status_code=res.status_code
+                            )
 
                     async for line in res.aiter_lines():
                         line = line.strip()
@@ -1924,6 +1938,8 @@ class RemoteOpenAiCompatibleProvider(BaseAiProvider):
                                 )
         except httpx.TimeoutException:
             raise ProviderTimeoutError(f"{self.provider_name} stream timed out for model '{model_id}'", self.provider_name, model_id)
+        except (httpx.ConnectError, httpx.NetworkError, httpx.RemoteProtocolError, httpx.ReadError) as net_err:
+            raise ProviderUnavailableError(f"{self.provider_name} network connection failed: {net_err}", self.provider_name, model_id)
         except asyncio.CancelledError:
             raise
 
@@ -2139,32 +2155,34 @@ class AnthropicProvider(BaseAiProvider):
                     },
                     json=payload
                 ) as res:
-                    if res.status_code == 401:
-                        raise ProviderAuthenticationError(
-                            "Anthropic authentication failed (HTTP 401): Invalid API key.",
-                            provider="anthropic",
-                            model=model_id
-                        )
-                    elif res.status_code == 429:
-                        raise ProviderRateLimitError(
-                            "Anthropic rate limit reached (HTTP 429)",
-                            provider="anthropic",
-                            model=model_id
-                        )
-                    elif res.status_code >= 500:
-                        raise ProviderServiceError(
-                            f"Anthropic service error (HTTP {res.status_code})",
-                            provider="anthropic",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
-                    elif res.status_code != 200:
-                        raise ProviderError(
-                            f"Anthropic stream error (HTTP {res.status_code})",
-                            provider="anthropic",
-                            model=model_id,
-                            status_code=res.status_code
-                        )
+                    if res.status_code != 200:
+                        err_body = (await res.aread()).decode("utf-8", errors="replace")
+                        if res.status_code == 401:
+                            raise ProviderAuthenticationError(
+                                "Anthropic authentication failed (HTTP 401): Invalid API key.",
+                                provider="anthropic",
+                                model=model_id
+                            )
+                        elif res.status_code == 429:
+                            raise ProviderRateLimitError(
+                                f"Anthropic rate limit reached (HTTP 429): {err_body[:160]}",
+                                provider="anthropic",
+                                model=model_id
+                            )
+                        elif res.status_code >= 500:
+                            raise ProviderServiceError(
+                                f"Anthropic service error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="anthropic",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
+                        else:
+                            raise ProviderError(
+                                f"Anthropic stream error (HTTP {res.status_code}): {err_body[:160]}",
+                                provider="anthropic",
+                                model=model_id,
+                                status_code=res.status_code
+                            )
 
                     async for line in res.aiter_lines():
                         line = line.strip()
@@ -2190,6 +2208,8 @@ class AnthropicProvider(BaseAiProvider):
                                     yield StreamChunk(delta_content="", finish_reason=stop_reason)
         except httpx.TimeoutException:
             raise ProviderTimeoutError(f"Anthropic stream timed out for model '{model_id}'", "anthropic", model_id)
+        except (httpx.ConnectError, httpx.NetworkError, httpx.RemoteProtocolError, httpx.ReadError) as net_err:
+            raise ProviderUnavailableError(f"Anthropic network connection failed: {net_err}", "anthropic", model_id)
         except asyncio.CancelledError:
             raise
 
@@ -2874,7 +2894,7 @@ class AiProviderManager:
             resp.fallback_occurred = False
             resp.selected_provider = target_provider_id
             return resp
-        except (ProviderRateLimitError, ProviderServiceError, ProviderTimeoutError, ProviderUnavailableError) as exc:
+        except (ProviderRateLimitError, ProviderServiceError, ProviderTimeoutError, ProviderUnavailableError, ProviderError, httpx.HTTPError) as exc:
             # Fallback ONLY if explicitly configured by the user and key exists
             fallback_provider_id = active_cfg.get("fallback_provider")
             fallback_model = active_cfg.get("fallback_model")
@@ -2951,7 +2971,7 @@ class AiProviderManager:
                 user_id=user_id
             ):
                 yield chunk
-        except (ProviderRateLimitError, ProviderServiceError, ProviderTimeoutError, ProviderUnavailableError) as exc:
+        except (ProviderRateLimitError, ProviderServiceError, ProviderTimeoutError, ProviderUnavailableError, ProviderError, httpx.HTTPError) as exc:
             fallback_provider_id = active_cfg.get("fallback_provider")
             fallback_model = active_cfg.get("fallback_model")
             user_permitted = active_cfg.get("allow_fallback", False) and allow_fallback

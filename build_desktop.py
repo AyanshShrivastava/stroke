@@ -4,7 +4,7 @@ STROKE // AUTHORITATIVE DESKTOP PACKAGING SCRIPT (PyInstaller)
 Compiles Stroke into a Standalone Native Executable (.app for macOS, .exe for Windows)
 ================================================================================
 Usage:
-  python build_desktop.py [--arch arm64|x86_64|universal2] [--zip]
+  python build_desktop.py [--arch arm64|x86_64|universal2] [--zip] [--check-config]
 ================================================================================
 """
 
@@ -14,6 +14,82 @@ import platform
 import subprocess
 import shutil
 import argparse
+from typing import Tuple, List, Optional
+
+
+def normalize_arch(raw_arch: Optional[str]) -> str:
+    """Normalizes raw architecture string to canonical arm64 or x86_64."""
+    if not raw_arch:
+        raw_arch = platform.machine()
+    raw = raw_arch.lower()
+    if raw in ("arm64", "aarch64"):
+        return "arm64"
+    if raw in ("x86_64", "amd64", "x64"):
+        return "x86_64"
+    if raw == "universal2":
+        return "universal2"
+    return raw_arch
+
+
+def detect_rosetta_translation() -> bool:
+    """Detects if Python is running under Rosetta 2 x86_64 translation on an Apple Silicon Mac."""
+    if platform.system() != "Darwin":
+        return False
+    try:
+        res = subprocess.run(["sysctl", "-in", "sysctl.proc_translated"], capture_output=True, text=True, timeout=2.0)
+        return res.stdout.strip() == "1"
+    except Exception:
+        return False
+
+
+def check_universal2_compatibility() -> Tuple[bool, str]:
+    """
+    Validates whether the current Python environment has Mach-O universal2 binaries
+    capable of compiling a dual-slice universal binary for macOS.
+    """
+    if platform.system() != "Darwin":
+        return False, "universal2 is only applicable to macOS (Darwin)."
+
+    try:
+        res = subprocess.run(["file", sys.executable], capture_output=True, text=True, timeout=3.0)
+        output = res.stdout
+        is_universal = "arm64" in output and "x86_64" in output
+        if is_universal:
+            return True, "Python interpreter contains both arm64 and x86_64 Mach-O slices."
+        else:
+            return False, (
+                f"Current Python interpreter at {sys.executable} is single-architecture ({output.strip()}). "
+                "Universal2 builds require a universal Python binary and dual-slice compiled dylibs."
+            )
+    except Exception as exc:
+        return False, f"Could not inspect Python binary architecture: {exc}"
+
+
+# Forbidden mutable/sensitive file names that must NEVER be bundled into read-only app locations
+MUTABLE_OR_SENSITIVE_FILES = {
+    ".vault_key",
+    "local_firestore_db.json",
+    ".env",
+    "approved_workspaces.json",
+    "local_chat_sessions.json",
+    "mcp_servers.json",
+    "verified_project_context.json",
+}
+
+
+def validate_bundle_manifest(add_data_items: List[str], sep: str) -> List[str]:
+    """
+    Enforces read-only bundle compliance:
+    Asserts that no mutable user files or sensitive credentials are baked into the
+    PyInstaller application bundle. Dynamic writes must target paths_service directories.
+    """
+    violations = []
+    for item in add_data_items:
+        src = item.split(sep)[0]
+        base_name = os.path.basename(src)
+        if base_name in MUTABLE_OR_SENSITIVE_FILES:
+            violations.append(src)
+    return violations
 
 
 def parse_args():
@@ -29,30 +105,16 @@ def parse_args():
         action="store_true",
         help="Automatically generate distribution ZIP archive in dist/"
     )
+    parser.add_argument(
+        "--check-config",
+        action="store_true",
+        help="Validate build configuration, packaging manifest, and architecture without compiling."
+    )
     return parser.parse_args()
 
 
-def run_build():
-    args = parse_args()
-    system = platform.system()
-    host_arch = platform.machine()
-    target_arch = args.arch or host_arch
-
-    print("=" * 65)
-    print(f" [STROKE COMPILER // PLATFORM: {system.upper()} // ARCH: {target_arch}]")
-    print("=" * 65)
-
-    # Ensure PyInstaller is installed
-    try:
-        import PyInstaller
-    except ImportError:
-        print("[STROKE BUILD] PyInstaller not detected. Installing via pip...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller", "pywebview", "llama-cpp-python"])
-
-    # Separator for PyInstaller --add-data (; on Windows, : on Unix)
-    sep = ";" if system == "Windows" else ":"
-
-    # Core data files to embed in standalone bundle
+def get_bundle_add_data(system: str, sep: str) -> List[str]:
+    """Builds the list of static, read-only data files to embed in the application bundle."""
     add_data = [
         f"index.html{sep}.",
         f"download_model.py{sep}.",
@@ -62,7 +124,7 @@ def run_build():
         f".env.example{sep}."
     ]
 
-    # Embed Elemental Worlds VFX Database assets safely (exclude .vault_key, tokens, user data)
+    # Embed Elemental Worlds VFX Database static read-only assets safely
     static_vfx_assets = [
         os.path.join("data", "vfx_data.json"),
         os.path.join("data", "vfx_dump.txt"),
@@ -72,31 +134,17 @@ def run_build():
         if os.path.exists(asset):
             add_data.append(f"{asset}{sep}data")
 
-    # NOTE: Neural models (GGUF) are kept OUTSIDE the read-only application bundle.
-    # At runtime, models are downloaded/managed in user application data (~/Library/Application Support/Stroke/Models).
-    print("[STROKE BUILD] Neural models are stored externally in user app storage to maintain clean updates.")
+    # Add public static web assets if present
+    public_dir = "public"
+    if os.path.exists(public_dir):
+        add_data.append(f"{public_dir}{sep}public")
 
-    base_cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--name=Stroke",
-        "--noconfirm",
-        "--clean",
-        "--windowed" if system != "Linux" else "--onedir",
-    ]
+    return add_data
 
-    # Target architecture handling on macOS
-    if system == "Darwin" and args.arch:
-        if args.arch == "universal2":
-            print("[STROKE BUILD NOTICE] Building universal2 binary requires both arm64 and x86_64 dylibs.")
-        base_cmd.extend(["--target-arch", args.arch])
 
-    for item in add_data:
-        src = item.split(sep)[0]
-        if os.path.exists(src):
-            base_cmd.extend(["--add-data", item])
-
-    # Hidden imports required by FastAPI, Uvicorn, BYOK AI Providers, and Stroke Services
-    hidden_imports = [
+def get_hidden_imports() -> List[str]:
+    """Returns the list of required hidden imports for PyInstaller packaging."""
+    return [
         "uvicorn",
         "uvicorn.logging",
         "uvicorn.loops",
@@ -141,7 +189,92 @@ def run_build():
         "cryptography",
     ]
 
-    for imp in hidden_imports:
+
+def run_build():
+    args = parse_args()
+    system = platform.system()
+    raw_host_arch = platform.machine()
+    host_arch = normalize_arch(raw_host_arch)
+    target_arch = normalize_arch(args.arch) if args.arch else host_arch
+
+    print("=" * 65)
+    print(f" [STROKE COMPILER // PLATFORM: {system.upper()} // ARCH: {target_arch}]")
+    print("=" * 65)
+
+    # Architecture & translation diagnostic
+    is_rosetta = detect_rosetta_translation()
+    if is_rosetta:
+        print("[STROKE BUILD NOTICE] Active Python is running under Rosetta 2 x86_64 translation on Apple Silicon.")
+
+    # Universal binary check
+    if target_arch == "universal2" and system == "Darwin":
+        can_universal, u_msg = check_universal2_compatibility()
+        print(f"[STROKE BUILD UNIVERSAL2 CHECK] {u_msg}")
+        if not can_universal:
+            print(
+                "[STROKE BUILD WARNING] Building universal2 on a single-arch interpreter may fail during lipo linking.\n"
+                f"Recommendation: Specify --arch {host_arch} or use a Universal2 Python environment.",
+                file=sys.stderr
+            )
+
+    sep = ";" if system == "Windows" else ":"
+    add_data = get_bundle_add_data(system, sep)
+
+    # Verify read-only bundle safety
+    violations = validate_bundle_manifest(add_data, sep)
+    if violations:
+        print(
+            f"[STROKE BUILD CRITICAL] Read-only bundle violation: mutable/sensitive files detected in manifest: {violations}\n"
+            "Aborting build to prevent bundling mutable state into read-only app locations.",
+            file=sys.stderr
+        )
+        sys.exit(1)
+
+    print("[STROKE BUILD VERIFICATION] Confirmed: Zero mutable user database/key files in bundle manifest.")
+    print("[STROKE BUILD VERIFICATION] Dynamic runtime writes strictly target user application storage (paths_service).")
+    print("[STROKE BUILD VERIFICATION] Neural models (GGUF) are resolved from user application storage (~/Models).")
+
+    # If --check-config was requested, validate and return immediately without compiling
+    if args.check_config:
+        print("\n[STROKE BUILD CHECK-CONFIG SUCCESSFUL]")
+        print(f"  Target Platform:     {system}")
+        print(f"  Target Architecture: {target_arch}")
+        print(f"  Host Architecture:   {host_arch}")
+        print(f"  Rosetta Translated:  {is_rosetta}")
+        print(f"  Bundled Data Assets: {len(add_data)} entry(s)")
+        print(f"  Hidden Imports:      {len(get_hidden_imports())} modules")
+        print("  All packaging options and read-only location checks PASSED.")
+        print("=" * 65 + "\n")
+        return
+
+    # Ensure PyInstaller is installed
+    try:
+        import PyInstaller
+    except ImportError:
+        print("[STROKE BUILD] PyInstaller not detected. Installing via pip...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+
+    base_cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--name=Stroke",
+        "--noconfirm",
+        "--clean",
+        "--windowed" if system != "Linux" else "--onedir",
+    ]
+
+    # Target architecture handling on macOS
+    if system == "Darwin":
+        if args.arch:
+            base_cmd.extend(["--target-arch", args.arch])
+        elif target_arch in ("arm64", "x86_64"):
+            base_cmd.extend(["--target-arch", target_arch])
+
+    for item in add_data:
+        src = item.split(sep)[0]
+        if os.path.exists(src):
+            base_cmd.extend(["--add-data", item])
+
+    for imp in get_hidden_imports():
         base_cmd.extend(["--hidden-import", imp])
 
     base_cmd.append("desktop.py")

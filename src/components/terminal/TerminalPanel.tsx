@@ -104,6 +104,7 @@ export function TerminalPanel({ isOpen, onClose, defaultWorkspace }: TerminalPan
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Delta polling loop for output streaming

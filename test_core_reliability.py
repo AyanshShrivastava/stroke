@@ -251,5 +251,83 @@ class TestDiagnosticReportingHonesty(unittest.TestCase):
         self.assertIn("NOT RUN", md)
 
 
+class TestTerminalAndStreamHardening(unittest.TestCase):
+    """Verifies hardened terminal workspace isolation, caller identity, and stream error payloads."""
+
+    def test_11_terminal_workspace_and_caller_identity_isolation(self):
+        """Terminal command execution enforces session ownership and blocks binary traversal outside workspace."""
+        import terminal_service
+        from terminal_service import TerminalManager, evaluate_command_security, SecurityDecision
+        with tempfile.TemporaryDirectory() as ws_dir:
+            import workspace_service
+            workspace_service.approve_workspace(ws_dir)
+
+            sess_info = TerminalManager.create_terminal(ws_dir, caller_uid="alice_user")
+            sid = sess_info["session_id"]
+
+            # 1. Foreign user 'bob_user' cannot execute in alice's terminal session
+            with self.assertRaises(PermissionError) as ctx:
+                TerminalManager.run_command(sid, command="ls", caller_uid="bob_user", is_internal=False)
+            self.assertIn("belongs to user 'alice_user', not 'bob_user'", str(ctx.exception))
+
+            # 2. Binary path traversing outside workspace is blocked
+            outside_cmd = TerminalManager.run_command(sid, command="../../outside_bin", caller_uid="alice_user", is_internal=False)
+            self.assertEqual(outside_cmd["status"], "error")
+            self.assertEqual(outside_cmd["error"], "workspace_traversal_denied")
+
+            # 3. AI-initiated command traversing outside workspace via argument is denied
+            sec_dec, sec_rat = evaluate_command_security("cat", ["../../secret.key"], is_ai_initiated=True, workspace_path=ws_dir)
+            self.assertEqual(sec_dec, SecurityDecision.DENIED)
+            self.assertIn("traverses outside designated workspace", sec_rat)
+
+            # Cleanup
+            TerminalManager.stop_terminal(sid, caller_uid="alice_user", is_internal=False)
+
+    def test_12_ai_stream_error_payload_and_toast(self):
+        """Stream generator fails gracefully with structured toast/error payload and does not hang."""
+        from fastapi.testclient import TestClient
+        import main
+        from main import app
+        import ai_provider_service
+
+        client = TestClient(app)
+        auth_header = {"Authorization": "Bearer mock-test-token"}
+        mock_user = {"uid": "test_user", "email": "test@example.com"}
+
+        # Simulate provider failure during stream
+        async def mock_failing_stream(*args, **kwargs):
+            raise ai_provider_service.ProviderAuthenticationError("Invalid API key simulation", provider="groq", model="llama-3.3-70b-versatile")
+            yield  # pragma: no cover
+
+        with patch("auth_service.verify_firebase_id_token", return_value=mock_user), \
+             patch.object(main.global_ai_provider_manager, "execute_stream_chat", side_effect=mock_failing_stream):
+            res = client.post("/api/ai/chat/stream", json={"messages": [{"role": "user", "content": "hello"}]}, headers=auth_header)
+            self.assertEqual(res.status_code, 200)
+            body = res.text
+            self.assertIn("data: [DONE]", body)
+            self.assertIn('"type": "error"', body)
+            self.assertIn('"toast":', body)
+            self.assertIn('"error_type": "auth"', body)
+
+    def test_13_credentials_vault_corruption_snapshot_and_time_import(self):
+        """Credentials vault preserves damaged key snapshot with timestamp without NameError."""
+        import credentials_vault_service
+        with tempfile.TemporaryDirectory() as tmp_v_dir:
+            k_file = os.path.join(tmp_v_dir, credentials_vault_service.VAULT_KEY_FILE)
+            d_file = os.path.join(tmp_v_dir, credentials_vault_service.VAULT_DATA_FILE)
+            with open(k_file, "wb") as f:
+                f.write(b"damaged_short_key")
+            with open(d_file, "wb") as f:
+                f.write(b"some_encrypted_data")
+
+            with patch("credentials_vault_service._get_vault_dir", return_value=credentials_vault_service.Path(tmp_v_dir)):
+                with self.assertRaises(credentials_vault_service.VaultKeyCorruptionError) as ctx:
+                    credentials_vault_service._get_or_create_cipher()
+                self.assertIn("corrupted", str(ctx.exception).lower())
+                # Verify .bak snapshot file was created
+                bak_files = [f for f in os.listdir(tmp_v_dir) if ".bak" in f]
+                self.assertTrue(len(bak_files) > 0)
+
+
 if __name__ == "__main__":
     unittest.main()
