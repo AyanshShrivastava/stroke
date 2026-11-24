@@ -2816,13 +2816,14 @@ async def download_weights_endpoint(payload: Optional[Dict[str, Any]] = None, us
 # ==============================================================================
 
 @app.get("/api/models/providers", tags=["BYOK Models & Providers"])
-async def list_model_providers(user: AuthenticatedUser = Depends(get_current_user)):
+async def list_model_providers(user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)):
     """
     GET /api/models/providers
     Returns safe configuration status for all supported providers.
     NEVER includes plaintext API keys.
     """
-    statuses = credentials_vault_service.vault.list_all_statuses(user.uid)
+    uid = user.uid if user else "default_user"
+    statuses = credentials_vault_service.vault.list_all_statuses(uid)
     active_cfg = ai_provider_service.get_active_model_config()
     return {
         "status": "success",
@@ -2836,23 +2837,24 @@ async def list_model_providers(user: AuthenticatedUser = Depends(get_current_use
 @app.post("/api/models/credentials", tags=["BYOK Models & Providers"])
 async def save_provider_credentials(
     payload: SaveCredentialRequest,
-    user: AuthenticatedUser = Depends(get_current_user)
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
 ):
     """
     POST /api/models/credentials
     Stores an API key and optional metadata safely in the OS Keychain and encrypted vault.
     Never persists keys in plaintext or logs.
     """
+    uid = user.uid if user else "default_user"
     success = credentials_vault_service.vault.store_credential(
         provider=payload.provider,
         api_key=payload.api_key,
         metadata=payload.metadata,
-        user_id=user.uid
+        user_id=uid
     )
     if not success:
         raise HTTPException(status_code=500, detail="Failed to securely store credential in vault.")
 
-    status_digest = credentials_vault_service.vault.get_provider_status(payload.provider, user.uid)
+    status_digest = credentials_vault_service.vault.get_provider_status(payload.provider, uid)
     return {
         "status": "success",
         "message": f"Successfully stored {payload.provider.upper()} credentials in secure vault.",
@@ -2863,13 +2865,14 @@ async def save_provider_credentials(
 @app.delete("/api/models/credentials/{provider}", tags=["BYOK Models & Providers"])
 async def delete_provider_credentials(
     provider: str,
-    user: AuthenticatedUser = Depends(get_current_user)
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
 ):
     """
     DELETE /api/models/credentials/{provider}
     Removes the specified provider credential from OS Keychain and encrypted vault.
     """
-    credentials_vault_service.vault.delete_credential(provider, user.uid)
+    uid = user.uid if user else "default_user"
+    credentials_vault_service.vault.delete_credential(provider, uid)
     return {
         "status": "success",
         "message": f"Removed credentials for {provider}.",
@@ -2880,15 +2883,16 @@ async def delete_provider_credentials(
 @app.post("/api/models/test-connection", tags=["BYOK Models & Providers"])
 async def test_provider_connection_endpoint(
     payload: TestConnectionRequest,
-    user: AuthenticatedUser = Depends(get_current_user)
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
 ):
     """
     POST /api/models/test-connection
     Executes an actual live verification request against the provider's official API.
     """
+    uid = user.uid if user else "default_user"
     api_key = payload.api_key
     if not api_key:
-        api_key = credentials_vault_service.vault.get_credential(payload.provider, user.uid)
+        api_key = credentials_vault_service.vault.get_credential(payload.provider, uid)
     if not api_key:
         return {
             "status": "error",
@@ -2914,7 +2918,7 @@ async def test_provider_connection_endpoint(
 
 
 @app.get("/api/models/active", tags=["BYOK Models & Providers"])
-async def get_active_model_endpoint(user: AuthenticatedUser = Depends(get_current_user)):
+async def get_active_model_endpoint(user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)):
     """GET /api/models/active - Returns currently selected active provider and model preferences."""
     return {
         "status": "success",
@@ -2925,7 +2929,7 @@ async def get_active_model_endpoint(user: AuthenticatedUser = Depends(get_curren
 @app.post("/api/models/active", tags=["BYOK Models & Providers"])
 async def set_active_model_endpoint(
     payload: SetActiveModelRequest,
-    user: AuthenticatedUser = Depends(get_current_user)
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
 ):
     """POST /api/models/active - Updates currently selected active provider and model preferences."""
     updated = ai_provider_service.set_active_model_config(payload.model_dump(exclude_none=True))
@@ -2937,7 +2941,7 @@ async def set_active_model_endpoint(
 
 
 @app.get("/api/models/catalog", tags=["BYOK Models & Providers"])
-async def get_models_catalog(user: AuthenticatedUser = Depends(get_current_user)):
+async def get_models_catalog(user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)):
     """GET /api/models/catalog - Returns list of registered models with capabilities."""
     models_list = [m.model_dump() for m in ai_provider_service.MODEL_REGISTRY.values()]
     return {
@@ -2967,11 +2971,11 @@ async def get_reasoning_profiles_endpoint(user: Optional[auth_service.Authentica
 async def get_live_models_endpoint(
     provider: str,
     base_url: Optional[str] = None,
-    user: AuthenticatedUser = Depends(get_current_user)
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
 ):
     """GET /api/models/live/{provider} - Queries the provider API directly to return authentic live models."""
     try:
-        user_uid = getattr(user, "uid", "anonymous")
+        user_uid = user.uid if user else "default_user"
         models = await ai_provider_service.fetch_live_provider_models(
             provider=provider,
             user_id=user_uid,
@@ -2990,11 +2994,11 @@ async def get_live_models_endpoint(
 async def post_live_models_endpoint(
     provider: str,
     payload: FetchLiveModelsRequest,
-    user: AuthenticatedUser = Depends(get_current_user)
+    user: Optional[auth_service.AuthenticatedUser] = Depends(auth_service.get_optional_user)
 ):
     """POST /api/models/live/{provider} - Queries the provider API with an optional unsaved key or custom base_url."""
     try:
-        user_uid = getattr(user, "uid", "anonymous")
+        user_uid = user.uid if user else "default_user"
         models = await ai_provider_service.fetch_live_provider_models(
             provider=provider,
             user_id=user_uid,

@@ -46,7 +46,7 @@ VAULT_KEY_FILE = "byok_vault.key"
 VAULT_DATA_FILE = "byok_credentials.vault"
 
 # Supported provider identifiers
-SUPPORTED_PROVIDERS = ["groq", "gemini", "openrouter", "openai", "anthropic", "custom"]
+SUPPORTED_PROVIDERS = ["groq", "gemini", "openrouter", "openai", "anthropic", "deepseek", "custom"]
 
 # Standard environment variable mappings
 ENV_KEY_MAPPINGS = {
@@ -55,6 +55,7 @@ ENV_KEY_MAPPINGS = {
     "openrouter": "OPENROUTER_API_KEY",
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
+    "deepseek": "DEEPSEEK_API_KEY",
     "custom": "CUSTOM_AI_API_KEY",
 }
 

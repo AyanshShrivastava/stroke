@@ -767,7 +767,10 @@ class AgentExecutionGate:
         try:
             effective_caller = f"task-{task.task_id}" if task.terminal_session_id else task.user_uid
             if hasattr(tool_dispatcher, "dispatch_async"):
-                raw_res = await tool_dispatcher.dispatch_async(tool_name, arguments, caller_uid=effective_caller)
+                try:
+                    raw_res = await tool_dispatcher.dispatch_async(tool_name, arguments, caller_uid=effective_caller)
+                except TypeError:
+                    raw_res = await tool_dispatcher.dispatch_async(tool_name, arguments)
             elif hasattr(tool_dispatcher, "dispatch"):
                 raw_res = await asyncio.to_thread(tool_dispatcher.dispatch, tool_name, arguments)
             else:

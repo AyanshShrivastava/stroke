@@ -52,6 +52,7 @@ class ProviderType(str, Enum):
     OPENROUTER = "openrouter"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
     CUSTOM = "custom"
 
 
@@ -509,9 +510,42 @@ MODEL_REGISTRY: Dict[str, ModelMetadata] = {
         supported_sampling_params=["temperature", "top_p", "max_tokens"],
         description="Hybrid reasoning frontier model."
     ),
+    # --------------------------------------------------------------------------
+    # DEEPSEEK (Direct BYOK)
+    # --------------------------------------------------------------------------
+    "deepseek-chat": ModelMetadata(
+        model_id="deepseek-chat",
+        provider=ProviderType.DEEPSEEK,
+        display_name="DeepSeek V3",
+        source="api.deepseek.com",
+        context_limit=64000,
+        input_modalities=["text"],
+        supports_tool_calling=True,
+        supports_streaming=True,
+        supports_structured_output=True,
+        supports_reasoning_controls=False,
+        supported_sampling_params=["temperature", "top_p", "max_tokens"],
+        description="DeepSeek V3 state-of-the-art general purpose model."
+    ),
+    "deepseek-reasoner": ModelMetadata(
+        model_id="deepseek-reasoner",
+        provider=ProviderType.DEEPSEEK,
+        display_name="DeepSeek R1",
+        source="api.deepseek.com",
+        context_limit=64000,
+        input_modalities=["text"],
+        supports_tool_calling=False,
+        supports_streaming=True,
+        supports_structured_output=False,
+        supports_reasoning_controls=True,
+        supported_sampling_params=["max_tokens"],
+        description="DeepSeek R1 chain-of-thought reasoning model."
+    ),
 }
 
 MODEL_ALIASES: Dict[str, str] = {
+    "deepseek": "deepseek-chat",
+    "deepseek-v3": "deepseek-chat",
     "groq": "llama-3.3-70b-versatile",
     "groq-fast": "llama-3.1-8b-instant",
     "gemini": "gemini-2.0-flash",
@@ -565,6 +599,8 @@ def resolve_model_metadata(model_id: str, provider_hint: Optional[str] = None) -
         p_type = ProviderType.GEMINI
     elif "claude" in model_id.lower():
         p_type = ProviderType.ANTHROPIC
+    elif "deepseek" in model_id.lower():
+        p_type = ProviderType.DEEPSEEK
     elif "gpt" in model_id.lower() or model_id.startswith("o1") or model_id.startswith("o3"):
         p_type = ProviderType.OPENAI
 
@@ -2385,6 +2421,18 @@ async def test_provider_connection(
                     return False, "Invalid Anthropic API key (HTTP 401).", 401
                 return False, f"Anthropic returned HTTP {r.status_code}: {r.text[:120]}", r.status_code
 
+            elif prov == "deepseek":
+                r = await client.get(
+                    "https://api.deepseek.com/models",
+                    headers={"Authorization": f"Bearer {key}"}
+                )
+                if r.status_code == 200:
+                    models = [m.get("id") for m in r.json().get("data", [])]
+                    return True, f"Connected to DeepSeek! {len(models)} models available.", 200
+                elif r.status_code == 401:
+                    return False, "Invalid DeepSeek API key (HTTP 401).", 401
+                return False, f"DeepSeek returned HTTP {r.status_code}: {r.text[:120]}", r.status_code
+
             elif prov == "custom":
                 url = (base_url or "").rstrip("/")
                 if not url:
@@ -2575,6 +2623,33 @@ async def fetch_live_provider_models(
                                     "name": item.get("display_name") or item.get("id", ""),
                                     "provider": "anthropic",
                                     "context_length": 200000
+                                })
+                            if api_models:
+                                return api_models
+                    except Exception:
+                        pass
+                return catalog
+
+            elif prov == "deepseek":
+                catalog = [
+                    {"id": "deepseek-chat", "name": "DeepSeek V3", "provider": "deepseek", "context_length": 64000, "description": "State-of-the-art general purpose model."},
+                    {"id": "deepseek-reasoner", "name": "DeepSeek R1", "provider": "deepseek", "context_length": 64000, "description": "Frontier chain-of-thought reasoning model."}
+                ]
+                if key:
+                    try:
+                        res = await client.get(
+                            "https://api.deepseek.com/models",
+                            headers={"Authorization": f"Bearer {key}"}
+                        )
+                        if res.status_code == 200:
+                            api_models = []
+                            for item in res.json().get("data", []):
+                                mid = item.get("id", "")
+                                api_models.append({
+                                    "id": mid,
+                                    "name": item.get("name") or mid,
+                                    "provider": "deepseek",
+                                    "context_length": 64000
                                 })
                             if api_models:
                                 return api_models
@@ -2798,6 +2873,7 @@ class AiProviderManager:
         self.openrouter = OpenRouterProvider()
         self.openai = RemoteOpenAiCompatibleProvider()
         self.anthropic = AnthropicProvider()
+        self.deepseek = RemoteOpenAiCompatibleProvider(base_url="https://api.deepseek.com", provider_name="deepseek")
         self.custom = CustomProvider()
         self.local_gguf = LlamaCppProvider()
         self.ollama = OllamaProvider()
@@ -2818,6 +2894,8 @@ class AiProviderManager:
             return self.openai
         elif p == "anthropic":
             return self.anthropic
+        elif p == "deepseek":
+            return self.deepseek
         elif p == "custom":
             return self.custom
         return self.groq

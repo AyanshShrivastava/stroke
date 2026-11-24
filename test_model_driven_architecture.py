@@ -123,7 +123,7 @@ class TestModelDrivenArchitecture(unittest.IsolatedAsyncioTestCase):
         mock_inference = AsyncMock(side_effect=[completion_turn_1, completion_turn_2])
         dispatched_calls = []
 
-        async def fake_dispatch(tool_name, args=None):
+        async def fake_dispatch(tool_name, args=None, *extra_args, **kwargs):
             dispatched_calls.append({"tool": tool_name, "args": args})
             return {"status": "success", "message": "Successfully executed script in Roblox Studio."}
 
