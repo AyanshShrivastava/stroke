@@ -262,6 +262,20 @@ class SecurityHeaderMiddleware(BaseHTTPMiddleware):
                     self.ALLOWED_ORIGINS.add(o.strip().rstrip("/"))
 
     async def dispatch(self, request: Request, call_next):
+        # 0. Request body size limit check (prevent memory exhaustion DoS)
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                cl_int = int(content_length)
+                MAX_BODY_BYTES = 50 * 1024 * 1024  # 50 MB
+                if cl_int > MAX_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        content={"detail": f"Request entity exceeds 50 MB limit ({cl_int} bytes)."}
+                    )
+            except ValueError:
+                pass
+
         # 1. Host Header Validation (DNS Rebinding Protection)
         raw_host = request.headers.get("host")
         if raw_host is None or not raw_host.strip():
@@ -677,7 +691,7 @@ def _initialize_vault_cipher() -> Fernet:
         import github_service
         return github_service._get_or_create_vault_cipher()
     except Exception as e:
-        vault_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        vault_dir = str(paths_service.get_app_data_dir() / "credentials")
         os.makedirs(vault_dir, exist_ok=True)
         key_file = os.path.join(vault_dir, ".vault_key")
         if os.path.exists(key_file):
@@ -944,12 +958,13 @@ async def delete_account_endpoint(user: AuthenticatedUser = Depends(get_current_
 
     # 4. Local disk user memory file
     try:
-        local_mem_dir = Path("data") / "local_user_memory"
-        for candidate_key in (uid, user_email):
-            if candidate_key:
-                mem_file = local_mem_dir / f"{candidate_key}.json"
-                if mem_file.exists():
-                    mem_file.unlink()
+        for mem_dir in (paths_service.get_app_data_dir() / "local_user_memory", Path("data") / "local_user_memory"):
+            if mem_dir.exists():
+                for candidate_key in (uid, user_email):
+                    if candidate_key:
+                        mem_file = mem_dir / f"{candidate_key}.json"
+                        if mem_file.exists():
+                            mem_file.unlink()
     except Exception as mem_err:
         errors.append(f"Local memory file cleanup error: {mem_err}")
 
@@ -969,6 +984,27 @@ async def delete_account_endpoint(user: AuthenticatedUser = Depends(get_current_
     except Exception:
         pass
 
+    # 7. Cancel active agent tasks owned by this user
+    try:
+        user_tasks = TaskManager.list_tasks(user_uid=uid)
+        for t in user_tasks:
+            TaskManager.cancel_task(t["task_id"], reason="Account deleted")
+    except Exception:
+        pass
+
+    # 8. Attempt Firebase Authentication identity deletion
+    auth_deleted = False
+    auth_detail = "Firebase Authentication account must be deleted via Firebase Client SDK or Console."
+    try:
+        import firebase_admin
+        from firebase_admin import auth as admin_auth
+        if firebase_admin._apps:
+            admin_auth.delete_user(uid)
+            auth_deleted = True
+            auth_detail = "Firebase Authentication account deleted successfully."
+    except Exception as auth_err:
+        print(f"[AUTH AUDIT] Firebase Admin delete_user notice: {auth_err}", flush=True)
+
     if errors:
         print(f"[AUTH AUDIT] Partial deletion for UID {uid}: {errors}", flush=True)
         return JSONResponse(
@@ -979,8 +1015,8 @@ async def delete_account_endpoint(user: AuthenticatedUser = Depends(get_current_
                 "email": user_email,
                 "purged_subcollections": purged_subcollections,
                 "errors": errors,
-                "firebase_auth_deleted": False,
-                "message": "Some user resources could not be fully deleted."
+                "firebase_auth_deleted": auth_deleted,
+                "message": f"Some user resources could not be fully deleted. {auth_detail}"
             }
         )
 
@@ -991,8 +1027,8 @@ async def delete_account_endpoint(user: AuthenticatedUser = Depends(get_current_
         "uid": uid,
         "email": user_email or "unnamed",
         "purged_subcollections": purged_subcollections,
-        "firebase_auth_deleted": False,
-        "message": f"Backend data for user {uid} ({user_email or 'unnamed'}) purged successfully. Firebase Authentication account must be deleted via Firebase Client SDK or Console."
+        "firebase_auth_deleted": auth_deleted,
+        "message": f"Backend data for user {uid} ({user_email or 'unnamed'}) purged successfully. {auth_detail}"
     }
 
 
@@ -1548,7 +1584,7 @@ def record_user_firestore_memory(
     except Exception as exc:
         print(f"[STROKE MEMORY NOTICE] Firestore write note ({exc}). Persisting to genuine local storage.", flush=True)
         try:
-            local_mem_dir = os.path.join(DATA_DIR, "local_user_memory")
+            local_mem_dir = str(paths_service.get_app_data_dir() / "local_user_memory")
             os.makedirs(local_mem_dir, exist_ok=True)
             local_mem_file = os.path.join(local_mem_dir, f"{uid}.json")
             existing_local = []
@@ -3082,11 +3118,12 @@ async def list_user_chats(
     Returns saved chat sessions for the user from Firestore users/{email}/chats.
     Falls back to resilient local store if Firestore ADC is in sandbox mode.
     """
-    if email and user.email and email.strip().lower() != user.email.strip().lower():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Cannot access another user's chat sessions."
-        )
+    if email:
+        if not user.email or email.strip().lower() != user.email.strip().lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot access another user's chat sessions."
+            )
     clean_email = (user.email or uid).strip().lower()
     sessions = []
     try:
@@ -3102,7 +3139,7 @@ async def list_user_chats(
 
     if not sessions:
         with _local_chats_lock:
-            sessions = list(_LOCAL_CHAT_SESSIONS.get(clean_email, []))
+            sessions = list(_LOCAL_CHAT_SESSIONS.get(uid) or _LOCAL_CHAT_SESSIONS.get(clean_email, []))
 
     return {
         "status": "success",
@@ -3120,11 +3157,12 @@ async def get_single_user_chat(
     email: Optional[str] = Query(None, description="Optional email")
 ):
     uid = user.uid
-    if email and user.email and email.strip().lower() != user.email.strip().lower():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Cannot access another user's chat sessions."
-        )
+    if email:
+        if not user.email or email.strip().lower() != user.email.strip().lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot access another user's chat sessions."
+            )
     clean_email = (user.email or uid).strip().lower()
     try:
         doc = db.collection("users").document(uid).collection("chats").document(session_id).get()
@@ -3137,7 +3175,7 @@ async def get_single_user_chat(
         pass
 
     with _local_chats_lock:
-        sessions = _LOCAL_CHAT_SESSIONS.get(clean_email, [])
+        sessions = _LOCAL_CHAT_SESSIONS.get(uid) or _LOCAL_CHAT_SESSIONS.get(clean_email, [])
         match = next((s for s in sessions if s.get("session_id") == session_id), None)
         if match:
             return {"status": "success", "chat": match}
@@ -3152,11 +3190,12 @@ async def save_user_chat(
     user: AuthenticatedUser = Depends(get_current_user)
 ):
     uid = user.uid
-    if payload.email and user.email and payload.email.strip().lower() != user.email.strip().lower():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Cannot save chat session into another user's account."
-        )
+    if payload.email:
+        if not user.email or payload.email.strip().lower() != user.email.strip().lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot save chat session into another user's account."
+            )
     clean_email = (user.email or uid).strip().lower()
 
     if payload.is_temporary:
@@ -3198,10 +3237,8 @@ async def save_user_chat(
         pass
 
     with _local_chats_lock:
-        if clean_email not in _LOCAL_CHAT_SESSIONS:
-            _LOCAL_CHAT_SESSIONS[clean_email] = []
-
-        existing = next((s for s in _LOCAL_CHAT_SESSIONS[clean_email] if s.get("session_id") == payload.session_id), None)
+        target_store = _LOCAL_CHAT_SESSIONS.setdefault(uid, [])
+        existing = next((s for s in target_store if s.get("session_id") == payload.session_id), None)
 
         if existing and existing.get("version", 0) > (payload.version or 1):
             # Optimistic concurrency: merge without dropping existing newer messages or overwriting newer title
@@ -3212,9 +3249,12 @@ async def save_user_chat(
             existing["messages_count"] = len(existing["messages"])
             final_session = existing
         else:
-            _LOCAL_CHAT_SESSIONS[clean_email] = [s for s in _LOCAL_CHAT_SESSIONS[clean_email] if s.get("session_id") != payload.session_id]
-            _LOCAL_CHAT_SESSIONS[clean_email].insert(0, session_data)
+            _LOCAL_CHAT_SESSIONS[uid] = [s for s in target_store if s.get("session_id") != payload.session_id]
+            _LOCAL_CHAT_SESSIONS[uid].insert(0, session_data)
             final_session = session_data
+
+        if clean_email and clean_email != uid:
+            _LOCAL_CHAT_SESSIONS[clean_email] = list(_LOCAL_CHAT_SESSIONS[uid])
 
         _save_local_chat_sessions(_LOCAL_CHAT_SESSIONS)
 
@@ -3236,11 +3276,12 @@ async def delete_user_chat(
     email: Optional[str] = Query(None, description="Optional email")
 ):
     uid = user.uid
-    if email and user.email and email.strip().lower() != user.email.strip().lower():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Cannot delete another user's chat sessions."
-        )
+    if email:
+        if not user.email or email.strip().lower() != user.email.strip().lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot delete another user's chat sessions."
+            )
     clean_email = (user.email or uid).strip().lower()
     try:
         db.collection("users").document(uid).collection("chats").document(session_id).delete()
@@ -3248,9 +3289,11 @@ async def delete_user_chat(
         pass
 
     with _local_chats_lock:
+        if uid in _LOCAL_CHAT_SESSIONS:
+            _LOCAL_CHAT_SESSIONS[uid] = [s for s in _LOCAL_CHAT_SESSIONS[uid] if s.get("session_id") != session_id]
         if clean_email in _LOCAL_CHAT_SESSIONS:
             _LOCAL_CHAT_SESSIONS[clean_email] = [s for s in _LOCAL_CHAT_SESSIONS[clean_email] if s.get("session_id") != session_id]
-            _save_local_chat_sessions(_LOCAL_CHAT_SESSIONS)
+        _save_local_chat_sessions(_LOCAL_CHAT_SESSIONS)
 
     return {"status": "success", "session_id": session_id, "deleted": True}
 
@@ -4135,8 +4178,9 @@ async def get_agent_task(task_id: str, user: Optional[auth_service.Authenticated
     task = TaskManager.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail=f"Agent task '{task_id}' not found.")
-    if user and task.user_uid not in ("default_user", "anonymous") and task.user_uid != user.uid:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot access another user's agent task.")
+    if task.user_uid not in ("default_user", "anonymous"):
+        if not user or task.user_uid != user.uid:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot access another user's agent task.")
     return task.to_dict()
 
 
@@ -4146,8 +4190,9 @@ async def cancel_agent_task(task_id: str, user: Optional[auth_service.Authentica
     task = TaskManager.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail=f"Agent task '{task_id}' not found.")
-    if user and task.user_uid not in ("default_user", "anonymous") and task.user_uid != user.uid:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot cancel another user's agent task.")
+    if task.user_uid not in ("default_user", "anonymous"):
+        if not user or task.user_uid != user.uid:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot cancel another user's agent task.")
     success = TaskManager.cancel_task(task_id, reason="User requested cancellation via API")
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot cancel task '{task_id}' (not found or already terminal).")
@@ -4160,8 +4205,9 @@ async def approve_agent_task(task_id: str, user: Optional[auth_service.Authentic
     task = TaskManager.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail=f"Agent task '{task_id}' not found.")
-    if user and task.user_uid not in ("default_user", "anonymous") and task.user_uid != user.uid:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot approve another user's agent task.")
+    if task.user_uid not in ("default_user", "anonymous"):
+        if not user or task.user_uid != user.uid:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot approve another user's agent task.")
     success = TaskManager.approve_task(task_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot approve task '{task_id}' (task not in awaiting_approval state).")
@@ -4229,8 +4275,9 @@ async def get_parallel_agent_job(
     job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
-    if user and job.user_uid not in ("default_user", "anonymous") and job.user_uid != user.uid:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot access another user's agent job.")
+    if job.user_uid not in ("default_user", "anonymous"):
+        if not user or job.user_uid != user.uid:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot access another user's agent job.")
     return job.to_dict()
 
 
@@ -4243,8 +4290,9 @@ async def cancel_parallel_agent_job(
     job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
-    if user and job.user_uid not in ("default_user", "anonymous") and job.user_uid != user.uid:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot cancel another user's agent job.")
+    if job.user_uid not in ("default_user", "anonymous"):
+        if not user or job.user_uid != user.uid:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot cancel another user's agent job.")
     success = parallel_agent_system.global_multi_agent_orchestrator.cancel_job(job_id)
     if not success:
         raise HTTPException(status_code=400, detail=f"Cannot cancel job '{job_id}' (not found or already terminal).")
@@ -4260,8 +4308,9 @@ async def stream_parallel_agent_job(
     job = parallel_agent_system.global_multi_agent_orchestrator.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Parallel agent job '{job_id}' not found.")
-    if user and job.user_uid not in ("default_user", "anonymous") and job.user_uid != user.uid:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot stream another user's agent job.")
+    if job.user_uid not in ("default_user", "anonymous"):
+        if not user or job.user_uid != user.uid:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Cannot stream another user's agent job.")
 
     async def event_generator():
         last_index = 0
@@ -4471,7 +4520,8 @@ async def verify_terminal_access(
     if token:
         try:
             claims = auth_service.verify_firebase_id_token(token)
-            return {"auth": "firebase", "is_internal": False, "uid": claims.get("uid"), "user": claims}
+            uid = claims.get("uid") or claims.get("user_id") or claims.get("sub")
+            return {"auth": "firebase", "is_internal": False, "uid": uid, "user": claims}
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -4487,9 +4537,26 @@ async def verify_terminal_access(
 
 
 def _extract_caller_uid_and_internal(access: Dict[str, Any]):
-    caller_uid = access.get("uid") or (access.get("user") or {}).get("uid") or "internal_daemon"
-    is_internal = bool(access.get("is_internal") or access.get("auth") in ("internal", "internal_token"))
-    return caller_uid, is_internal
+    is_internal = bool(
+        access.get("is_internal") is True
+        or access.get("auth") in ("internal", "internal_token")
+    )
+    if is_internal:
+        internal_uid = access.get("uid") or (access.get("user") or {}).get("uid") or "internal_daemon"
+        return internal_uid, True
+
+    caller_uid = (
+        access.get("uid")
+        or (access.get("user") or {}).get("uid")
+        or (access.get("user") or {}).get("user_id")
+        or (access.get("user") or {}).get("sub")
+    )
+    if not caller_uid or caller_uid == "internal_daemon":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Authenticated user cannot claim internal_daemon identity and must have a valid UID."
+        )
+    return caller_uid, False
 
 
 @app.post("/terminal/create", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
@@ -4777,6 +4844,19 @@ async def stream_terminal_output_endpoint(
             "X-Accel-Buffering": "no"
         }
     )
+
+
+@app.get("/terminal/output/stream", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
+async def stream_terminal_output_query_endpoint(
+    session_id: str = Query(..., description="Unique terminal session ID"),
+    from_seq: int = Query(0, description="Start streaming from this sequence number"),
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
+    """
+    GET /terminal/output/stream
+    Query parameter-based SSE streaming endpoint alias for live terminal output.
+    """
+    return await stream_terminal_output_endpoint(session_id=session_id, from_seq=from_seq, access=access)
 
 
 # ==============================================================================

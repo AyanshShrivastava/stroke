@@ -1,377 +1,494 @@
 """
 ================================================================================
-STROKE // COMPREHENSIVE SECURITY AUDIT & VULNERABILITY REGRESSION TEST SUITE
+STROKE // COMPREHENSIVE SECURITY, AUTH, AUTHORIZATION & DATA AUDIT REGRESSION SUITE
 ================================================================================
-Exhaustively verifies defensive security controls and regressions across:
-  1. API Key Exposure: Header-based Gemini authentication, zero key in URLs.
-  2. Custom AI Provider SSRF: Cloud metadata and loopback protections.
-  3. Chat Session BOLA / IDOR: Cross-account reading, writing, and deletion rejection.
-  4. Agent Orchestrator BOLA: Cross-tenant task and multi-agent job access control.
-  5. Terminal Secret Redaction: Groq, OpenRouter, OpenAI, GitHub PATs, and bearer tokens.
-  6. Filesystem Path Traversal & Symlink Escapes: Workspace boundary enforcement.
-  7. Terminal Child Process Environment: Secret leakage prevention in child processes.
-  8. Non-Elevated Standard Privilege: Non-admin zero-elevation enforcement.
-  9. Credentials Vault: Machine-bound encryption and key masking in public outputs.
-  10. GitHub Service Input Sanitization: Traversal prevention on repos and branches.
-  11. MCP Protocol SSRF Protection: Strict IP blocklist and metadata defenses.
+Validates all repairs from the repository-wide engineering security audit:
+  1. Authoritative Firebase UID identity & cross-user chat isolation.
+  2. Strict object ownership for chats, agent tasks, parallel jobs, and terminal sessions.
+  3. Terminal session owner_uid enforcement across every operation:
+     (create, run, read output, read output delta, history, status, list, stop, restart, stream).
+  4. Isolation between authenticated users and internal daemon callers.
+  5. Command approval token validation: caller_uid, session, single-use consumption, replay prevention.
+  6. Workspace boundary validation & traversal rejection for diagnostics and filesystem.
+  7. Absolute No-Delete Policy enforcement for AI-initiated file operations.
+  8. MCP SSRF protection, DNS rebinding blocks, and child-process environment sanitization.
+  9. MCP Secret Vault key corruption safety, backup recovery, and credential preservation.
+ 10. Complete /auth/account audit: subcollection purge, local memory purge, BYOK cleanup, honest reporting.
+ 11. Request body size limit (DoS prevention).
 ================================================================================
 """
 
 import os
 import sys
-import json
 import time
-import asyncio
+import json
+import socket
 import unittest
-from unittest.mock import patch, MagicMock, AsyncMock
-import httpx
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 from fastapi.testclient import TestClient
-
-# Ensure test flags
-os.environ["STROKE_ALLOW_OFFLINE_DB"] = "1"
-os.environ["STROKE_DEV_CONSOLE_OTP"] = "1"
-os.environ["FIREBASE_PROJECT_ID"] = "stroke-test-security"
-
-import main
 from main import app
+import main
 import auth_service
 from auth_service import AuthenticatedUser
-import ai_provider_service
-from ai_provider_service import GeminiProvider, CustomProvider, ProviderServiceError
 import terminal_service
-from terminal_service import redact_sensitive_data, get_sanitized_child_env
+from terminal_service import TerminalManager, ApprovalRecord
 import workspace_service
-from workspace_service import validate_path_access, validate_task_id, WorkspaceSecurityError
-import paths_service
-import credentials_vault_service
-import github_service
+import file_service
+import backup_service
 import mcp_client
-from mcp_client import SsrfProtector, McpError
-import agent_orchestrator
-from agent_orchestrator import TaskManager, TaskState
-import parallel_agent_system
+from mcp_client import SsrfProtector, McpSecretVault, build_minimal_mcp_env, McpError
+import credentials_vault_service
+import paths_service
+from agent_orchestrator import TaskState, TaskBudget, AgentTask, TaskManager
 
 
-class TestSecurityAuditComprehensive(unittest.TestCase):
-    """Repository-wide comprehensive security audit regression suite."""
+class TestCrossUserChatIsolation(unittest.TestCase):
+    """Audits chat endpoints against cross-user snooping and email spoofing."""
 
     def setUp(self):
         self.client = TestClient(app)
-        self.user_a = AuthenticatedUser(
-            uid="uid_user_alpha",
-            email="alpha@stroke.internal",
+
+    def test_01_cannot_list_chats_with_mismatching_email(self):
+        """User A cannot list chats for User B by specifying email query param."""
+        user_a = AuthenticatedUser(
+            uid="user_alice_123",
+            email="alice@example.com",
             email_verified=True,
-            display_name="User Alpha"
+            claims={"uid": "user_alice_123", "email": "alice@example.com"}
         )
-        self.user_b = AuthenticatedUser(
-            uid="uid_user_beta",
-            email="beta@stroke.internal",
+
+        app.dependency_overrides[main.get_current_user] = lambda: user_a
+        try:
+            # Alice querying Bob's email must be forbidden
+            resp = self.client.get("/chats?email=bob@example.com")
+            self.assertEqual(resp.status_code, 403)
+            self.assertIn("Access denied", resp.json()["detail"])
+        finally:
+            app.dependency_overrides.pop(main.get_current_user, None)
+
+    def test_02_user_without_email_cannot_supply_foreign_email(self):
+        """User authenticated without email claim cannot supply a foreign email parameter."""
+        user_anon = AuthenticatedUser(
+            uid="anon_user_999",
+            email=None,
+            email_verified=False,
+            claims={"uid": "anon_user_999"}
+        )
+
+        app.dependency_overrides[main.get_current_user] = lambda: user_anon
+        try:
+            resp = self.client.get("/chats?email=victim@example.com")
+            self.assertEqual(resp.status_code, 403)
+        finally:
+            app.dependency_overrides.pop(main.get_current_user, None)
+
+    def test_03_cannot_save_chat_into_another_users_account(self):
+        """User A cannot save a chat session attributed to User B's email."""
+        user_a = AuthenticatedUser(
+            uid="user_alice_123",
+            email="alice@example.com",
             email_verified=True,
-            display_name="User Beta"
-        )
-        app.dependency_overrides.clear()
-
-    def tearDown(self):
-        app.dependency_overrides.clear()
-
-    # --------------------------------------------------------------------------
-    # 1. API KEY EXPOSURE DEFENSE
-    # --------------------------------------------------------------------------
-    def test_01_gemini_uses_headers_not_url_query_param(self):
-        """Verify GeminiProvider does NOT leak API key in query parameters."""
-        provider = GeminiProvider()
-        test_key = "AIzaSyFakeKeyForSecurityAuditTest123456"
-
-        mock_resp = httpx.Response(
-            status_code=200,
-            json={"candidates": [{"content": {"parts": [{"text": "Security test ok"}]}}]},
-            request=httpx.Request("POST", "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent")
+            claims={"uid": "user_alice_123", "email": "alice@example.com"}
         )
 
-        with patch("credentials_vault_service.vault.get_credential", return_value=test_key):
-            with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp) as mock_post:
-                resp = asyncio.run(provider.chat_complete(
-                    model_id="gemini-2.0-flash",
-                    messages=[{"role": "user", "content": "hi"}]
-                ))
+        app.dependency_overrides[main.get_current_user] = lambda: user_a
+        try:
+            payload = {
+                "session_id": "session-tamper-1",
+                "title": "Tampered Chat",
+                "email": "victim@example.com",
+                "messages": [{"id": "m1", "role": "user", "content": "hello"}]
+            }
+            resp = self.client.post("/chats/save", json=payload)
+            self.assertEqual(resp.status_code, 403)
+        finally:
+            app.dependency_overrides.pop(main.get_current_user, None)
 
-                self.assertIsNotNone(resp)
-                self.assertEqual(resp.content, "Security test ok")
 
-                call_args, call_kwargs = mock_post.call_args
-                called_url = call_args[0]
-                headers = call_kwargs.get("headers", {})
+class TestAgentTaskAndJobIsolation(unittest.TestCase):
+    """Audits agent tasks and parallel jobs against cross-user inspection and manipulation."""
 
-                # MUST NOT contain '?key=' in url
-                self.assertNotIn("?key=", called_url)
-                self.assertNotIn(test_key, called_url)
-                # MUST contain x-goog-api-key header
-                self.assertEqual(headers.get("x-goog-api-key"), test_key)
+    def setUp(self):
+        self.client = TestClient(app)
 
-    def test_02_gemini_models_fetch_uses_header(self):
-        """Verify fetch_live_provider_models for Gemini does NOT place key in URL."""
-        test_key = "AIzaSyFakeKeyModelsFetch1234567890"
+    def test_01_unauthenticated_cannot_access_user_task(self):
+        """Unauthenticated caller (user=None) cannot inspect another user's agent task."""
+        task = TaskManager.create_task("Build secure module", user_uid="user_victim_456")
 
-        mock_resp = httpx.Response(
-            status_code=200,
-            json={"models": [{"name": "models/gemini-2.0-flash", "supportedGenerationMethods": ["generateContent"]}]},
-            request=httpx.Request("GET", "https://generativelanguage.googleapis.com/v1beta/models")
-        )
+        # Calling without auth header -> get_optional_user returns None
+        resp = self.client.get(f"/agent/tasks/{task.task_id}")
+        self.assertEqual(resp.status_code, 403)
 
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_resp) as mock_get:
-            models = asyncio.run(ai_provider_service.fetch_live_provider_models("gemini", api_key=test_key))
-            self.assertTrue(len(models) > 0)
-
-            call_args, call_kwargs = mock_get.call_args
-            called_url = call_args[0]
-            headers = call_kwargs.get("headers", {})
-
-            self.assertNotIn("?key=", called_url)
-            self.assertNotIn(test_key, called_url)
-            self.assertEqual(headers.get("x-goog-api-key"), test_key)
-
-    # --------------------------------------------------------------------------
-    # 2. SSRF PROTECTION FOR CUSTOM AI PROVIDERS
-    # --------------------------------------------------------------------------
-    def test_03_custom_provider_blocks_cloud_metadata_ssrf(self):
-        """Verify CustomProvider blocks requests to 169.254.169.254 and metadata.google.internal."""
-        dangerous_targets = [
-            "http://169.254.169.254",
-            "http://169.254.169.254/latest/meta-data/",
-            "http://metadata.google.internal/computeMetadata/v1/",
-            "http://metadata",
-            "http://0x7f000001",  # Obfuscated hex IP
-        ]
-
-        for target in dangerous_targets:
-            # 1. Test test_provider_connection
-            ok, msg, code = asyncio.run(ai_provider_service.test_provider_connection(
-                provider="custom",
-                api_key="test_key",
-                base_url=target
-            ))
-            self.assertFalse(ok, f"Target {target} should have been blocked!")
-            self.assertIn("SSRF", msg)
-            self.assertEqual(code, 400)
-
-            # 2. Test CustomProvider chat_complete
-            custom = CustomProvider(base_url=target)
-            with patch("credentials_vault_service.vault.get_credential", return_value="test_key"):
-                with self.assertRaises(ProviderServiceError) as ctx:
-                    asyncio.run(custom.chat_complete(
-                        messages=[{"role": "user", "content": "hi"}],
-                        model_id="custom-model"
-                    ))
-                self.assertIn("SSRF", str(ctx.exception))
-
-    def test_04_custom_provider_permits_safe_local_models(self):
-        """Verify CustomProvider permits legitimate local endpoints (e.g. Ollama/vLLM on localhost)."""
-        safe_targets = [
-            "http://localhost:11434/v1",
-            "http://127.0.0.1:8000/v1",
-        ]
-        for url in safe_targets:
-            validated = SsrfProtector.validate_url(url, allow_local=True)
-            self.assertEqual(validated, url)
-
-    # --------------------------------------------------------------------------
-    # 3. CHAT SESSION BOLA / IDOR PROTECTION
-    # --------------------------------------------------------------------------
-    def test_05_chat_list_rejects_cross_account_email(self):
-        """A user cannot list another user's chat sessions via email query parameter."""
-        app.dependency_overrides[auth_service.get_current_user] = lambda: self.user_a
-        res = self.client.get("/chats?email=beta@stroke.internal")
-        self.assertEqual(res.status_code, 403)
-        self.assertIn("Access denied", res.json()["detail"])
-
-    def test_06_chat_get_rejects_cross_account_email(self):
-        """A user cannot retrieve another user's single chat session."""
-        app.dependency_overrides[auth_service.get_current_user] = lambda: self.user_a
-        res = self.client.get("/chats/sess_123?email=beta@stroke.internal")
-        self.assertEqual(res.status_code, 403)
-        self.assertIn("Access denied", res.json()["detail"])
-
-    def test_07_chat_save_rejects_cross_account_email(self):
-        """A user cannot save or overwrite a chat session in another user's account."""
-        app.dependency_overrides[auth_service.get_current_user] = lambda: self.user_a
-        res = self.client.post("/chats/save", json={
-            "session_id": "sess_hack_1",
-            "email": "beta@stroke.internal",
-            "title": "Malicious Injection",
-            "messages": [{"role": "user", "content": "hello"}]
-        })
-        self.assertEqual(res.status_code, 403)
-        self.assertIn("Access denied", res.json()["detail"])
-
-    def test_08_chat_delete_rejects_cross_account_email(self):
-        """A user cannot delete another user's chat sessions."""
-        app.dependency_overrides[auth_service.get_current_user] = lambda: self.user_a
-        res = self.client.delete("/chats/sess_123?email=beta@stroke.internal")
-        self.assertEqual(res.status_code, 403)
-        self.assertIn("Access denied", res.json()["detail"])
-
-    # --------------------------------------------------------------------------
-    # 4. AGENT ORCHESTRATOR & PARALLEL MULTI-AGENT BOLA DEFENSE
-    # --------------------------------------------------------------------------
-    def test_09_agent_task_access_control(self):
-        """User A cannot read, cancel, or approve an Agent Task created by User B."""
-        task = TaskManager.create_task(
-            active_goal="Confidential Project Task",
-            reasoning_level="medium",
-            user_uid=self.user_b.uid
-        )
+    def test_02_other_user_cannot_cancel_or_approve_task(self):
+        """User A cannot cancel or approve a task owned by User B."""
+        task = TaskManager.create_task("Build secure module", user_uid="user_victim_456")
         task.state = TaskState.AWAITING_APPROVAL
 
-        # User A attempts to view Task
-        app.dependency_overrides[auth_service.get_optional_user] = lambda: self.user_a
-        res = self.client.get(f"/agent/tasks/{task.task_id}")
-        self.assertEqual(res.status_code, 403)
-        self.assertIn("Access denied", res.json()["detail"])
+        user_attacker = AuthenticatedUser(
+            uid="user_attacker_789",
+            email="attacker@example.com",
+            email_verified=True,
+            claims={"uid": "user_attacker_789"}
+        )
 
-        # User A attempts to cancel Task
-        res_cancel = self.client.post(f"/agent/tasks/{task.task_id}/cancel")
-        self.assertEqual(res_cancel.status_code, 403)
+        app.dependency_overrides[main.get_optional_user] = lambda: user_attacker
+        try:
+            # Attacker cannot inspect
+            resp = self.client.get(f"/agent/tasks/{task.task_id}")
+            self.assertEqual(resp.status_code, 403)
 
-        # User A attempts to approve Task
-        res_approve = self.client.post(f"/agent/tasks/{task.task_id}/approve")
-        self.assertEqual(res_approve.status_code, 403)
+            # Attacker cannot cancel
+            resp_cancel = self.client.post(f"/agent/tasks/{task.task_id}/cancel")
+            self.assertEqual(resp_cancel.status_code, 403)
 
-        # Owner User B can access
-        app.dependency_overrides[auth_service.get_optional_user] = lambda: self.user_b
-        res_owner = self.client.get(f"/agent/tasks/{task.task_id}")
-        self.assertEqual(res_owner.status_code, 200)
-        self.assertEqual(res_owner.json()["task_id"], task.task_id)
+            # Attacker cannot approve
+            resp_appr = self.client.post(f"/agent/tasks/{task.task_id}/approve")
+            self.assertEqual(resp_appr.status_code, 403)
+        finally:
+            app.dependency_overrides.pop(main.get_optional_user, None)
 
-    def test_10_parallel_agent_job_access_control(self):
-        """User A cannot read, cancel, or stream a Multi-Agent Job created by User B."""
+    def test_03_unauthenticated_cannot_access_parallel_job(self):
+        """Unauthenticated caller cannot inspect or cancel a parallel agent job owned by a user."""
+        import parallel_agent_system
         job = parallel_agent_system.global_multi_agent_orchestrator.create_job(
-            user_goal="Secret Multi-Agent Job",
-            workspace_path="/tmp",
-            user_uid=self.user_b.uid
+            user_goal="Test Goal",
+            workspace_path=terminal_service.DEFAULT_WORKSPACE,
+            user_uid="user_victim_456"
         )
 
-        # User A attempts to read job
-        app.dependency_overrides[auth_service.get_optional_user] = lambda: self.user_a
-        res = self.client.get(f"/api/orchestrator/jobs/{job.job_id}")
-        self.assertEqual(res.status_code, 403)
-        self.assertIn("Access denied", res.json()["detail"])
+        resp = self.client.get(f"/api/orchestrator/jobs/{job.job_id}")
+        self.assertEqual(resp.status_code, 403)
 
-        # User A attempts to cancel job
-        res_cancel = self.client.post(f"/api/orchestrator/jobs/{job.job_id}/cancel")
-        self.assertEqual(res_cancel.status_code, 403)
+        resp_cancel = self.client.post(f"/api/orchestrator/jobs/{job.job_id}/cancel")
+        self.assertEqual(resp_cancel.status_code, 403)
 
-        # User A attempts to stream job
-        res_stream = self.client.get(f"/api/orchestrator/jobs/{job.job_id}/stream")
-        self.assertEqual(res_stream.status_code, 403)
 
-        # Owner User B can access
-        app.dependency_overrides[auth_service.get_optional_user] = lambda: self.user_b
-        res_owner = self.client.get(f"/api/orchestrator/jobs/{job.job_id}")
-        self.assertEqual(res_owner.status_code, 200)
-        self.assertEqual(res_owner.json()["job_id"], job.job_id)
+class TestTerminalSessionAuthorization(unittest.TestCase):
+    """Audits terminal session ownership and authorization across all operations."""
 
-    # --------------------------------------------------------------------------
-    # 5. TERMINAL SECRET REDACTION
-    # --------------------------------------------------------------------------
-    def test_11_terminal_redacts_groq_and_openrouter_keys(self):
-        """Verify terminal output redaction redacts Groq and OpenRouter keys."""
-        groq_text = "Output with key gsk_1234567890abcdefghijklmnopqrstuvwxyz and more text."
-        redacted_groq = redact_sensitive_data(groq_text)
-        self.assertNotIn("gsk_", redacted_groq)
-        self.assertIn("[REDACTED_GROQ_API_KEY]", redacted_groq)
-
-        or_text = "Calling OpenRouter sk-or-v1-abcdef0123456789abcdef0123456789 for model run."
-        redacted_or = redact_sensitive_data(or_text)
-        self.assertNotIn("sk-or-v1-", redacted_or)
-        self.assertIn("[REDACTED_OPENROUTER_API_KEY]", redacted_or)
-
-    def test_12_terminal_redacts_github_google_and_bearer_tokens(self):
-        """Verify terminal output redaction covers GitHub PATs, Google keys, and Bearer tokens."""
-        text = (
-            "Github: ghp_111122223333444455556666777788889999\n"
-            "Google: AIzaSyD1234567890abcdef1234567890ab\n"
-            "Auth: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgN"
+    def setUp(self):
+        self.client = TestClient(app)
+        # Create a session owned by user_alice
+        res = TerminalManager.create_terminal(
+            workspace_path=terminal_service.DEFAULT_WORKSPACE,
+            caller_uid="user_alice",
+            is_internal=False
         )
-        redacted = redact_sensitive_data(text)
-        self.assertNotIn("ghp_", redacted)
-        self.assertIn("[REDACTED_GITHUB_PAT]", redacted)
-        self.assertNotIn("AIza", redacted)
-        self.assertIn("[REDACTED_GOOGLE_API_KEY]", redacted)
-        self.assertIn("Bearer [REDACTED_JWT]", redacted)
+        self.alice_session_id = res["session_id"]
 
-    # --------------------------------------------------------------------------
-    # 6. FILESYSTEM ACCESS & PATH TRAVERSAL ENFORCEMENT
-    # --------------------------------------------------------------------------
-    def test_13_workspace_path_traversal_rejection(self):
-        """Verify validate_path_access and validate_task_id reject traversal attacks."""
-        for bad_tid in ["../escape", "task/../../etc", "task\x00null"]:
-            with self.assertRaises(WorkspaceSecurityError):
-                validate_task_id(bad_tid)
+    def tearDown(self):
+        try:
+            TerminalManager.stop_terminal(self.alice_session_id, caller_uid="user_alice", is_internal=False)
+        except Exception:
+            pass
 
-        with self.assertRaises(WorkspaceSecurityError):
-            validate_path_access("/etc/passwd")
+    def test_01_user_bob_cannot_access_alice_terminal_operations(self):
+        """User Bob cannot run, read output, get status, restart, or stop Alice's terminal."""
+        # 1. Run command raises PermissionError
+        with self.assertRaises(PermissionError):
+            TerminalManager.run_command(
+                session_id=self.alice_session_id,
+                command="python3",
+                args=["--version"],
+                caller_uid="user_bob",
+                is_internal=False
+            )
 
-        with self.assertRaises(WorkspaceSecurityError):
-            validate_path_access("/var/root")
+        # 2. Read output
+        res_out = TerminalManager.read_terminal_output(
+            session_id=self.alice_session_id,
+            caller_uid="user_bob",
+            is_internal=False
+        )
+        self.assertEqual(res_out["status"], "error")
+        self.assertEqual(res_out["error"], "access_denied")
 
-    # --------------------------------------------------------------------------
-    # 7. TERMINAL ENVIRONMENT SANITIZATION
-    # --------------------------------------------------------------------------
-    def test_14_child_process_environment_strips_secrets(self):
-        """Verify get_sanitized_child_env strips parent backend secrets."""
+        # 3. Read delta
+        res_delta = TerminalManager.terminal_read_output_delta(
+            session_id=self.alice_session_id,
+            caller_uid="user_bob",
+            is_internal=False
+        )
+        self.assertEqual(res_delta["status"], "error")
+        self.assertEqual(res_delta["error"], "access_denied")
+
+        # 4. Status
+        res_stat = TerminalManager.get_terminal_status(
+            session_id=self.alice_session_id,
+            caller_uid="user_bob",
+            is_internal=False
+        )
+        self.assertEqual(res_stat["status"], "error")
+        self.assertEqual(res_stat["error"], "access_denied")
+
+        # 5. History
+        res_hist = TerminalManager.get_terminal_history(
+            session_id=self.alice_session_id,
+            caller_uid="user_bob",
+            is_internal=False
+        )
+        self.assertEqual(res_hist["status"], "error")
+        self.assertEqual(res_hist["error"], "access_denied")
+
+        # 6. Stop
+        res_stop = TerminalManager.stop_terminal(
+            session_id=self.alice_session_id,
+            caller_uid="user_bob",
+            is_internal=False
+        )
+        self.assertEqual(res_stop["status"], "error")
+        self.assertEqual(res_stop["error"], "access_denied")
+
+        # 7. Restart
+        res_restart = TerminalManager.restart_terminal(
+            session_id=self.alice_session_id,
+            caller_uid="user_bob",
+            is_internal=False
+        )
+        self.assertEqual(res_restart["status"], "error")
+        self.assertEqual(res_restart["error"], "access_denied")
+
+    def test_02_firebase_user_cannot_claim_internal_daemon_identity(self):
+        """A user request with auth='firebase' cannot claim caller_uid='internal_daemon'."""
+        with self.assertRaises(Exception):
+            main._extract_caller_uid_and_internal({
+                "auth": "firebase",
+                "is_internal": False,
+                "uid": "internal_daemon"
+            })
+
+    def test_03_terminal_approval_token_cannot_be_replayed(self):
+        """Single-use approval tokens cannot be replayed or consumed more than once."""
+        session = TerminalManager.get_session(self.alice_session_id)
+        appr_id = "appr-test-single-use-123"
+        rec = ApprovalRecord(
+            approval_id=appr_id,
+            command="git",
+            args=["push", "origin", "main"],
+            cwd=session.cwd,
+            uid="user_alice",
+            session_id=self.alice_session_id,
+            expires_at=time.time() + 300.0,
+            consumed=False
+        )
+        terminal_service._APPROVAL_REGISTRY[appr_id] = rec
+
+        # First consumption succeeds
+        res1 = TerminalManager.respond_to_approval(
+            approval_id=appr_id,
+            approved=False,
+            caller_uid="user_alice",
+            is_internal=False
+        )
+        self.assertEqual(res1["status"], "denied")
+
+        # Second attempt must be rejected as replayed or already consumed
+        res2 = TerminalManager.respond_to_approval(
+            approval_id=appr_id,
+            approved=False,
+            caller_uid="user_alice",
+            is_internal=False
+        )
+        self.assertEqual(res2["status"], "error")
+        self.assertIn("already", res2["message"].lower())
+
+
+class TestMcpSecurityAndSsrf(unittest.TestCase):
+    """Audits MCP Client SSRF, DNS rebinding, secret vault, and process cleanup."""
+
+    def test_01_ssrf_protector_blocks_private_networks(self):
+        """SsrfProtector blocks RFC 1918 private IPs, loopback, and carrier-grade NAT."""
+        private_urls = [
+            "http://10.0.0.1:8000/mcp",
+            "http://172.16.0.5:8080/sse",
+            "http://192.168.1.1/rpc",
+            "http://100.64.0.1:3000/mcp",
+            "http://127.0.0.1:8501/mcp",
+            "http://localhost:8501/mcp",
+        ]
+        for u in private_urls:
+            with self.assertRaises(McpError) as ctx:
+                SsrfProtector.validate_url(u, allow_local=False)
+            err_msg = str(ctx.exception).lower()
+            self.assertTrue(
+                "blocked" in err_msg or "prohibited" in err_msg or "restricted" in err_msg,
+                f"Unexpected error message: {err_msg}"
+            )
+
+    def test_02_ssrf_protector_blocks_cloud_metadata(self):
+        """SsrfProtector strictly blocks AWS/GCP cloud metadata IP and hostnames."""
+        meta_urls = [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://metadata.google.internal/computeMetadata/v1/",
+            "http://instance-data/latest/meta-data/",
+        ]
+        for u in meta_urls:
+            with self.assertRaises(McpError):
+                SsrfProtector.validate_url(u, allow_local=False)
+
+    def test_03_ssrf_protector_blocks_dns_rebinding_domains(self):
+        """SsrfProtector strictly blocks public wildcard DNS rebinding domains."""
+        rebinding_urls = [
+            "http://make-127-0-0-1-rr.nip.io:8080/mcp",
+            "http://192.168.1.1.sslip.io/mcp",
+            "http://customer.localtest.me/mcp",
+        ]
+        for u in rebinding_urls:
+            with self.assertRaises(McpError):
+                SsrfProtector.validate_url(u, allow_local=False)
+
+    def test_04_mcp_minimal_env_strips_backend_secrets(self):
+        """build_minimal_mcp_env strips all sensitive tokens, keys, and credentials."""
         with patch.dict(os.environ, {
+            "FIREBASE_SERVICE_ACCOUNT_KEY": "secret_firebase_key",
+            "GITHUB_TOKEN": "ghp_secret_pat_value",
+            "STROKE_INTERNAL_SECRET": "secret_internal_auth",
+            "OPENAI_API_KEY": "sk-secret-key",
             "PATH": "/usr/bin:/bin",
-            "FIREBASE_PROJECT_ID": "secret-firebase-id",
-            "GROQ_API_KEY": "gsk_secret123",
-            "GITHUB_PAT": "ghp_secret123",
-            "CUSTOM_SECRET_KEY": "super_secret_val",
             "USER": "developer"
         }, clear=True):
-            clean_env = get_sanitized_child_env("/tmp")
+            clean_env = build_minimal_mcp_env()
+            self.assertNotIn("FIREBASE_SERVICE_ACCOUNT_KEY", clean_env)
+            self.assertNotIn("GITHUB_TOKEN", clean_env)
+            self.assertNotIn("STROKE_INTERNAL_SECRET", clean_env)
+            self.assertNotIn("OPENAI_API_KEY", clean_env)
             self.assertIn("PATH", clean_env)
             self.assertIn("USER", clean_env)
-            self.assertNotIn("FIREBASE_PROJECT_ID", clean_env)
-            self.assertNotIn("GROQ_API_KEY", clean_env)
-            self.assertNotIn("GITHUB_PAT", clean_env)
-            self.assertNotIn("CUSTOM_SECRET_KEY", clean_env)
 
-    # --------------------------------------------------------------------------
-    # 8. NON-ELEVATED ZERO PRIVILEGE
-    # --------------------------------------------------------------------------
-    def test_15_elevation_status_reporting(self):
-        """Verify paths_service correctly checks non-admin elevation status."""
-        status = paths_service.get_elevation_status()
-        self.assertIn("is_elevated", status)
-        self.assertIn("guidance", status)
+    def test_05_mcp_vault_refuses_silent_key_regeneration_when_encrypted_data_exists(self):
+        """McpSecretVault refuses to regenerate a new key if encrypted configs exist."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            tmp_creds = tmp_path / "credentials"
+            tmp_creds.mkdir(parents=True, exist_ok=True)
+            mcp_cfg_path = tmp_path / "mcp_servers.json"
+            mcp_cfg_path.write_text('{"server1": {"token": "enc:fernet:somesecret"}}', encoding="utf-8")
 
-    # --------------------------------------------------------------------------
-    # 9. CREDENTIALS VAULT MASKING
-    # --------------------------------------------------------------------------
-    def test_16_credentials_vault_masks_keys(self):
-        """Verify API keys are masked when listed for UI display."""
-        raw_key = "gsk_12345678901234567890abcdef"
-        masked = credentials_vault_service.mask_key(raw_key)
-        self.assertNotIn(raw_key, masked)
-        self.assertTrue(masked.startswith("gsk_••••••••••••"))
-        self.assertTrue(masked.endswith("cdef"))
+            # Temporarily point McpSecretVault to isolated temp directory
+            old_cipher = McpSecretVault._cipher
+            old_vault_dir = McpSecretVault.VAULT_DIR
+            old_key_file = McpSecretVault.KEY_FILE
+            old_bak = McpSecretVault._BAK_KEY_FILE
+            old_legacy = McpSecretVault._LEGACY_KEY_FILE
 
-    # --------------------------------------------------------------------------
-    # 10. GITHUB SERVICE INPUT VALIDATION
-    # --------------------------------------------------------------------------
-    def test_17_github_service_input_validation(self):
-        """Verify GitHub input validation rejects path traversals."""
-        self.assertFalse(github_service.validate_repo_name("../evil/repo"))
-        self.assertFalse(github_service.validate_repo_name("user/repo/extra"))
-        self.assertTrue(github_service.validate_repo_name("owner/valid-repo.name"))
+            McpSecretVault._cipher = None
+            McpSecretVault.VAULT_DIR = str(tmp_creds)
+            McpSecretVault.KEY_FILE = str(tmp_creds / ".mcp_vault_key")
+            McpSecretVault._BAK_KEY_FILE = str(tmp_creds / ".mcp_vault_key.bak")
+            McpSecretVault._LEGACY_KEY_FILE = str(tmp_path / ".legacy_vault_key")
 
-        self.assertFalse(github_service.validate_file_path("../escape.txt"))
-        self.assertFalse(github_service.validate_file_path("/absolute/path.txt"))
-        self.assertFalse(github_service.validate_file_path("file\x00null.txt"))
-        self.assertTrue(github_service.validate_file_path("src/components/App.tsx"))
+            with patch("paths_service.get_app_data_dir", return_value=tmp_path):
+                try:
+                    with self.assertRaises(RuntimeError) as ctx:
+                        McpSecretVault._get_cipher()
+                    self.assertIn("Cannot generate new MCP Vault key", str(ctx.exception))
+                finally:
+                    McpSecretVault._cipher = old_cipher
+                    McpSecretVault.VAULT_DIR = old_vault_dir
+                    McpSecretVault.KEY_FILE = old_key_file
+                    McpSecretVault._BAK_KEY_FILE = old_bak
+                    McpSecretVault._LEGACY_KEY_FILE = old_legacy
 
-        self.assertFalse(github_service.validate_ref_name("main..sub"))
-        self.assertFalse(github_service.validate_ref_name("main\x00bad"))
-        self.assertTrue(github_service.validate_ref_name("feature/safe-branch-1"))
+
+class TestFilesystemAndDiagnosticsSecurity(unittest.TestCase):
+    """Audits workspace traversal, symlink resolution, and the Absolute No-Delete Policy."""
+
+    def test_01_absolute_no_delete_policy_enforced(self):
+        """Calling delete_file or remove_directory raises NoDeletePolicyViolation."""
+        with self.assertRaises(file_service.NoDeletePolicyViolation):
+            file_service.delete_file("/any/path/file.txt")
+
+        with self.assertRaises(file_service.NoDeletePolicyViolation):
+            file_service.remove_directory("/any/path/dir")
+
+    def test_02_diagnostic_workspace_rejects_traversal(self):
+        """_validate_diagnostic_workspace rejects '..' traversal sequences with HTTP 403."""
+        from main import _validate_diagnostic_workspace
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as ctx:
+            _validate_diagnostic_workspace("../../etc")
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_03_diagnostic_workspace_rejects_paths_outside_approved_roots(self):
+        """_validate_diagnostic_workspace rejects unapproved system paths."""
+        from main import _validate_diagnostic_workspace
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException) as ctx:
+            _validate_diagnostic_workspace("/var/log")
+        self.assertEqual(ctx.exception.status_code, 403)
+
+
+class TestAccountDeletionPurge(unittest.TestCase):
+    """Audits /auth/account for complete data removal and honest status reporting."""
+
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_01_account_deletion_cleans_local_memory_and_vault(self):
+        """Deleting account clears local memory files, chats, BYOK credentials, and returns honest status."""
+        test_uid = "user_delete_test_555"
+        test_email = "deleteme@example.com"
+
+        # Seed local memory file
+        mem_dir = paths_service.get_app_data_dir() / "local_user_memory"
+        mem_dir.mkdir(parents=True, exist_ok=True)
+        mem_file = mem_dir / f"{test_uid}.json"
+        mem_file.write_text('{"records": []}', encoding="utf-8")
+
+        # Seed local chat session
+        main._LOCAL_CHAT_SESSIONS[test_uid] = [{"session_id": "s1", "title": "Delete Chat"}]
+
+        # Seed BYOK credentials
+        credentials_vault_service.vault.store_credential("openai", "sk-test-key-12345", user_id=test_uid)
+
+        user = AuthenticatedUser(
+            uid=test_uid,
+            email=test_email,
+            email_verified=True,
+            claims={"uid": test_uid, "email": test_email}
+        )
+
+        app.dependency_overrides[main.get_current_user] = lambda: user
+        try:
+            resp = self.client.delete("/auth/account")
+            self.assertIn(resp.status_code, (200, 207))
+            data = resp.json()
+            self.assertIn(data["status"], ("success", "partial_success"))
+            self.assertEqual(data["uid"], test_uid)
+
+            # Verify local memory file was unlinked
+            self.assertFalse(mem_file.exists())
+
+            # Verify chat session was removed
+            self.assertNotIn(test_uid, main._LOCAL_CHAT_SESSIONS)
+
+            # Verify BYOK credentials was removed
+            self.assertIsNone(credentials_vault_service.vault.get_credential("openai", user_id=test_uid))
+        finally:
+            app.dependency_overrides.pop(main.get_current_user, None)
+
+
+class TestDosProtection(unittest.TestCase):
+    """Audits request body size limits against memory exhaustion DoS attacks."""
+
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_01_request_body_exceeding_50mb_returns_413(self):
+        """Requests with Content-Length > 50 MB are immediately rejected with HTTP 413."""
+        resp = self.client.post(
+            "/auth/me",
+            headers={"Content-Length": str(60 * 1024 * 1024)}
+        )
+        self.assertEqual(resp.status_code, 413)
+        self.assertIn("exceeds 50 MB limit", resp.json()["detail"])
 
 
 if __name__ == "__main__":

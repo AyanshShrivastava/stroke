@@ -407,7 +407,7 @@ def atomic_write_file(
     - Supports both text (str) and binary (bytes).
     """
     clean_task_id = workspace_service.validate_task_id(task_id) if task_id != "ai_operation" else "ai_operation"
-    path = Path(target_path).resolve()
+    path = workspace_service.validate_path_access(target_path, allow_app_data=True)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with _BACKUP_LOCK:

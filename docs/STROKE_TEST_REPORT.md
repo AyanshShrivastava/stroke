@@ -1,9 +1,9 @@
 # Stroke Automated Bug Hunting & Test Diagnostic Report
 
-**Report ID:** `HUNT-1794843778`  
-**Generated:** 2026-11-16 15:42:58 UTC  
+**Report ID:** `HUNT-1795515367`  
+**Generated:** 2026-11-24 10:16:07 UTC  
 **Workspace:** `/Users/ayansh/Desktop/stroke`  
-**Audit Duration:** 9728.31 ms  
+**Audit Duration:** 3836.99 ms  
 
 ## 1. Executive Diagnostic Summary
 
@@ -19,7 +19,7 @@
 | **Filesystem Safety & Backups** | PASS | ✅ PASS |
 | **Frontend Build (Vite/Nitro)** | PASS | ✅ PASS |
 | **Unguarded Broken Imports** | 0 | ✅ 0 Broken |
-| **Application Startup & Routes** | 169 Routes Registered | ✅ PASS |
+| **Application Startup & Routes** | 170 Routes Registered | ✅ PASS |
 | **Total Diagnostic Issues** | 0 (Critical: 0, High: 0, Medium: 0, Low: 0) | ✅ CLEAN |
 
 ## 2. Subsystem Health Status
@@ -39,7 +39,7 @@
 
 ## 3. Discovered Test Suites
 
-- **Backend Tests Discovered:** 496 tests across 36 files.
+- **Backend Tests Discovered:** 498 tests across 36 files.
 - **Frontend Tests Discovered:** 17 tests across 3 files.
 
 ## 4. Actionable Bug & Diagnostic Issues

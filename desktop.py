@@ -129,14 +129,15 @@ class BackendSupervisor:
         return ready
 
     def wait_until_healthy(self, timeout_sec: float = 15.0) -> bool:
-        """Polls /health until HTTP 200 and instance_id matches or timeout."""
+        """Polls /health until HTTP 200, verifying matching process PID and instance_id."""
         start = time.time()
         while time.time() - start < timeout_sec:
             health = probe_stroke_health(self.port, timeout_sec=0.5)
             if health and health.get("status") == "healthy":
-                # Verify instance_id if returned
                 resp_inst = health.get("instance_id")
-                if not resp_inst or resp_inst == self.instance_id:
+                resp_pid = health.get("pid")
+                # Ensure the responding service is actually THIS supervised backend process
+                if resp_pid == os.getpid() and (not self.instance_id or resp_inst == self.instance_id):
                     return True
             time.sleep(0.15)
         return False
@@ -215,12 +216,13 @@ def main():
             zoomable=True,
             min_size=(800, 600)
         )
-        opened_webview = True
         print("[STROKE DESKTOP] Native PyWebView window active. Running main UI loop...", flush=True)
         webview.start()
-        # When webview.start() returns, the window was closed by the user
+        # When webview.start() returns cleanly, the window was opened and closed by the user
+        opened_webview = True
         print("[STROKE DESKTOP] Native window closed by user. Cleaning up...", flush=True)
     except Exception as exc:
+        opened_webview = False
         print(f"[STROKE DESKTOP NOTICE] PyWebView native window unavailable ({exc}). Using system browser interface.", flush=True)
 
     # Fallback to default browser

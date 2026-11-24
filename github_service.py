@@ -22,6 +22,8 @@ from typing import Dict, List, Any, Optional, Tuple
 import httpx
 from cryptography.fernet import Fernet
 
+import paths_service
+
 logger = logging.getLogger("stroke.github_service")
 
 # Base API domain with HTTPS enforcement
@@ -29,9 +31,12 @@ GITHUB_API_BASE = os.getenv("GITHUB_API_BASE", "https://api.github.com").rstrip(
 if not GITHUB_API_BASE.startswith("https://"):
     GITHUB_API_BASE = "https://api.github.com"
 
-VAULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+VAULT_DIR = str(paths_service.get_app_data_dir() / "credentials")
 KEY_FILE = os.path.join(VAULT_DIR, ".vault_key")
 TOKEN_VAULT_FILE = os.path.join(VAULT_DIR, ".github_token.enc")
+_LEGACY_VAULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+_LEGACY_KEY_FILE = os.path.join(_LEGACY_VAULT_DIR, ".vault_key")
+_LEGACY_TOKEN_FILE = os.path.join(_LEGACY_VAULT_DIR, ".github_token.enc")
 
 # Validation regex patterns
 REPO_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$")
@@ -77,20 +82,62 @@ def validate_ref_name(ref: Optional[str]) -> bool:
 # ------------------------------------------------------------------------------
 def _get_or_create_vault_cipher() -> Fernet:
     """
-    Derives an authentic Fernet encryption key based on machine identity and a locally
-    generated secure random salt with 0600 file permissions. Never uses hardcoded keys.
+    Derives or loads an authentic Fernet encryption key stored in stable user application data
+    with 0600 file permissions and 0700 directory permissions.
+    Refuses to silently overwrite existing damaged keys when encrypted token data exists.
     """
     os.makedirs(VAULT_DIR, exist_ok=True)
+    try:
+        os.chmod(VAULT_DIR, 0o700)
+    except Exception:
+        pass
+
+    # 1. Primary stable location
     if os.path.exists(KEY_FILE):
         try:
             with open(KEY_FILE, "rb") as f:
                 key = f.read().strip()
                 if len(key) == 44:
                     return Fernet(key)
+                else:
+                    raise ValueError(f"Invalid key length: {len(key)} (expected 44 bytes)")
         except Exception as e:
-            logger.warning("Failed to read vault key file.")
+            backup_key = f"{KEY_FILE}.corrupted.{int(time.time())}.bak"
+            try:
+                import shutil
+                shutil.copy2(KEY_FILE, backup_key)
+                logger.error("Preserved snapshot of corrupted GitHub key at %s", backup_key)
+            except Exception as copy_err:
+                logger.error("Failed to backup corrupted GitHub key: %s", copy_err)
 
-    # Derive key from machine node + local CSPRNG bytes
+            if os.path.exists(TOKEN_VAULT_FILE) and os.path.getsize(TOKEN_VAULT_FILE) > 0:
+                logger.critical("Refusing to silently regenerate key while encrypted token exists: %s", e)
+                raise RuntimeError(
+                    f"GitHub vault key corrupted at {KEY_FILE}. Preserved snapshot at {backup_key}. "
+                    f"Refusing to overwrite key and destroy existing encrypted token: {e}"
+                )
+            logger.warning("Corrupted key without token file, regenerating: %s", e)
+
+    # 2. Seamless migration from legacy source-directory key and token file
+    if not os.path.exists(KEY_FILE) and os.path.exists(_LEGACY_KEY_FILE):
+        try:
+            with open(_LEGACY_KEY_FILE, "rb") as f:
+                legacy_key = f.read().strip()
+            if len(legacy_key) == 44:
+                fd = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with open(fd, "wb") as f:
+                    f.write(legacy_key)
+                logger.info("Migrated legacy GitHub vault key to %s", KEY_FILE)
+                if not os.path.exists(TOKEN_VAULT_FILE) and os.path.exists(_LEGACY_TOKEN_FILE):
+                    import shutil
+                    shutil.copy2(_LEGACY_TOKEN_FILE, TOKEN_VAULT_FILE)
+                    os.chmod(TOKEN_VAULT_FILE, 0o600)
+                    logger.info("Migrated legacy GitHub encrypted token to %s", TOKEN_VAULT_FILE)
+                return Fernet(legacy_key)
+        except Exception as mig_err:
+            logger.warning("Legacy GitHub vault migration failed: %s", mig_err)
+
+    # 3. Derive key from machine node + local CSPRNG bytes
     machine_id = str(uuid.getnode()).encode("utf-8")
     salt = os.urandom(16)
     derived = hashlib.pbkdf2_hmac("sha256", machine_id, salt, 100_000)
@@ -103,7 +150,7 @@ def _get_or_create_vault_cipher() -> Fernet:
         with open(fd, "wb") as f:
             f.write(key)
     except Exception as e:
-        logger.error("Failed to persist secure vault key.")
+        logger.error("Failed to persist secure vault key: %s", e)
 
     return Fernet(key)
 

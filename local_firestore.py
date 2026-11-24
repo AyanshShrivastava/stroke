@@ -84,7 +84,7 @@ class LocalDocumentReference:
     def collection(self, sub_name: str) -> "LocalCollectionReference":
         return LocalCollectionReference(self.client, f"{self.path}/{sub_name}")
 
-    def get(self) -> LocalDocumentSnapshot:
+    def get(self, transaction: Optional[Any] = None) -> LocalDocumentSnapshot:
         data = self.client._get_doc_data(self.path)
         return LocalDocumentSnapshot(self.id, data, reference=self)
 
@@ -128,7 +128,8 @@ class LocalWriteBatch:
 
 class LocalFirestoreClient:
     """
-    Thread-safe, genuinely disk-backed local Firestore storage client.
+    Thread-safe, process-safe, genuinely disk-backed local Firestore storage client.
+    Guarantees cross-process file-level locking and atomic mutations to prevent data loss.
     """
     def __init__(self, storage_path: Optional[str] = None, db_path: Optional[str] = None):
         target_path = db_path or storage_path
@@ -136,32 +137,73 @@ class LocalFirestoreClient:
             target_path = str(paths_service.get_local_firestore_db_path())
         self.storage_path = os.path.abspath(target_path)
         os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
+        self.lock_file_path = f"{self.storage_path}.lock"
         self._lock = threading.RLock()
+        self._last_mtime: float = 0.0
         self._db: Dict[str, Any] = self._load()
+
+    def _file_lock_ctx(self):
+        import contextlib
+        client_self = self
+        @contextlib.contextmanager
+        def _flock():
+            with open(client_self.lock_file_path, "a+", encoding="utf-8") as f:
+                try:
+                    import fcntl
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                except (ImportError, AttributeError, OSError):
+                    pass
+                try:
+                    yield
+                finally:
+                    try:
+                        import fcntl
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                    except Exception:
+                        pass
+        return _flock()
+
+    def _read_disk_unlocked(self) -> Dict[str, Any]:
+        if os.path.exists(self.storage_path):
+            try:
+                with open(self.storage_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self._last_mtime = os.path.getmtime(self.storage_path)
+                    return data
+            except Exception as exc:
+                backup_path = f"{self.storage_path}.corrupted.{int(datetime.now(timezone.utc).timestamp())}.bak"
+                try:
+                    import shutil
+                    shutil.copy2(self.storage_path, backup_path)
+                    print(f"[LOCAL FIRESTORE CRITICAL] Corrupted database JSON detected: {exc}. Preserved snapshot at {backup_path}", flush=True)
+                except Exception as copy_err:
+                    print(f"[LOCAL FIRESTORE CRITICAL] Failed to backup corrupted DB: {copy_err}", flush=True)
+                return {}
+        return {}
 
     def _load(self) -> Dict[str, Any]:
         with self._lock:
-            if os.path.exists(self.storage_path):
-                try:
-                    with open(self.storage_path, "r", encoding="utf-8") as f:
-                        return json.load(f)
-                except Exception as exc:
-                    backup_path = f"{self.storage_path}.corrupted.{int(datetime.now(timezone.utc).timestamp())}.bak"
-                    try:
-                        import shutil
-                        shutil.copy2(self.storage_path, backup_path)
-                        print(f"[LOCAL FIRESTORE CRITICAL] Corrupted database JSON detected: {exc}. Preserved snapshot at {backup_path}", flush=True)
-                    except Exception as copy_err:
-                        print(f"[LOCAL FIRESTORE CRITICAL] Failed to backup corrupted DB: {copy_err}", flush=True)
-                    return {}
-            return {}
+            with self._file_lock_ctx():
+                return self._read_disk_unlocked()
 
-    def _save(self):
-        with self._lock:
-            temp_path = f"{self.storage_path}.tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(self._db, f, indent=2, default=str)
-            os.replace(temp_path, self.storage_path)
+    def _sync_read(self) -> Dict[str, Any]:
+        """Ensures in-memory dict reflects any out-of-process modifications."""
+        try:
+            if os.path.exists(self.storage_path):
+                current_mtime = os.path.getmtime(self.storage_path)
+                if current_mtime > self._last_mtime:
+                    self._db = self._read_disk_unlocked()
+        except Exception:
+            pass
+        return self._db
+
+    def _atomic_write(self, db_state: Dict[str, Any]):
+        temp_path = f"{self.storage_path}.tmp.{os.getpid()}"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(db_state, f, indent=2, default=str)
+        os.replace(temp_path, self.storage_path)
+        self._last_mtime = os.path.getmtime(self.storage_path)
+        self._db = db_state
 
     def collection(self, name: str) -> LocalCollectionReference:
         return LocalCollectionReference(self, name)
@@ -187,72 +229,89 @@ class LocalFirestoreClient:
                 if self.batch_ops:
                     self.client._apply_batch(self.batch_ops)
                     self.batch_ops = []
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                if exc_type is None:
+                    self.commit()
+                return False
         return LocalTx(self)
 
     def _get_doc_data(self, path: str) -> Optional[Dict[str, Any]]:
         with self._lock:
-            return self._db.get(path)
+            with self._file_lock_ctx():
+                self._sync_read()
+                return self._db.get(path)
 
     def _set_doc_data(self, path: str, data: Dict[str, Any], merge: bool = False):
         with self._lock:
-            if merge and path in self._db:
-                merged = dict(self._db[path])
-                merged.update(data)
-                self._db[path] = merged
-            else:
-                self._db[path] = dict(data)
-            self._save()
+            with self._file_lock_ctx():
+                current_db = dict(self._read_disk_unlocked())
+                if merge and path in current_db:
+                    merged = dict(current_db[path])
+                    merged.update(data)
+                    current_db[path] = merged
+                else:
+                    current_db[path] = dict(data)
+                self._atomic_write(current_db)
 
     def _update_doc_data(self, path: str, data: Dict[str, Any]):
         with self._lock:
-            if path not in self._db:
-                self._db[path] = {}
-            for k, v in data.items():
-                if hasattr(v, "__class__") and "Increment" in v.__class__.__name__:
-                    # Handle firestore.Increment locally
-                    current = self._db[path].get(k, 0)
-                    delta = getattr(v, "value", 1)
-                    self._db[path][k] = current + delta
-                else:
-                    self._db[path][k] = v
-            self._save()
+            with self._file_lock_ctx():
+                current_db = dict(self._read_disk_unlocked())
+                if path not in current_db:
+                    current_db[path] = {}
+                for k, v in data.items():
+                    if hasattr(v, "__class__") and "Increment" in v.__class__.__name__:
+                        curr = current_db[path].get(k, 0)
+                        delta = getattr(v, "value", 1)
+                        current_db[path][k] = curr + delta
+                    else:
+                        current_db[path][k] = v
+                self._atomic_write(current_db)
 
     def _delete_doc_data(self, path: str):
         with self._lock:
-            self._db.pop(path, None)
-            self._save()
+            with self._file_lock_ctx():
+                current_db = dict(self._read_disk_unlocked())
+                current_db.pop(path, None)
+                self._atomic_write(current_db)
 
     def _apply_batch(self, ops: List[Any]):
         with self._lock:
-            for op, path, data, merge in ops:
-                if op == "set":
-                    if merge and path in self._db:
-                        merged = dict(self._db[path])
-                        merged.update(data)
-                        self._db[path] = merged
-                    else:
-                        self._db[path] = dict(data)
-                elif op == "update":
-                    if path not in self._db:
-                        self._db[path] = {}
-                    for k, v in data.items():
-                        if hasattr(v, "__class__") and "Increment" in v.__class__.__name__:
-                            current = self._db[path].get(k, 0)
-                            delta = getattr(v, "value", 1)
-                            self._db[path][k] = current + delta
+            with self._file_lock_ctx():
+                current_db = dict(self._read_disk_unlocked())
+                for op, path, data, merge in ops:
+                    if op == "set":
+                        if merge and path in current_db:
+                            merged = dict(current_db[path])
+                            merged.update(data)
+                            current_db[path] = merged
                         else:
-                            self._db[path][k] = v
-                elif op == "delete":
-                    self._db.pop(path, None)
-            self._save()
+                            current_db[path] = dict(data)
+                    elif op == "update":
+                        if path not in current_db:
+                            current_db[path] = {}
+                        for k, v in data.items():
+                            if hasattr(v, "__class__") and "Increment" in v.__class__.__name__:
+                                curr = current_db[path].get(k, 0)
+                                delta = getattr(v, "value", 1)
+                                current_db[path][k] = curr + delta
+                            else:
+                                current_db[path][k] = v
+                    elif op == "delete":
+                        current_db.pop(path, None)
+                self._atomic_write(current_db)
 
     def _get_collection_docs(self, collection_path: str) -> Dict[str, Dict[str, Any]]:
         with self._lock:
-            results = {}
-            prefix = f"{collection_path}/"
-            for k, v in self._db.items():
-                if k.startswith(prefix):
-                    sub = k[len(prefix):]
-                    if "/" not in sub:
-                        results[sub] = v
-            return results
+            with self._file_lock_ctx():
+                self._sync_read()
+                results = {}
+                prefix = f"{collection_path}/"
+                for k, v in self._db.items():
+                    if k.startswith(prefix):
+                        sub = k[len(prefix):]
+                        if "/" not in sub:
+                            results[sub] = v
+                return results

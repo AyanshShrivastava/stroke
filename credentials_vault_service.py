@@ -57,6 +57,11 @@ ENV_KEY_MAPPINGS = {
 }
 
 
+class VaultKeyCorruptionError(RuntimeError):
+    """Raised when an existing vault key is unreadable or corrupted, preventing silent key loss."""
+    pass
+
+
 def _get_vault_dir() -> Path:
     """Returns the secure credentials directory inside the user's application data folder."""
     vault_dir = paths_service.get_app_data_dir() / "credentials"
@@ -69,20 +74,56 @@ def _get_vault_dir() -> Path:
 
 
 def _get_or_create_cipher() -> Optional[Fernet]:
-    """Derives or loads the machine-bound Fernet cipher key stored with 0600 permissions."""
+    """
+    Derives or loads the machine-bound Fernet cipher key stored with 0600 permissions.
+    Refuses to silently overwrite existing damaged keys when vault data depends on them.
+    """
     vault_dir = _get_vault_dir()
     key_file = vault_dir / VAULT_KEY_FILE
+    vault_data_file = vault_dir / VAULT_DATA_FILE
+    legacy_key_file = Path(__file__).parent / "data" / VAULT_KEY_FILE
 
+    # 1. Primary stable location in user application data
     if key_file.exists():
         try:
             with open(key_file, "rb") as f:
                 key_bytes = f.read().strip()
                 if len(key_bytes) == 44:
                     return Fernet(key_bytes)
+                else:
+                    raise ValueError(f"Invalid key length: {len(key_bytes)} (expected 44 bytes)")
         except Exception as exc:
-            logger.warning("Could not read local vault key: %s", exc)
+            backup_key = vault_dir / f"{VAULT_KEY_FILE}.corrupted.{int(time.time())}.bak"
+            try:
+                import shutil
+                shutil.copy2(str(key_file), str(backup_key))
+                logger.error("Preserved snapshot of corrupted key at %s", backup_key)
+            except Exception as copy_err:
+                logger.error("Failed to backup corrupted vault key: %s", copy_err)
 
-    # Derive fresh key from machine identity + CSPRNG salt
+            if vault_data_file.exists() and vault_data_file.stat().st_size > 0:
+                logger.critical("Refusing to silently regenerate key while encrypted vault data exists: %s", exc)
+                raise VaultKeyCorruptionError(
+                    f"BYOK credentials key corrupted at {key_file}. "
+                    f"Preserved damaged key at {backup_key}. Refusing to overwrite and lose existing vault secrets: {exc}"
+                )
+            logger.warning("Corrupted key without vault data, regenerating: %s", exc)
+
+    # 2. Seamless migration from legacy source-directory key file
+    if legacy_key_file.exists() and not key_file.exists():
+        try:
+            with open(legacy_key_file, "rb") as f:
+                legacy_k = f.read().strip()
+            if len(legacy_k) == 44:
+                fd = os.open(str(key_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with open(fd, "wb") as f:
+                    f.write(legacy_k)
+                logger.info("Migrated legacy BYOK vault key from %s to %s", legacy_key_file, key_file)
+                return Fernet(legacy_k)
+        except Exception as mig_err:
+            logger.warning("Legacy BYOK key migration failed: %s", mig_err)
+
+    # 3. Derive fresh key from machine identity + CSPRNG salt
     try:
         machine_node = str(uuid.getnode()).encode("utf-8")
         salt = os.urandom(16)
@@ -258,10 +299,15 @@ class CredentialsVault:
 
         # 2. Encrypted Vault
         vault_data = self._read_encrypted_vault_file()
-        user_block = vault_data.get(user_id or "default", {})
-        prov_record = user_block.get(provider, {})
+        user_block = vault_data.get(user_id) if user_id else None
+        prov_record = user_block.get(provider, {}) if user_block else {}
         if prov_record.get("key"):
             return prov_record["key"].strip()
+        # Fallback to default user block if not found under specific user_id
+        if user_id and "default" in vault_data:
+            default_record = vault_data.get("default", {}).get(provider, {})
+            if default_record.get("key"):
+                return default_record["key"].strip()
 
         # 3. Environment Variable
         env_var = ENV_KEY_MAPPINGS.get(provider)

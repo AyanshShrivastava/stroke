@@ -20,6 +20,9 @@ import re
 import time
 import shutil
 import urllib.parse
+import atexit
+import subprocess
+import threading
 from enum import Enum
 from typing import Dict, List, Any, Optional, Callable, Awaitable, Set, Tuple
 from dataclasses import dataclass, field
@@ -28,6 +31,30 @@ from cryptography.fernet import Fernet
 import paths_service
 
 logger = logging.getLogger("stroke.mcp_client")
+
+# Track active subprocess PIDs across the process lifecycle for leak-free termination
+_ACTIVE_STDIO_PIDS: Set[int] = set()
+_ACTIVE_STDIO_PIDS_LOCK = threading.Lock()
+
+
+def _cleanup_all_mcp_processes():
+    """Safety cleanup handler: kills any remaining MCP child processes on application exit."""
+    with _ACTIVE_STDIO_PIDS_LOCK:
+        pids = list(_ACTIVE_STDIO_PIDS)
+    for pid in pids:
+        try:
+            if sys.platform != "win32":
+                try:
+                    os.killpg(os.getpgid(pid), signal.SIGTERM)
+                except Exception:
+                    os.kill(pid, signal.SIGTERM)
+            else:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+        except Exception:
+            pass
+
+
+atexit.register(_cleanup_all_mcp_processes)
 
 # ------------------------------------------------------------------------------
 # PROTOCOL CONSTANTS & LIFECYCLE STATES
@@ -214,6 +241,7 @@ class McpSecretVault:
 
     VAULT_DIR = str(paths_service.get_app_data_dir() / "credentials")
     KEY_FILE = os.path.join(VAULT_DIR, ".mcp_vault_key")
+    _BAK_KEY_FILE = os.path.join(VAULT_DIR, ".mcp_vault_key.bak")
     _LEGACY_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".vault_key")
     _cipher: Optional[Fernet] = None
 
@@ -234,35 +262,108 @@ class McpSecretVault:
                 with open(cls.KEY_FILE, "rb") as f:
                     key = f.read().strip()
                 if key and len(key) >= 32:
-                    cls._cipher = Fernet(key)
+                    cipher = Fernet(key)
+                    # Verify cipher functions properly
+                    cipher.encrypt(b"probe")
+                    cls._cipher = cipher
                     return cls._cipher
             except Exception as e:
-                logger.error(f"[McpSecretVault] Corrupted key file at {cls.KEY_FILE}: {e}")
+                logger.error(f"[McpSecretVault] Primary key file corrupted at {cls.KEY_FILE}: {e}")
+                # Try backup key if available
+                if os.path.exists(cls._BAK_KEY_FILE):
+                    try:
+                        with open(cls._BAK_KEY_FILE, "rb") as bf:
+                            bkey = bf.read().strip()
+                        if bkey and len(bkey) >= 32:
+                            cipher = Fernet(bkey)
+                            cipher.encrypt(b"probe")
+                            cls._cipher = cipher
+                            # Restore primary from backup
+                            with open(cls.KEY_FILE, "wb") as f:
+                                f.write(bkey)
+                            try:
+                                os.chmod(cls.KEY_FILE, 0o600)
+                            except Exception:
+                                pass
+                            logger.info("[McpSecretVault] Restored MCP vault key from backup file.")
+                            return cls._cipher
+                    except Exception as be:
+                        logger.error(f"[McpSecretVault] Backup key also unreadable: {be}")
                 raise RuntimeError(f"MCP Secret Vault key corrupted at {cls.KEY_FILE}. Refusing to overwrite and lose existing secrets: {e}")
 
-        # 2. Seamless migration from legacy source-directory key file
-        if os.path.exists(cls._LEGACY_KEY_FILE):
+        # 2. Check backup key if primary is absent
+        if os.path.exists(cls._BAK_KEY_FILE):
             try:
-                with open(cls._LEGACY_KEY_FILE, "rb") as f:
-                    legacy_key = f.read().strip()
-                if legacy_key and len(legacy_key) >= 32:
-                    # Persist into stable location with 0600 mode
-                    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-                    fd = os.open(cls.KEY_FILE, flags, 0o600)
-                    with open(fd, "wb") as f:
-                        f.write(legacy_key)
-                    cls._cipher = Fernet(legacy_key)
-                    logger.info(f"[McpSecretVault] Migrated legacy key from {cls._LEGACY_KEY_FILE} to {cls.KEY_FILE}")
+                with open(cls._BAK_KEY_FILE, "rb") as bf:
+                    bkey = bf.read().strip()
+                if bkey and len(bkey) >= 32:
+                    cls._cipher = Fernet(bkey)
+                    with open(cls.KEY_FILE, "wb") as f:
+                        f.write(bkey)
+                    try:
+                        os.chmod(cls.KEY_FILE, 0o600)
+                    except Exception:
+                        pass
                     return cls._cipher
-            except Exception as e:
-                logger.warning(f"[McpSecretVault] Legacy key migration failed: {e}")
+            except Exception:
+                pass
 
-        # 3. Generate new key with 0600 mode
+        # 3. Seamless migration from legacy source-directory key file
+        legacy_candidates = [
+            cls._LEGACY_KEY_FILE,
+            os.path.join(str(paths_service.get_app_data_dir()), ".mcp_vault_key"),
+            os.path.join(cls.VAULT_DIR, ".vault_key"),
+        ]
+        for leg_path in legacy_candidates:
+            if os.path.exists(leg_path):
+                try:
+                    with open(leg_path, "rb") as f:
+                        legacy_key = f.read().strip()
+                    if legacy_key and len(legacy_key) >= 32:
+                        cls._cipher = Fernet(legacy_key)
+                        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                        fd = os.open(cls.KEY_FILE, flags, 0o600)
+                        with open(fd, "wb") as f:
+                            f.write(legacy_key)
+                        # Save backup
+                        with open(cls._BAK_KEY_FILE, "wb") as bf:
+                            bf.write(legacy_key)
+                        try:
+                            os.chmod(cls._BAK_KEY_FILE, 0o600)
+                        except Exception:
+                            pass
+                        logger.info(f"[McpSecretVault] Migrated legacy key from {leg_path} to {cls.KEY_FILE}")
+                        return cls._cipher
+                except Exception as e:
+                    logger.warning(f"[McpSecretVault] Legacy key migration from {leg_path} failed: {e}")
+
+        # 4. Check whether existing encrypted data exists before generating new key
+        config_path = paths_service.get_app_data_dir() / "mcp_servers.json"
+        if config_path.exists():
+            try:
+                raw_cfg = config_path.read_text(encoding="utf-8")
+                if "enc:fernet:" in raw_cfg:
+                    raise RuntimeError(
+                        f"Cannot generate new MCP Vault key: Existing encrypted MCP configurations found at {config_path} "
+                        "but the encryption key is missing. Refusing to regenerate key to prevent permanent credential loss."
+                    )
+            except RuntimeError:
+                raise
+            except Exception:
+                pass
+
+        # 5. Generate new key with 0600 mode
         new_key = Fernet.generate_key()
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         fd = os.open(cls.KEY_FILE, flags, 0o600)
         with open(fd, "wb") as f:
             f.write(new_key)
+        try:
+            with open(cls._BAK_KEY_FILE, "wb") as bf:
+                bf.write(new_key)
+            os.chmod(cls._BAK_KEY_FILE, 0o600)
+        except Exception:
+            pass
         cls._cipher = Fernet(new_key)
         return cls._cipher
 
@@ -549,6 +650,8 @@ class StdioTransport(McpTransport):
                 **kwargs
             )
             self._pid = self.process.pid
+            with _ACTIVE_STDIO_PIDS_LOCK:
+                _ACTIVE_STDIO_PIDS.add(self._pid)
             self._closed = False
             self._reader_task = asyncio.create_task(self._read_stdout_loop())
             self._stderr_task = asyncio.create_task(self._read_stderr_loop())
@@ -665,6 +768,8 @@ class StdioTransport(McpTransport):
         # Robust process tree teardown to prevent zombies
         if self.process:
             pid = self.process.pid
+            with _ACTIVE_STDIO_PIDS_LOCK:
+                _ACTIVE_STDIO_PIDS.discard(pid)
             try:
                 if self.process.stdin and not self.process.stdin.is_closing():
                     self.process.stdin.close()

@@ -53,7 +53,7 @@ def get_firebase_project_id() -> str:
     return os.getenv("FIREBASE_PROJECT_ID", FIREBASE_PROJECT_ID) or DEFAULT_FIREBASE_PROJECT_ID
 
 
-def verify_firebase_id_token(token: str, project_id: Optional[str] = None) -> Dict[str, Any]:
+def verify_firebase_id_token(token: str, project_id: Optional[str] = None, check_revoked: bool = False) -> Dict[str, Any]:
     """
     Cryptographically verifies a Firebase Authentication ID token.
     
@@ -63,6 +63,7 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None) -> Di
     - Issuer matching https://securetoken.google.com/<project_id>
     - Expiration time (exp > now)
     - Non-empty subject (uid)
+    - Token revocation status (if check_revoked=True or STROKE_AUTH_CHECK_REVOKED=1)
     
     Returns decoded JWT claims dictionary or raises ValueError.
     """
@@ -71,6 +72,7 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None) -> Di
 
     token = token.strip()
     target_project_id = (project_id or get_firebase_project_id()).strip()
+    should_check_revoked = check_revoked or (os.getenv("STROKE_AUTH_CHECK_REVOKED", "0").lower() in ("1", "true", "yes"))
 
     # Case A: Local Firebase Auth Emulator is configured
     emulator_host = os.getenv("FIREBASE_AUTH_EMULATOR_HOST") or FIREBASE_AUTH_EMULATOR_HOST
@@ -80,12 +82,23 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None) -> Di
             from firebase_admin import auth as admin_auth
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(options={"projectId": target_project_id})
-            decoded = admin_auth.verify_id_token(token, check_revoked=False)
+            decoded = admin_auth.verify_id_token(token, check_revoked=should_check_revoked)
             return decoded
         except Exception as exc:
             raise ValueError(f"Firebase Emulator token verification failed: {exc}")
 
     # Case B: Standard Desktop / Server Token Verification via Google's Public Certificates
+    claims = None
+    if should_check_revoked:
+        try:
+            import firebase_admin
+            from firebase_admin import auth as admin_auth
+            if firebase_admin._apps:
+                claims = admin_auth.verify_id_token(token, check_revoked=True)
+                return claims
+        except Exception as revoke_exc:
+            raise ValueError(f"Token verification or revocation check failed: {revoke_exc}")
+
     try:
         claims = google.oauth2.id_token.verify_firebase_token(
             token,
@@ -99,7 +112,7 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None) -> Di
             import firebase_admin
             from firebase_admin import auth as admin_auth
             if firebase_admin._apps:
-                claims = admin_auth.verify_id_token(token, check_revoked=False)
+                claims = admin_auth.verify_id_token(token, check_revoked=should_check_revoked)
             else:
                 raise primary_exc
         except Exception:
