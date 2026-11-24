@@ -1795,12 +1795,12 @@ export function enforceSameOriginOnMutations(
 
 export const BUILDER_CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://*.clerk.com https://challenges.cloudflare.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.accounts.dev https://*.accounts.dev https://*.lcl.dev https://*.clerk.com https://challenges.cloudflare.com",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline' https:",
   "font-src 'self' data: https:",
-  "img-src 'self' data: blob: https:",
-  "connect-src 'self' https: wss:",
+  "img-src 'self' data: blob: https://img.clerk.com https:",
+  "connect-src 'self' https: wss: ws: http://127.0.0.1:* http://localhost:*",
   "frame-src 'self' blob: data: https://challenges.cloudflare.com",
   "object-src 'none'",
   "base-uri 'self'",
