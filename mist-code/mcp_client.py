@@ -240,10 +240,21 @@ class McpSecretVault:
     """
 
     VAULT_DIR = str(paths_service.get_app_data_dir() / "credentials")
-    KEY_FILE = os.path.join(VAULT_DIR, ".mcp_vault_key")
-    _BAK_KEY_FILE = os.path.join(VAULT_DIR, ".mcp_vault_key.bak")
-    _LEGACY_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".vault_key")
+    KEY_DIR = str(paths_service.get_app_data_dir() / ".keys")
+    KEY_FILE = os.path.join(KEY_DIR, ".mcp_vault_key")
+    _BAK_KEY_FILE = os.path.join(KEY_DIR, ".mcp_vault_key.bak")
+    _KEYRING_SERVICE = "stroke_vault_master"
+    _KEYRING_ACCOUNT = "mcp_vault_key"
     _cipher: Optional[Fernet] = None
+
+    @classmethod
+    def _is_keyring_usable(cls) -> bool:
+        try:
+            import keyring
+            kr = keyring.get_keyring()
+            return bool(kr and "fail" not in kr.__class__.__name__.lower())
+        except Exception:
+            return False
 
     @classmethod
     def _get_cipher(cls) -> Fernet:
@@ -251,25 +262,38 @@ class McpSecretVault:
             return cls._cipher
 
         os.makedirs(cls.VAULT_DIR, exist_ok=True)
+        os.makedirs(cls.KEY_DIR, exist_ok=True)
         try:
             os.chmod(cls.VAULT_DIR, 0o700)
+            os.chmod(cls.KEY_DIR, 0o700)
         except Exception:
             pass
 
-        # 1. Primary stable location
+        # 1. Prefer OS keyring for master key storage (never stored beside ciphertext)
+        if cls._is_keyring_usable():
+            try:
+                import keyring
+                kr_key = keyring.get_password(cls._KEYRING_SERVICE, cls._KEYRING_ACCOUNT)
+                if kr_key and len(kr_key.strip()) >= 32:
+                    cipher = Fernet(kr_key.strip().encode("utf-8"))
+                    cipher.encrypt(b"probe")
+                    cls._cipher = cipher
+                    return cls._cipher
+            except Exception as e:
+                logger.debug(f"[McpSecretVault] Keyring lookup skipped: {e}")
+
+        # 2. Separate .keys/ fallback location
         if os.path.exists(cls.KEY_FILE):
             try:
                 with open(cls.KEY_FILE, "rb") as f:
                     key = f.read().strip()
                 if key and len(key) >= 32:
                     cipher = Fernet(key)
-                    # Verify cipher functions properly
                     cipher.encrypt(b"probe")
                     cls._cipher = cipher
                     return cls._cipher
             except Exception as e:
                 logger.error(f"[McpSecretVault] Primary key file corrupted at {cls.KEY_FILE}: {e}")
-                # Try backup key if available
                 if os.path.exists(cls._BAK_KEY_FILE):
                     try:
                         with open(cls._BAK_KEY_FILE, "rb") as bf:
@@ -278,64 +302,28 @@ class McpSecretVault:
                             cipher = Fernet(bkey)
                             cipher.encrypt(b"probe")
                             cls._cipher = cipher
-                            # Restore primary from backup
-                            with open(cls.KEY_FILE, "wb") as f:
+                            fd = os.open(cls.KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                            with open(fd, "wb") as f:
                                 f.write(bkey)
-                            try:
-                                os.chmod(cls.KEY_FILE, 0o600)
-                            except Exception:
-                                pass
                             logger.info("[McpSecretVault] Restored MCP vault key from backup file.")
                             return cls._cipher
                     except Exception as be:
                         logger.error(f"[McpSecretVault] Backup key also unreadable: {be}")
                 raise RuntimeError(f"MCP Secret Vault key corrupted at {cls.KEY_FILE}. Refusing to overwrite and lose existing secrets: {e}")
 
-        # 2. Check backup key if primary is absent
+        # 3. Check backup key if primary is absent
         if os.path.exists(cls._BAK_KEY_FILE):
             try:
                 with open(cls._BAK_KEY_FILE, "rb") as bf:
                     bkey = bf.read().strip()
                 if bkey and len(bkey) >= 32:
                     cls._cipher = Fernet(bkey)
-                    with open(cls.KEY_FILE, "wb") as f:
+                    fd = os.open(cls.KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                    with open(fd, "wb") as f:
                         f.write(bkey)
-                    try:
-                        os.chmod(cls.KEY_FILE, 0o600)
-                    except Exception:
-                        pass
                     return cls._cipher
             except Exception:
                 pass
-
-        # 3. Seamless migration from legacy source-directory key file
-        legacy_candidates = [
-            cls._LEGACY_KEY_FILE,
-            os.path.join(str(paths_service.get_app_data_dir()), ".mcp_vault_key"),
-            os.path.join(cls.VAULT_DIR, ".vault_key"),
-        ]
-        for leg_path in legacy_candidates:
-            if os.path.exists(leg_path):
-                try:
-                    with open(leg_path, "rb") as f:
-                        legacy_key = f.read().strip()
-                    if legacy_key and len(legacy_key) >= 32:
-                        cls._cipher = Fernet(legacy_key)
-                        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-                        fd = os.open(cls.KEY_FILE, flags, 0o600)
-                        with open(fd, "wb") as f:
-                            f.write(legacy_key)
-                        # Save backup
-                        with open(cls._BAK_KEY_FILE, "wb") as bf:
-                            bf.write(legacy_key)
-                        try:
-                            os.chmod(cls._BAK_KEY_FILE, 0o600)
-                        except Exception:
-                            pass
-                        logger.info(f"[McpSecretVault] Migrated legacy key from {leg_path} to {cls.KEY_FILE}")
-                        return cls._cipher
-                except Exception as e:
-                    logger.warning(f"[McpSecretVault] Legacy key migration from {leg_path} failed: {e}")
 
         # 4. Check whether existing encrypted data exists before generating new key
         config_path = paths_service.get_app_data_dir() / "mcp_servers.json"
@@ -352,16 +340,25 @@ class McpSecretVault:
             except Exception:
                 pass
 
-        # 5. Generate new key with 0600 mode
+        # 5. Generate new CSPRNG key; store in OS keyring first, else 0600 in .keys/
         new_key = Fernet.generate_key()
+        if cls._is_keyring_usable():
+            try:
+                import keyring
+                keyring.set_password(cls._KEYRING_SERVICE, cls._KEYRING_ACCOUNT, new_key.decode("utf-8"))
+                cls._cipher = Fernet(new_key)
+                return cls._cipher
+            except Exception as e:
+                logger.info(f"[McpSecretVault] Keyring store failed, falling back to 0600 key file: {e}")
+
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         fd = os.open(cls.KEY_FILE, flags, 0o600)
         with open(fd, "wb") as f:
             f.write(new_key)
         try:
-            with open(cls._BAK_KEY_FILE, "wb") as bf:
+            bfd = os.open(cls._BAK_KEY_FILE, flags, 0o600)
+            with open(bfd, "wb") as bf:
                 bf.write(new_key)
-            os.chmod(cls._BAK_KEY_FILE, 0o600)
         except Exception:
             pass
         cls._cipher = Fernet(new_key)
@@ -458,7 +455,8 @@ def build_minimal_mcp_env(custom_env: Optional[Dict[str, str]] = None) -> Dict[s
     DANGEROUS_INJECTION_KEYS = {
         "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
         "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH", "PYTHONPATH",
-        "PYTHONHOME", "NODE_OPTIONS", "STROKE_INTERNAL_SECRET"
+        "PYTHONHOME", "NODE_OPTIONS", "STROKE_INTERNAL_SECRET",
+        "STROKE_ENCRYPTION_KEY", "STROKE_VAULT_KEY", "SHELL", "HOME"
     }
 
     if custom_env:
@@ -868,25 +866,41 @@ class StreamableHttpTransport(McpTransport):
         self._connected = True
 
     async def _safe_post(self, endpoint: str, payload: Dict[str, Any], timeout: float) -> httpx.Response:
-        """Sends POST request with manual redirect validation against SSRF."""
+        """Sends POST request with manual redirect validation against SSRF and credential stripping."""
         if not self.client:
             raise McpError("HTTP transport not connected.")
 
         current_url = endpoint
         max_redirects = 5
+        cross_origin_redirected = False
+        initial_netloc = urllib.parse.urlparse(endpoint).netloc.lower()
+        sensitive_header_names = {"authorization", "cookie", "proxy-authorization", "x-api-key"}
 
         for _ in range(max_redirects):
-            # Validate URL before dispatch
+            # Validate URL before dispatch (re-validates DNS resolution)
             SsrfProtector.validate_url(current_url, allow_local=self.allow_local)
 
             req_headers = {}
-            if self.session_id:
+            if self.session_id and not cross_origin_redirected:
                 req_headers["Mcp-Session-Id"] = self.session_id
 
-            resp = await self.client.post(current_url, json=payload, headers=req_headers, timeout=timeout)
+            if cross_origin_redirected:
+                # Strip sensitive headers on cross-origin redirect to prevent credential leakage
+                sanitized_client_headers = {
+                    k: v for k, v in self.client.headers.items()
+                    if k.lower() not in sensitive_header_names
+                }
+                async with httpx.AsyncClient(
+                    headers=sanitized_client_headers,
+                    timeout=timeout,
+                    follow_redirects=False
+                ) as redirect_client:
+                    resp = await redirect_client.post(current_url, json=payload, headers=req_headers, timeout=timeout)
+            else:
+                resp = await self.client.post(current_url, json=payload, headers=req_headers, timeout=timeout)
 
             # Capture session header if provided
-            if "Mcp-Session-Id" in resp.headers:
+            if "Mcp-Session-Id" in resp.headers and not cross_origin_redirected:
                 self.session_id = resp.headers["Mcp-Session-Id"]
 
             if resp.status_code in (301, 302, 303, 307, 308):
@@ -896,6 +910,9 @@ class StreamableHttpTransport(McpTransport):
                 next_url = urllib.parse.urljoin(current_url, location)
                 # Ensure redirect target passes SSRF check
                 SsrfProtector.validate_url(next_url, allow_local=self.allow_local)
+                next_netloc = urllib.parse.urlparse(next_url).netloc.lower()
+                if next_netloc != initial_netloc:
+                    cross_origin_redirected = True
                 current_url = next_url
                 continue
 
@@ -1201,9 +1218,77 @@ class McpApprovalRecord:
 
 
 class McpApprovalManager:
-    """Manages one-time, cryptographically random approvals for registering or launching MCP servers."""
-    def __init__(self):
+    """
+    Manages one-time, cryptographically random, durably persisted approvals
+    for registering, connecting, or launching MCP servers across restarts/instances.
+    """
+    def __init__(self, store_path: Optional[str] = None):
+        self._lock = threading.RLock()
+        self._store_path = store_path
         self._approvals: Dict[str, McpApprovalRecord] = {}
+        self._load_store()
+
+    def _get_store_path(self) -> str:
+        if self._store_path:
+            return self._store_path
+        return str(paths_service.get_app_data_dir() / "mcp_approvals.json")
+
+    def _load_store(self) -> None:
+        path = self._get_store_path()
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            if isinstance(raw, dict):
+                now = time.time()
+                for appr_id, rec in raw.items():
+                    if not isinstance(rec, dict):
+                        continue
+                    expires_at = float(rec.get("expires_at", 0))
+                    if now > expires_at + 3600:
+                        continue
+                    self._approvals[appr_id] = McpApprovalRecord(
+                        approval_id=str(rec.get("approval_id", appr_id)),
+                        server_id=str(rec.get("server_id", "")),
+                        action=str(rec.get("action", "")),
+                        target=str(rec.get("target", "")),
+                        user_uid=str(rec.get("user_uid", "")),
+                        created_at=float(rec.get("created_at", 0)),
+                        expires_at=expires_at,
+                        consumed=bool(rec.get("consumed", False)),
+                    )
+        except Exception as exc:
+            logger.debug(f"[McpApprovalManager] Failed reading approval store: {exc}")
+
+    def _save_store(self) -> None:
+        path = self._get_store_path()
+        now = time.time()
+        payload = {}
+        for appr_id, rec in self._approvals.items():
+            if now > rec.expires_at + 3600:
+                continue
+            payload[appr_id] = {
+                "approval_id": rec.approval_id,
+                "server_id": rec.server_id,
+                "action": rec.action,
+                "target": rec.target,
+                "user_uid": rec.user_uid,
+                "created_at": rec.created_at,
+                "expires_at": rec.expires_at,
+                "consumed": rec.consumed,
+            }
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with open(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except Exception as exc:
+            logger.warning(f"[McpApprovalManager] Failed saving approval store: {exc}")
 
     def create_approval(
         self,
@@ -1213,36 +1298,68 @@ class McpApprovalManager:
         user_uid: str,
         ttl_seconds: int = 300
     ) -> McpApprovalRecord:
-        appr_id = f"mcp_appr_{uuid.uuid4().hex}"
-        now = time.time()
-        record = McpApprovalRecord(
-            approval_id=appr_id,
-            server_id=server_id,
-            action=action,
-            target=target,
-            user_uid=user_uid,
-            created_at=now,
-            expires_at=now + ttl_seconds,
-            consumed=False
-        )
-        self._approvals[appr_id] = record
-        return record
+        with self._lock:
+            self._load_store()
+            appr_id = f"mcp_appr_{uuid.uuid4().hex}"
+            now = time.time()
+            record = McpApprovalRecord(
+                approval_id=appr_id,
+                server_id=server_id,
+                action=action,
+                target=target,
+                user_uid=user_uid,
+                created_at=now,
+                expires_at=now + ttl_seconds,
+                consumed=False
+            )
+            self._approvals[appr_id] = record
+            self._save_store()
+            return record
 
-    def consume_approval(self, approval_id: str, server_id: str, user_uid: str) -> bool:
-        if not approval_id or approval_id not in self._approvals:
-            return False
-        rec = self._approvals[approval_id]
-        if rec.consumed:
-            return False
-        if rec.server_id != server_id:
-            return False
-        if rec.user_uid != user_uid:
-            return False
-        if time.time() > rec.expires_at:
-            return False
+    def get_approval(self, approval_id: str) -> Optional[McpApprovalRecord]:
+        with self._lock:
+            self._load_store()
+            return self._approvals.get(approval_id)
 
-        rec.consumed = True
-        return True
+    def reject_approval(self, approval_id: str, user_uid: str) -> bool:
+        with self._lock:
+            self._load_store()
+            rec = self._approvals.get(approval_id)
+            if not rec or rec.user_uid != user_uid or rec.consumed:
+                return False
+            rec.consumed = True
+            self._save_store()
+            return True
+
+    def consume_approval(
+        self,
+        approval_id: str,
+        server_id: str,
+        user_uid: str,
+        action: Optional[str] = None,
+        target: Optional[str] = None,
+    ) -> bool:
+        with self._lock:
+            self._load_store()
+            if not approval_id or approval_id not in self._approvals:
+                return False
+            rec = self._approvals[approval_id]
+            if rec.consumed:
+                return False
+            if rec.server_id != server_id:
+                return False
+            if rec.user_uid != user_uid:
+                return False
+            if action is not None and rec.action != action:
+                return False
+            if target is not None and rec.target != target:
+                return False
+            if time.time() > rec.expires_at:
+                return False
+
+            rec.consumed = True
+            self._save_store()
+            return True
 
 
 # ------------------------------------------------------------------------------

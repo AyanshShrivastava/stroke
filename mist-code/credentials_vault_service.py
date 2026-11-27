@@ -76,17 +76,78 @@ def _get_vault_dir() -> Path:
     return vault_dir
 
 
+def _get_key_dir() -> Path:
+    """Returns a separate key directory so fallback keys are never stored beside ciphertext."""
+    key_dir = paths_service.get_app_data_dir() / ".keys"
+    key_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(key_dir, 0o700)
+    except Exception:
+        pass
+    return key_dir
+
+
+def _is_keyring_usable() -> bool:
+    try:
+        import keyring
+        kr = keyring.get_keyring()
+        return bool(kr and "fail" not in kr.__class__.__name__.lower())
+    except Exception:
+        return False
+
+
 def _get_or_create_cipher() -> Optional[Fernet]:
     """
-    Derives or loads the machine-bound Fernet cipher key stored with 0600 permissions.
-    Refuses to silently overwrite existing damaged keys when vault data depends on them.
+    Loads or creates a Fernet cipher key.
+    1. Prefers OS-level keyring ('stroke_vault_master' / 'byok_vault_key') so the key is
+       never stored beside the encrypted vault file.
+    2. Falls back to a 0600 key file in a separate .keys/ directory (never beside ciphertext
+       and never migrating from legacy repository data/.vault_key).
     """
     vault_dir = _get_vault_dir()
-    key_file = vault_dir / VAULT_KEY_FILE
+    key_dir = _get_key_dir()
+    key_file = key_dir / VAULT_KEY_FILE
+    legacy_vault_dir_key = vault_dir / VAULT_KEY_FILE
     vault_data_file = vault_dir / VAULT_DATA_FILE
-    legacy_key_file = Path(__file__).parent / "data" / VAULT_KEY_FILE
 
-    # 1. Primary stable location in user application data
+    # 0. Fail closed if a corrupted key file is present alongside vault data
+    for candidate_dir, candidate_key in ((key_dir, key_file), (vault_dir, legacy_vault_dir_key)):
+        if candidate_key.exists():
+            try:
+                with open(candidate_key, "rb") as f:
+                    key_bytes = f.read().strip()
+                if len(key_bytes) != 44:
+                    raise ValueError(f"Invalid key length: {len(key_bytes)} (expected 44 bytes)")
+                Fernet(key_bytes)
+            except Exception as exc:
+                backup_key = candidate_dir / f"{VAULT_KEY_FILE}.corrupted.{int(time.time())}.bak"
+                try:
+                    import shutil
+                    shutil.copy2(str(candidate_key), str(backup_key))
+                    logger.error("Preserved snapshot of corrupted key at %s", backup_key)
+                except Exception as copy_err:
+                    logger.error("Failed to backup corrupted vault key: %s", copy_err)
+
+                if vault_data_file.exists() and vault_data_file.stat().st_size > 0:
+                    logger.critical("Refusing to silently regenerate key while encrypted vault data exists: %s", exc)
+                    raise VaultKeyCorruptionError(
+                        f"BYOK credentials key corrupted at {candidate_key}. "
+                        f"Preserved damaged key at {backup_key}. Refusing to overwrite and lose existing vault secrets: {exc}"
+                    )
+
+    # 1. Prefer OS keyring for master key storage
+    if _is_keyring_usable():
+        try:
+            import keyring
+            kr_key = keyring.get_password("stroke_vault_master", "byok_vault_key")
+            if kr_key:
+                key_bytes = kr_key.strip().encode("utf-8")
+                if len(key_bytes) == 44:
+                    return Fernet(key_bytes)
+        except Exception as exc:
+            logger.debug("Keyring master key lookup unavailable: %s", exc)
+
+    # 2. Check separate .keys/ fallback location
     if key_file.exists():
         try:
             with open(key_file, "rb") as f:
@@ -96,7 +157,7 @@ def _get_or_create_cipher() -> Optional[Fernet]:
                 else:
                     raise ValueError(f"Invalid key length: {len(key_bytes)} (expected 44 bytes)")
         except Exception as exc:
-            backup_key = vault_dir / f"{VAULT_KEY_FILE}.corrupted.{int(time.time())}.bak"
+            backup_key = key_dir / f"{VAULT_KEY_FILE}.corrupted.{int(time.time())}.bak"
             try:
                 import shutil
                 shutil.copy2(str(key_file), str(backup_key))
@@ -112,28 +173,18 @@ def _get_or_create_cipher() -> Optional[Fernet]:
                 )
             logger.warning("Corrupted key without vault data, regenerating: %s", exc)
 
-    # 2. Seamless migration from legacy source-directory key file
-    if legacy_key_file.exists() and not key_file.exists():
-        try:
-            with open(legacy_key_file, "rb") as f:
-                legacy_k = f.read().strip()
-            if len(legacy_k) == 44:
-                fd = os.open(str(key_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-                with open(fd, "wb") as f:
-                    f.write(legacy_k)
-                logger.info("Migrated legacy BYOK vault key from %s to %s", legacy_key_file, key_file)
-                return Fernet(legacy_k)
-        except Exception as mig_err:
-            logger.warning("Legacy BYOK key migration failed: %s", mig_err)
-
-    # 3. Derive fresh key from machine identity + CSPRNG salt
+    # 3. Generate fresh CSPRNG Fernet key (never derive from MAC address or migrate compromised repo keys)
     try:
-        machine_node = str(uuid.getnode()).encode("utf-8")
-        salt = os.urandom(16)
-        derived = hashlib.pbkdf2_hmac("sha256", machine_node, salt, 100_000)
-        fernet_key = base64.urlsafe_b64encode(derived[:32])
+        fernet_key = Fernet.generate_key()
 
-        # Write with 0600 permissions
+        if _is_keyring_usable():
+            try:
+                import keyring
+                keyring.set_password("stroke_vault_master", "byok_vault_key", fernet_key.decode("utf-8"))
+                return Fernet(fernet_key)
+            except Exception as exc:
+                logger.info("Keyring master key persistence failed, using 0600 key file: %s", exc)
+
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         mode = 0o600
         fd = os.open(str(key_file), flags, mode)
@@ -267,13 +318,19 @@ class CredentialsVault:
             except Exception as exc:
                 logger.info("Keyring storage failed for %s, using encrypted vault: %s", provider, exc)
 
-        # Always update local encrypted vault with metadata (and key as fallback)
+        # Only store key in encrypted vault file if OS keyring is unavailable;
+        # always update non-secret metadata in the vault file.
         with self._lock:
             vault_data = self._read_encrypted_vault_file()
             user_block = vault_data.setdefault(user_id or "default", {})
             prov_record = user_block.setdefault(provider, {})
-            prov_record["key"] = api_key
-            prov_record["updated_at"] = os.environ.get("MOCK_TIME", "") or str(int(os.path.getmtime(_get_vault_dir())))
+            if success_keyring:
+                prov_record.pop("key", None)
+                prov_record["stored_in_keyring"] = True
+            else:
+                prov_record["key"] = api_key
+                prov_record["stored_in_keyring"] = False
+            prov_record["updated_at"] = os.environ.get("MOCK_TIME", "") or str(int(time.time()))
             if metadata:
                 prov_record["metadata"] = metadata
 

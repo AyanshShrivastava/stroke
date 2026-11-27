@@ -1731,6 +1731,172 @@ class TerminalManager:
             return cls._sessions.get(session_id)
 
     @classmethod
+    def change_directory(
+        cls,
+        session_id: str,
+        target_dir: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Changes the working directory of a terminal session within approved workspace boundaries."""
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
+        with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+            try:
+                cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+            except PermissionError as pe:
+                return {"status": "error", "error": "access_denied", "message": str(pe)}
+
+        import workspace_service
+        base = session.cwd or session.workspace_path
+        candidate = target_dir if os.path.isabs(target_dir) else os.path.join(base, target_dir)
+        try:
+            canonical = workspace_service.validate_path_access(candidate)
+        except (workspace_service.WorkspaceSecurityError, PermissionError) as pe:
+            return {"status": "error", "error": "access_denied", "message": str(pe)}
+
+        if not canonical.exists() or not canonical.is_dir():
+            return {"status": "error", "error": "not_a_directory", "message": f"Directory not found: {canonical}"}
+
+        session.cwd = str(canonical)
+        return {"status": "success", "session_id": session_id, "cwd": session.cwd}
+
+    @classmethod
+    def start_interactive_shell(
+        cls,
+        session_id: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Starts an interactive PTY shell (macOS/Linux) or piped shell (Windows) bound to
+        the session's approved workspace with sanitized environment variables.
+        """
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
+        with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+            try:
+                cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+            except PermissionError as pe:
+                return {"status": "error", "error": "access_denied", "message": str(pe)}
+
+            existing_proc = getattr(session, "_pty_proc", None)
+            if existing_proc and existing_proc.poll() is None:
+                return {"status": "success", "session_id": session_id, "pid": existing_proc.pid, "pty": True}
+
+            clean_env = get_sanitized_child_env(session.workspace_path)
+            cwd = session.cwd or session.workspace_path
+
+            if sys.platform != "win32":
+                import pty
+                master_fd, slave_fd = pty.openpty()
+                shell_bin = "/bin/zsh" if (sys.platform == "darwin" and os.path.exists("/bin/zsh")) else "/bin/sh"
+                proc = subprocess.Popen(
+                    [shell_bin, "-i"],
+                    stdin=slave_fd,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    cwd=cwd,
+                    env=clean_env,
+                    start_new_session=True,
+                    close_fds=True,
+                )
+                os.close(slave_fd)
+                session._pty_master_fd = master_fd
+                session._pty_proc = proc
+                session.process = proc
+                session.state = "running"
+
+                def _pty_reader():
+                    try:
+                        while True:
+                            try:
+                                chunk = os.read(master_fd, 4096)
+                            except OSError:
+                                break
+                            if not chunk:
+                                break
+                            text = redact_sensitive_data(chunk.decode("utf-8", errors="replace"))
+                            session._append_output("stdout", text)
+                    finally:
+                        try:
+                            os.close(master_fd)
+                        except OSError:
+                            pass
+                        session.state = "completed"
+
+                threading.Thread(target=_pty_reader, daemon=True, name=f"Stroke-PTY-{session_id}").start()
+                return {"status": "success", "session_id": session_id, "pid": proc.pid, "pty": True, "cwd": cwd}
+            else:
+                shell_bin = os.environ.get("COMSPEC", "cmd.exe")
+                proc = subprocess.Popen(
+                    [shell_bin],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    cwd=cwd,
+                    env=clean_env,
+                    text=False,
+                )
+                session._pty_master_fd = None
+                session._pty_proc = proc
+                session.process = proc
+                session.state = "running"
+
+                def _pipe_reader():
+                    try:
+                        while proc.stdout:
+                            line = proc.stdout.readline()
+                            if not line:
+                                break
+                            session._append_output("stdout", redact_sensitive_data(line.decode("utf-8", errors="replace").rstrip("\r\n")))
+                    finally:
+                        session.state = "completed"
+
+                threading.Thread(target=_pipe_reader, daemon=True, name=f"Stroke-Shell-{session_id}").start()
+                return {"status": "success", "session_id": session_id, "pid": proc.pid, "pty": False, "cwd": cwd}
+
+    @classmethod
+    def send_input(
+        cls,
+        session_id: str,
+        data: str,
+        caller_uid: Optional[str] = "internal_daemon",
+        is_internal: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Writes interactive input to an active PTY/shell session."""
+        if is_internal is None:
+            is_internal = (caller_uid == "internal_daemon")
+
+        with cls._lock:
+            session = cls._sessions.get(session_id)
+            if not session:
+                return {"status": "error", "error": "session_not_found", "message": f"Session '{session_id}' not found."}
+            try:
+                cls._verify_session_ownership(session, caller_uid=caller_uid, is_internal=is_internal)
+            except PermissionError as pe:
+                return {"status": "error", "error": "access_denied", "message": str(pe)}
+
+            master_fd = getattr(session, "_pty_master_fd", None)
+            proc = getattr(session, "_pty_proc", None)
+            if master_fd is not None and proc and proc.poll() is None:
+                os.write(master_fd, data.encode("utf-8"))
+                return {"status": "success", "session_id": session_id, "bytes_written": len(data)}
+            if proc and proc.poll() is None and proc.stdin:
+                proc.stdin.write(data.encode("utf-8"))
+                proc.stdin.flush()
+                return {"status": "success", "session_id": session_id, "bytes_written": len(data)}
+            return {"status": "error", "error": "no_active_pty", "message": "No active interactive shell in this session."}
+
+    @classmethod
     def cleanup_all(cls) -> int:
         """Terminates all active background terminal sessions and reclaims resources."""
         with cls._lock:

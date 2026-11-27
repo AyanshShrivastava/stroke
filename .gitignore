@@ -13,4 +13,12 @@ __pycache__/
 *.pyc
 mist-code/venv
 mist-code/.pytest_cache
+.vault_key
+*.vault
+*.enc
+byok_vault.key
+.mcp_vault_key*
+mist-code/data/.vault_key
+mist-code/data/.github_token.enc
+
 

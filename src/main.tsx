@@ -70,13 +70,15 @@ function ClerkConfigurationError() {
             >
               Save Key & Launch Mist
             </button>
-            <button
-              type="button"
-              onClick={() => handleSave('pk_test_Y2xlcmsuaW5zcGlyZWQucHVtYS03NC5sY2wuZGV2JA')}
-              className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white/80 hover:bg-white/[0.08] hover:text-white transition-all cursor-pointer"
-            >
-              Launch with Development Key
-            </button>
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={() => handleSave('pk_test_Y2xlcmsuaW5zcGlyZWQucHVtYS03NC5sY2wuZGV2JA')}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-white/80 hover:bg-white/[0.08] hover:text-white transition-all cursor-pointer"
+              >
+                Launch with Development Key
+              </button>
+            )}
           </div>
         </form>
       </div>

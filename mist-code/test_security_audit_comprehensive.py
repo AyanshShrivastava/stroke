@@ -377,15 +377,14 @@ class TestMcpSecurityAndSsrf(unittest.TestCase):
             old_vault_dir = McpSecretVault.VAULT_DIR
             old_key_file = McpSecretVault.KEY_FILE
             old_bak = McpSecretVault._BAK_KEY_FILE
-            old_legacy = McpSecretVault._LEGACY_KEY_FILE
 
             McpSecretVault._cipher = None
             McpSecretVault.VAULT_DIR = str(tmp_creds)
             McpSecretVault.KEY_FILE = str(tmp_creds / ".mcp_vault_key")
             McpSecretVault._BAK_KEY_FILE = str(tmp_creds / ".mcp_vault_key.bak")
-            McpSecretVault._LEGACY_KEY_FILE = str(tmp_path / ".legacy_vault_key")
 
-            with patch("paths_service.get_app_data_dir", return_value=tmp_path):
+            with patch("paths_service.get_app_data_dir", return_value=tmp_path), \
+                 patch.object(McpSecretVault, "_is_keyring_usable", return_value=False):
                 try:
                     with self.assertRaises(RuntimeError) as ctx:
                         McpSecretVault._get_cipher()
@@ -395,7 +394,6 @@ class TestMcpSecurityAndSsrf(unittest.TestCase):
                     McpSecretVault.VAULT_DIR = old_vault_dir
                     McpSecretVault.KEY_FILE = old_key_file
                     McpSecretVault._BAK_KEY_FILE = old_bak
-                    McpSecretVault._LEGACY_KEY_FILE = old_legacy
 
 
 class TestFilesystemAndDiagnosticsSecurity(unittest.TestCase):

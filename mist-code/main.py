@@ -193,12 +193,19 @@ db: firestore.Client = initialize_firestore_client()
 # FASTAPI APPLICATION & MIDDLEWARE DEFINITION
 # ==============================================================================
 
+_IS_PRODUCTION = (
+    os.getenv("STROKE_ENV", "").strip().lower() == "production"
+    or os.getenv("NODE_ENV", "").strip().lower() == "production"
+)
+_ENABLE_DOCS = os.getenv("STROKE_ENABLE_DOCS", "0").strip().lower() in ("1", "true", "yes")
+
 app = FastAPI(
     title="Stroke - Secure Cyberpunk Engine",
     description="Stateless FastAPI REST backend integrated with Firebase Firestore and GitHub OAuth PAT flow.",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if (not _IS_PRODUCTION or _ENABLE_DOCS) else None,
+    redoc_url="/redoc" if (not _IS_PRODUCTION or _ENABLE_DOCS) else None,
+    openapi_url="/openapi.json" if (not _IS_PRODUCTION or _ENABLE_DOCS) else None,
 )
 
 # ==============================================================================
@@ -323,12 +330,15 @@ class SecurityHeaderMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://* http://localhost:* http://127.0.0.1:*; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://www.gstatic.com https://apis.google.com https://cdn.jsdelivr.net; "
+            "default-src 'self' data: blob: https://* http://localhost:* http://127.0.0.1:*; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://www.gstatic.com https://apis.google.com https://cdn.jsdelivr.net; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
             "font-src 'self' data: https://fonts.gstatic.com; "
-            "img-src 'self' data: blob: https://* http://*; "
-            "connect-src 'self' https://* http://* ws://* wss://*; "
+            "img-src 'self' data: blob: https://*; "
+            "connect-src 'self' https://* http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://*; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
             "frame-ancestors 'none';"
         )
         return response
@@ -661,15 +671,27 @@ class RobloxVerifyObjectPayload(BaseModel):
 # ROUTE HANDLERS: FRONTEND ASSET SERVING
 # ==============================================================================
 
-@app.get("/", response_class=FileResponse, tags=["Web Interface"])
+@app.get("/", tags=["Web Interface"])
 async def serve_index_page():
-    """Serves the Matrix Green Cyberpunk Single-File User Interface."""
+    """Serves the Stroke BYOK Desktop UI with an injected per-session loopback token."""
+    if not os.environ.get("STROKE_INTERNAL_SECRET"):
+        import secrets as _secrets
+        os.environ["STROKE_INTERNAL_SECRET"] = _secrets.token_urlsafe(32)
+    session_token = os.environ["STROKE_INTERNAL_SECRET"]
+
     index_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     if os.path.exists(index_file_path):
-        return FileResponse(
-            index_file_path,
-            media_type="text/html",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"}
+        with open(index_file_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        meta_tag = f'<meta name="stroke-session-token" content="{session_token}">'
+        if "<head>" in html_content:
+            html_content = html_content.replace("<head>", f"<head>\n  {meta_tag}", 1)
+        return HTMLResponse(
+            content=html_content,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+                "Pragma": "no-cache",
+            },
         )
     return HTMLResponse(
         content="<h1 style='color:#00ff66;background:#050505;font-family:monospace;padding:2rem;'>"
@@ -679,21 +701,85 @@ async def serve_index_page():
 
 
 _OAUTH_STATE_REGISTRY: Dict[str, Dict[str, Any]] = {}
+_OAUTH_STATE_LOCK = threading.RLock()
+
+
+def _oauth_state_file_path() -> Path:
+    return paths_service.get_app_data_dir() / "oauth_states.json"
+
+
+def _save_oauth_state(state: str, info: Dict[str, Any]) -> None:
+    with _OAUTH_STATE_LOCK:
+        _OAUTH_STATE_REGISTRY[state] = info
+        path = _oauth_state_file_path()
+        data: Dict[str, Any] = {}
+        if path.exists():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    data = loaded
+            except Exception:
+                pass
+        now = time.time()
+        cleaned = {k: v for k, v in data.items() if isinstance(v, dict) and float(v.get("expires_at", 0)) > now}
+        cleaned[state] = info
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+            fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with open(fd, "w", encoding="utf-8") as f:
+                json.dump(cleaned, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except Exception:
+            pass
+
+
+def _pop_oauth_state(state: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not state:
+        return None
+    with _OAUTH_STATE_LOCK:
+        session_info = _OAUTH_STATE_REGISTRY.pop(state, None)
+        path = _oauth_state_file_path()
+        if path.exists():
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    disk_info = loaded.pop(state, None)
+                    if session_info is None:
+                        session_info = disk_info
+                    now = time.time()
+                    cleaned = {k: v for k, v in loaded.items() if isinstance(v, dict) and float(v.get("expires_at", 0)) > now}
+                    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+                    fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                    with open(fd, "w", encoding="utf-8") as f:
+                        json.dump(cleaned, f)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp_path, path)
+            except Exception:
+                pass
+        return session_info
 
 # Application-level encryption for sensitive tokens in Firestore
 # Derived dynamically from machine identity and secure local vault key (no hardcoded fallback key)
 def _initialize_vault_cipher() -> Fernet:
-    """Initializes machine vault Fernet cipher with 0600 permissions. Fails closed."""
+    """Initializes machine vault Fernet cipher via OS keyring or 0600 .keys/ store. Fails closed."""
     env_key = os.getenv("STROKE_ENCRYPTION_KEY")
     if env_key:
         return Fernet(env_key.encode("utf-8") if isinstance(env_key, str) else env_key)
     try:
         import github_service
         return github_service._get_or_create_vault_cipher()
-    except Exception as e:
-        vault_dir = str(paths_service.get_app_data_dir() / "credentials")
-        os.makedirs(vault_dir, exist_ok=True)
-        key_file = os.path.join(vault_dir, ".vault_key")
+    except Exception:
+        key_dir = str(paths_service.get_app_data_dir() / ".keys")
+        os.makedirs(key_dir, exist_ok=True)
+        try:
+            os.chmod(key_dir, 0o700)
+        except Exception:
+            pass
+        key_file = os.path.join(key_dir, ".firestore_vault_key")
         if os.path.exists(key_file):
             try:
                 with open(key_file, "rb") as f:
@@ -1201,12 +1287,12 @@ async def github_connect(
         if clean_raw in SecurityHeaderMiddleware.ALLOWED_ORIGINS:
             initiating_origin = clean_raw
 
-    _OAUTH_STATE_REGISTRY[state] = {
+    _save_oauth_state(state, {
         "uid": uid,
         "email": user.email,
         "origin": initiating_origin,
         "expires_at": time.time() + 600
-    }
+    })
 
     oauth_params = {
         "client_id": GITHUB_CLIENT_ID,
@@ -1268,15 +1354,15 @@ async def github_callback(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if not state or state not in _OAUTH_STATE_REGISTRY:
+    # Atomic single-use consumption across instances/restarts
+    session_info = _pop_oauth_state(state)
+    if not session_info:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Compromised, unrecognized, or missing OAuth state tracking token."
         )
 
-    # Atomic single-use consumption
-    session_info = _OAUTH_STATE_REGISTRY.pop(state, None)
-    if not session_info or time.time() > session_info.get("expires_at", 0):
+    if time.time() > session_info.get("expires_at", 0):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OAuth authorization session has expired. Please initiate GitHub connect again."
@@ -1998,18 +2084,26 @@ async def request_mcp_server_approval(payload: McpApprovalRequestPayload, user: 
 async def connect_custom_mcp_server(payload: McpConnectRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """
     POST /mcp/connect
-    Connects Stroke to any custom local or remote MCP server with SSRF protection and approval validation.
+    Connects Stroke to any custom local or remote MCP server with SSRF protection,
+    mandatory single-use approval validation, and genuine MCP handshake/tool discovery.
     """
     from mcp_client import global_mcp_registry, McpError
 
-    if payload.approval_id:
-        valid = global_mcp_registry.approval_mgr.consume_approval(
-            approval_id=payload.approval_id,
-            server_id=payload.server_id,
-            user_uid=user.uid
+    if not payload.approval_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Explicit single-use approval_id is required to connect an MCP server."
         )
-        if not valid:
-            raise HTTPException(status_code=403, detail="Invalid, expired, or already-consumed MCP approval token.")
+
+    valid = global_mcp_registry.approval_mgr.consume_approval(
+        approval_id=payload.approval_id,
+        server_id=payload.server_id,
+        user_uid=user.uid,
+        action="connect",
+        target=payload.url
+    )
+    if not valid:
+        raise HTTPException(status_code=403, detail="Invalid, expired, mismatched, or already-consumed MCP approval token.")
 
     try:
         server = mcp_bridge.register_custom_mcp_server(
@@ -2020,6 +2114,12 @@ async def connect_custom_mcp_server(payload: McpConnectRequest, user: Authentica
             tools=payload.tools,
             allow_local=payload.allow_local
         )
+        clean_id = payload.server_id.strip().lower().replace(" ", "_")
+        # Perform genuine MCP initialize handshake and tool discovery before reporting connected
+        client = await global_mcp_registry.connect_server(clean_id, allow_local_override=payload.allow_local)
+        server["connected"] = client.is_active()
+        server["lifecycle_state"] = client.state.value
+        server["tools"] = client.discovered_tools
         return {
             "status": "success",
             "message": f"Successfully connected to MCP server '{payload.name}'.",
@@ -2035,8 +2135,10 @@ async def connect_custom_mcp_server(payload: McpConnectRequest, user: Authentica
 async def disconnect_custom_mcp_server(payload: McpDisconnectRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """
     POST /mcp/disconnect
-    Disconnects a custom MCP server.
+    Disconnects an MCP server and tears down its active transport/process cleanly.
     """
+    from mcp_client import global_mcp_registry
+    await global_mcp_registry.disconnect_server(payload.server_id)
     success = mcp_bridge.remove_custom_mcp_server(payload.server_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"Server '{payload.server_id}' not found or cannot be removed.")
@@ -2087,13 +2189,15 @@ async def save_mcp_configuration(payload: McpConfigPayload, user: AuthenticatedU
 async def list_all_mcp_tools(user: AuthenticatedUser = Depends(get_current_user)):
     """
     GET /mcp/tools
-    Returns the comprehensive catalog of tools across Roblox Studio, GitHub, and external MCP servers.
+    Returns the comprehensive catalog of tools across Roblox Studio, GitHub, Workspace, and external MCP servers.
     """
+    all_schemas = mcp_bridge.get_all_mcp_ai_tool_schemas()
     return {
         "status": "success",
+        "tools": all_schemas,
         "roblox_studio_tools": mcp_bridge.get_roblox_studio_tools(),
         "github_tools": mcp_bridge.get_github_tools(),
-        "all_schemas": mcp_bridge.get_all_mcp_ai_tool_schemas()
+        "all_schemas": all_schemas
     }
 
 
@@ -2106,7 +2210,7 @@ class GitHubTokenPayload(BaseModel):
 
 
 @app.get("/github/status", tags=["GitHub Integration"])
-async def get_github_pat_status():
+async def get_github_pat_status(user: AuthenticatedUser = Depends(get_current_user)):
     """
     GET /github/status
     Inspects GitHub PAT status, verifying credentials, user identity, and rate limits.
@@ -3556,9 +3660,10 @@ async def chat_with_neural_ai(payload: AiChatRequest, user: AuthenticatedUser = 
             "detail": f"Loaded {len(payload.attachments)} attached file(s): {', '.join(att_names)}"
         })
 
+    active_cfg = ai_provider_service.get_active_model_config()
     ai_reply_text = ""
-    provider_used = "local-offline"
-    model_used = payload.model or "llama3.2-local"
+    provider_used = active_cfg.get("active_provider") or "gemini"
+    model_used = payload.model or active_cfg.get("active_model") or "gemini-2.0-flash"
     fallback_occurred = False
     fallback_reason: Optional[str] = None
     tool_invoked = False
@@ -4544,13 +4649,13 @@ async def verify_terminal_access(
 
     if token:
         try:
-            claims = auth_service.verify_firebase_id_token(token)
+            claims = auth_service._verify_bearer_token(token)
             uid = claims.get("uid") or claims.get("user_id") or claims.get("sub")
-            return {"auth": "firebase", "is_internal": False, "uid": uid, "user": claims}
+            return {"auth": "bearer_jwt", "is_internal": False, "uid": uid, "user": claims}
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Terminal access rejected: Invalid Firebase token ({e})",
+                detail=f"Terminal access rejected: Invalid authentication token ({e})",
                 headers={"WWW-Authenticate": "Bearer"}
             )
 
@@ -4699,6 +4804,63 @@ async def list_terminals_endpoint(
     """
     caller_uid, is_internal = _extract_caller_uid_and_internal(access)
     return {"terminals": TerminalManager.list_terminals(caller_uid=caller_uid, is_internal=is_internal)}
+
+
+@app.post("/terminal/{session_id}/pty/start", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
+async def start_terminal_pty_endpoint(
+    session_id: str,
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
+    """Starts an interactive PTY shell inside the approved workspace for this terminal session."""
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    res = TerminalManager.start_interactive_shell(session_id, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
+    return res
+
+
+@app.post("/terminal/{session_id}/input", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
+async def send_terminal_input_endpoint(
+    session_id: str,
+    payload: Dict[str, Any],
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
+    """Sends interactive input to an active PTY/shell session."""
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    data = str(payload.get("data", ""))
+    res = TerminalManager.send_input(session_id, data=data, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
+    return res
+
+
+@app.post("/terminal/{session_id}/cd", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])
+async def change_terminal_dir_endpoint(
+    session_id: str,
+    payload: Dict[str, Any],
+    access: Dict[str, Any] = Depends(verify_terminal_access)
+):
+    """Changes working directory of a terminal session within approved workspace boundaries."""
+    caller_uid, is_internal = _extract_caller_uid_and_internal(access)
+    target_dir = str(payload.get("path", "")).strip()
+    if not target_dir:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target directory path is required.")
+    res = TerminalManager.change_directory(session_id, target_dir=target_dir, caller_uid=caller_uid, is_internal=is_internal)
+    if res.get("status") == "error":
+        if res.get("error") == "access_denied":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=res.get("message"))
+        if res.get("error") == "session_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=res.get("message"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res.get("message"))
+    return res
 
 
 @app.post("/terminal/{session_id}/stop", dependencies=[Depends(verify_terminal_access)], tags=["AI Terminal Service"])

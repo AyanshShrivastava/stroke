@@ -68,6 +68,11 @@ def check_universal2_compatibility() -> Tuple[bool, str]:
 # Forbidden mutable/sensitive file names that must NEVER be bundled into read-only app locations
 MUTABLE_OR_SENSITIVE_FILES = {
     ".vault_key",
+    "byok_vault.key",
+    "byok_credentials.vault",
+    ".mcp_vault_key",
+    ".mcp_vault_key.bak",
+    ".github_token.enc",
     "local_firestore_db.json",
     ".env",
     "approved_workspaces.json",

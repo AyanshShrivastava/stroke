@@ -798,20 +798,20 @@ def register_configured_server(server_id: str, s_cfg: Dict[str, Any]):
         cmd_path = os.path.expanduser(str(command))
         cmd_name = os.path.basename(cmd_path)
         if os.path.exists(cmd_path) or shutil.which(cmd_path):
-            is_connected = True
+            is_connected = False
             status_label = "ready"
-            status_text = f"Command Active ({cmd_name})"
+            status_text = f"Executable Ready ({cmd_name}) — handshake pending"
         else:
             is_connected = False
             status_label = "standby"
             status_text = f"Binary not found: {cmd_name}"
     elif url:
-        status_text = f"Endpoint configured ({url})"
+        status_text = f"Endpoint configured ({url}) — handshake pending"
         status_label = "standby"
     else:
-        is_connected = True
-        status_label = "ready"
-        status_text = "Ready"
+        is_connected = False
+        status_label = "standby"
+        status_text = "Configured"
 
     _MCP_REGISTRY[clean_id] = {
         "name": server_name,
@@ -1041,17 +1041,38 @@ def get_all_mcp_servers() -> Dict[str, Any]:
 
 
 async def get_all_mcp_servers_with_health() -> Dict[str, Any]:
-    """Returns real-time connection status of all configured MCP servers with 5-tier lifecycle states."""
+    """
+    Returns real-time connection status of all configured MCP servers using
+    global_mcp_registry as the single authoritative source of truth.
+    Never reports connected=True unless a genuine MCP handshake and tool discovery succeeded.
+    """
     servers_summary = {}
-    for key, s in _MCP_REGISTRY.items():
-        url = s.get("url")
-        command = s.get("command")
+    # Ensure registry statuses are included
+    registry_statuses = {s["id"]: s for s in global_mcp_registry.get_server_statuses()}
+
+    all_keys = list(dict.fromkeys(list(_MCP_REGISTRY.keys()) + list(registry_statuses.keys())))
+    for key in all_keys:
+        s = _MCP_REGISTRY.get(key, {})
+        reg = registry_statuses.get(key, {})
+        client = global_mcp_registry.clients.get(key)
+
+        url = reg.get("endpoint") if reg.get("transport") == "http" else s.get("url")
+        command = reg.get("endpoint") if reg.get("transport") == "stdio" else s.get("command")
+        name = reg.get("name") or s.get("name") or key
+        description = reg.get("description") or s.get("description") or ""
+        tools = client.discovered_tools if (client and client.is_active()) else s.get("tools", [])
+
         is_live = False
         status_label = "standby"
-        status_text = "Standby"
-        lifecycle_state = "configured"
+        status_text = "Standby (not connected)"
+        lifecycle_state = reg.get("lifecycle_state", "configured")
 
-        if command:
+        if client and client.is_active():
+            is_live = True
+            status_label = "online"
+            lifecycle_state = client.state.value
+            status_text = f"Connected ({len(client.discovered_tools)} tools)"
+        elif command:
             cmd_path = os.path.expanduser(str(command))
             if os.path.exists(cmd_path) or shutil.which(cmd_path):
                 lifecycle_state = "executable_found"
@@ -1063,13 +1084,13 @@ async def get_all_mcp_servers_with_health() -> Dict[str, Any]:
                         lifecycle_state = "protocol_connected"
                         status_text = f"Live Studio: {session.active_place_name or 'Connected'}"
                     else:
-                        is_live = True
+                        is_live = False
                         status_label = "ready"
-                        status_text = f"Command Ready: {os.path.basename(cmd_path)}"
+                        status_text = f"Ready to connect: {os.path.basename(cmd_path)}"
                 else:
-                    is_live = True
+                    is_live = False
                     status_label = "ready"
-                    status_text = f"Command Ready: {os.path.basename(cmd_path)}"
+                    status_text = f"Ready to connect: {os.path.basename(cmd_path)}"
             else:
                 is_live = False
                 status_label = "standby"
@@ -1077,27 +1098,21 @@ async def get_all_mcp_servers_with_health() -> Dict[str, Any]:
                 status_text = f"File not found: {os.path.basename(cmd_path)}"
         elif url:
             lifecycle_state = "executable_found"
-            if url.startswith("http://127.0.0.1") or url.startswith("http://localhost"):
-                is_live = await check_server_health(url)
-                if is_live:
-                    status_label = "online"
-                    lifecycle_state = "process_running"
-                    status_text = "Online"
-                else:
-                    status_label = "standby"
-                    status_text = f"Standby on {url}"
+            is_live = False
+            status_label = "standby"
+            status_text = f"Configured ({url}) — handshake required"
 
         servers_summary[key] = {
-            "name": s["name"],
-            "description": s["description"],
+            "name": name,
+            "description": description,
             "command": command,
             "url": url,
             "connected": is_live,
             "status": status_label,
             "lifecycle_state": lifecycle_state,
             "status_text": status_text,
-            "tool_count": len(s.get("tools", [])),
-            "tools": s.get("tools", [])
+            "tool_count": len(tools),
+            "tools": tools
         }
     return servers_summary
 
@@ -1114,34 +1129,25 @@ def register_custom_mcp_server(
     Registers or updates an external/custom MCP server connection with SSRF protection.
     Enables Stroke to connect to any local or remote MCP server safely.
     """
+    import urllib.parse
     clean_id = server_id.strip().lower().replace(" ", "_")
-    is_local = "127.0.0.1" in url or "localhost" in url or "::1" in url
-    effective_allow_local = allow_local if allow_local is not None else is_local
+    parsed_url = urllib.parse.urlparse((url or "").strip())
+    parsed_host = (parsed_url.hostname or "").lower()
+    is_local = parsed_host in ("127.0.0.1", "localhost", "::1")
+    effective_allow_local = bool(allow_local) if allow_local is not None else is_local
 
     # Validate URL against SSRF
     validated_url = SsrfProtector.validate_url(url, allow_local=effective_allow_local)
 
     if not tools:
-        tools = [
-            {
-                "name": f"mcp_{clean_id}_execute",
-                "description": f"Executes an action or RPC query on connected MCP server '{name}'.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {"type": "string", "description": "Action or command name."},
-                        "payload": {"type": "object", "description": "JSON arguments payload."}
-                    },
-                    "required": ["action"]
-                }
-            }
-        ]
+        tools = []
 
     server_entry = {
         "name": name,
         "description": description,
         "url": validated_url,
-        "connected": True,
+        "connected": False,
+        "lifecycle_state": McpServerState.CONFIGURED.value,
         "is_custom": True,
         "allow_local": effective_allow_local,
         "tools": tools
@@ -1240,13 +1246,15 @@ def apply_mcp_config_json(config: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(servers_section, dict):
         raise ValueError("Invalid configuration: 'mcpServers' must be a JSON object mapping server names to server configs.")
 
+    import urllib.parse
     _MCP_REGISTRY.clear()
     connected = []
     for s_name, s_cfg in servers_section.items():
         if isinstance(s_cfg, dict):
             url = s_cfg.get("url") or s_cfg.get("endpoint")
             if url:
-                is_local = "127.0.0.1" in url or "localhost" in url or "::1" in url
+                parsed_host = (urllib.parse.urlparse(str(url)).hostname or "").lower()
+                is_local = parsed_host in ("127.0.0.1", "localhost", "::1")
                 allow_local = s_cfg.get("allow_local", is_local)
                 SsrfProtector.validate_url(url, allow_local=allow_local)
 
@@ -1279,62 +1287,100 @@ get_mcp_servers_info = get_all_mcp_servers
 
 
 def get_all_mcp_ai_tool_schemas() -> List[Dict[str, Any]]:
-    """Transforms registered MCP tools into standard function schemas for the AI."""
+    """Transforms registered MCP, workspace file, and terminal tools into standard function schemas for the AI."""
     ai_tools = []
-    has_studio = any("studio" in s.lower() for s in _MCP_REGISTRY.keys())
+    seen_names = set()
+
+    def _add_tool(name: str, desc: str, params: Dict[str, Any]):
+        if not name or name in seen_names:
+            return
+        seen_names.add(name)
+        ai_tools.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": desc,
+                "parameters": params or {"type": "object", "properties": {}}
+            }
+        })
+
+    # 1. Include authoritative workspace file & terminal coding tools
+    try:
+        from terminal_service import get_all_agent_tools_schema
+        for t in get_all_agent_tools_schema():
+            _add_tool(
+                t.get("name", ""),
+                t.get("description", ""),
+                t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
+            )
+    except Exception:
+        pass
+
+    # 2. Include live discovered tools from global_mcp_registry
+    try:
+        for t in global_mcp_registry.list_all_tools():
+            _add_tool(
+                t.get("name", ""),
+                t.get("description", ""),
+                t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
+            )
+    except Exception:
+        pass
+
+    has_studio = any("studio" in s.lower() for s in list(_MCP_REGISTRY.keys()) + list(global_mcp_registry.configs.keys()))
     if not has_studio:
         for t in get_roblox_studio_tools():
-            ai_tools.append({
-                "type": "function",
-                "function": {
-                    "name": t.get("name", ""),
-                    "description": t.get("description", ""),
-                    "parameters": t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
-                }
-            })
+            _add_tool(
+                t.get("name", ""),
+                t.get("description", ""),
+                t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
+            )
 
-    has_github = any("github" in s.lower() for s in _MCP_REGISTRY.keys())
+    has_github = any("github" in s.lower() for s in list(_MCP_REGISTRY.keys()) + list(global_mcp_registry.configs.keys()))
     if not has_github:
         for t in get_github_tools():
-            ai_tools.append({
-                "type": "function",
-                "function": {
-                    "name": t.get("name", ""),
-                    "description": t.get("description", ""),
-                    "parameters": t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
-                }
-            })
+            _add_tool(
+                t.get("name", ""),
+                t.get("description", ""),
+                t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
+            )
 
     for s in _MCP_REGISTRY.values():
         for t in s.get("tools", []):
-            ai_tools.append({
-                "type": "function",
-                "function": {
-                    "name": t.get("name", ""),
-                    "description": t.get("description", ""),
-                    "parameters": t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
-                }
-            })
+            _add_tool(
+                t.get("name", ""),
+                t.get("description", ""),
+                t.get("parameters") or t.get("inputSchema") or {"type": "object", "properties": {}}
+            )
     return ai_tools
 
 
-def select_active_tools_for_query(prompt: str, history: Optional[List[Dict[str, str]]] = None, max_tools: int = 8) -> List[Dict[str, Any]]:
+def select_active_tools_for_query(prompt: str, history: Optional[List[Dict[str, str]]] = None, max_tools: int = 16) -> List[Dict[str, Any]]:
     """
-    Two-Tier Dynamic Tool Selection for Llama 3.2 1B.
-    Selects 6 to 8 relevant tool schemas per turn to avoid starving the 1B context window,
-    while tools_search allows on-demand discovery of any other tool.
+    Selects relevant workspace coding, terminal, and MCP tool schemas for the AI turn.
+    Always exposes core workspace file/terminal tools plus active MCP tools.
     """
     p_lower = prompt.lower()
     if history:
         for m in history[-2:]:
             p_lower += " " + str(m.get("content", "")).lower()
 
-    selected_names = {"terminal_run", "terminal_read_output", "web_search", "tools_search"}
+    selected_names = {
+        "list_directory", "read_file", "create_file", "edit_file", "apply_patch", "search_files",
+        "terminal_run", "terminal_read_output", "web_search", "tools_search"
+    }
+
+    # Include any live discovered MCP tools from connected servers
+    try:
+        for t in global_mcp_registry.list_all_tools():
+            if t.get("name"):
+                selected_names.add(t["name"])
+    except Exception:
+        pass
 
     is_roblox = any(k in p_lower for k in ["roblox", "studio", "luau", "vfx", "particle", "part", "cframe", "hitbox", "tween", "model", "mesh", "script"])
     is_github = any(k in p_lower for k in ["git", "github", "commit", "pull request", "branch", "repo", "issue", "pr"])
     is_vfx = any(k in p_lower for k in ["vfx", "particle", "lightning", "fire", "spark", "explosion", "aura", "spell"])
-    is_file = any(k in p_lower for k in ["file", "directory", "folder", "read", "write", "patch", "search_files"])
 
     if is_roblox:
         selected_names.update(["execute_luau", "studio_execute_luau", "script_search", "insert_asset", "list_roblox_studios", "inspect_instance"])
@@ -1342,8 +1388,6 @@ def select_active_tools_for_query(prompt: str, history: Optional[List[Dict[str, 
         selected_names.update(["search_vfx_database", "generate_material", "insert_asset"])
     if is_github:
         selected_names.update(["github_commit_file", "github_get_file_contents", "github_create_pull_request", "github_list_repos"])
-    if is_file:
-        selected_names.update(["read_file", "list_directory", "create_file", "edit_file"])
 
     all_schemas = get_all_mcp_ai_tool_schemas()
     has_tools_search = any(s.get("function", {}).get("name") == "tools_search" for s in all_schemas)

@@ -234,11 +234,14 @@ class BackendSupervisor:
         # Initialize and guarantee user-level persistent directories (outside read-only bundle)
         paths_service.ensure_user_directories()
 
-        # Configure environment ports and instance identity for child handlers
+        # Configure environment ports, instance identity, and per-session internal secret
         os.environ["PORT"] = str(self.port)
         os.environ["STROKE_PORT"] = str(self.port)
         os.environ["STROKE_INSTANCE_ID"] = self.instance_id
         os.environ["STROKE_APP_DATA"] = str(paths_service.get_app_data_dir())
+        if not os.environ.get("STROKE_INTERNAL_SECRET"):
+            import secrets
+            os.environ["STROKE_INTERNAL_SECRET"] = secrets.token_urlsafe(32)
 
         import uvicorn
         from main import app

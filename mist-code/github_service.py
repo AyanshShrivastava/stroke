@@ -32,11 +32,13 @@ if not GITHUB_API_BASE.startswith("https://"):
     GITHUB_API_BASE = "https://api.github.com"
 
 VAULT_DIR = str(paths_service.get_app_data_dir() / "credentials")
-KEY_FILE = os.path.join(VAULT_DIR, ".vault_key")
+KEY_DIR = str(paths_service.get_app_data_dir() / ".keys")
+KEY_FILE = os.path.join(KEY_DIR, ".github_vault_key")
 TOKEN_VAULT_FILE = os.path.join(VAULT_DIR, ".github_token.enc")
-_LEGACY_VAULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-_LEGACY_KEY_FILE = os.path.join(_LEGACY_VAULT_DIR, ".vault_key")
-_LEGACY_TOKEN_FILE = os.path.join(_LEGACY_VAULT_DIR, ".github_token.enc")
+_KEYRING_SERVICE = "stroke_github_pat"
+_KEYRING_ACCOUNT = "github_pat"
+_KEYRING_MASTER_SERVICE = "stroke_vault_master"
+_KEYRING_MASTER_ACCOUNT = "github_vault_key"
 
 # Validation regex patterns
 REPO_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$")
@@ -80,19 +82,41 @@ def validate_ref_name(ref: Optional[str]) -> bool:
 # ------------------------------------------------------------------------------
 # SECURE LOCAL TOKEN VAULT (MACHINE IDENTITY ENCRYPTION, 0600 PERMISSIONS)
 # ------------------------------------------------------------------------------
+def _is_keyring_usable() -> bool:
+    try:
+        import keyring
+        kr = keyring.get_keyring()
+        return bool(kr and "fail" not in kr.__class__.__name__.lower())
+    except Exception:
+        return False
+
+
 def _get_or_create_vault_cipher() -> Fernet:
     """
-    Derives or loads an authentic Fernet encryption key stored in stable user application data
-    with 0600 file permissions and 0700 directory permissions.
-    Refuses to silently overwrite existing damaged keys when encrypted token data exists.
+    Loads or creates an authentic Fernet encryption key.
+    1. Prefers OS keyring ('stroke_vault_master' / 'github_vault_key') so the key
+       is never stored beside the encrypted token file.
+    2. Falls back to a 0600 key file in .keys/ (never migrating from compromised repo data/.vault_key).
     """
     os.makedirs(VAULT_DIR, exist_ok=True)
+    os.makedirs(KEY_DIR, exist_ok=True)
     try:
         os.chmod(VAULT_DIR, 0o700)
+        os.chmod(KEY_DIR, 0o700)
     except Exception:
         pass
 
-    # 1. Primary stable location
+    # 1. Prefer OS keyring for master key
+    if _is_keyring_usable():
+        try:
+            import keyring
+            kr_key = keyring.get_password(_KEYRING_MASTER_SERVICE, _KEYRING_MASTER_ACCOUNT)
+            if kr_key and len(kr_key.strip()) == 44:
+                return Fernet(kr_key.strip().encode("utf-8"))
+        except Exception as e:
+            logger.debug("Keyring master key lookup skipped: %s", e)
+
+    # 2. Separate .keys/ fallback location
     if os.path.exists(KEY_FILE):
         try:
             with open(KEY_FILE, "rb") as f:
@@ -118,30 +142,15 @@ def _get_or_create_vault_cipher() -> Fernet:
                 )
             logger.warning("Corrupted key without token file, regenerating: %s", e)
 
-    # 2. Seamless migration from legacy source-directory key and token file
-    if not os.path.exists(KEY_FILE) and os.path.exists(_LEGACY_KEY_FILE):
+    # 3. Generate fresh CSPRNG Fernet key
+    key = Fernet.generate_key()
+    if _is_keyring_usable():
         try:
-            with open(_LEGACY_KEY_FILE, "rb") as f:
-                legacy_key = f.read().strip()
-            if len(legacy_key) == 44:
-                fd = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-                with open(fd, "wb") as f:
-                    f.write(legacy_key)
-                logger.info("Migrated legacy GitHub vault key to %s", KEY_FILE)
-                if not os.path.exists(TOKEN_VAULT_FILE) and os.path.exists(_LEGACY_TOKEN_FILE):
-                    import shutil
-                    shutil.copy2(_LEGACY_TOKEN_FILE, TOKEN_VAULT_FILE)
-                    os.chmod(TOKEN_VAULT_FILE, 0o600)
-                    logger.info("Migrated legacy GitHub encrypted token to %s", TOKEN_VAULT_FILE)
-                return Fernet(legacy_key)
-        except Exception as mig_err:
-            logger.warning("Legacy GitHub vault migration failed: %s", mig_err)
-
-    # 3. Derive key from machine node + local CSPRNG bytes
-    machine_id = str(uuid.getnode()).encode("utf-8")
-    salt = os.urandom(16)
-    derived = hashlib.pbkdf2_hmac("sha256", machine_id, salt, 100_000)
-    key = base64.urlsafe_b64encode(derived[:32])
+            import keyring
+            keyring.set_password(_KEYRING_MASTER_SERVICE, _KEYRING_MASTER_ACCOUNT, key.decode("utf-8"))
+            return Fernet(key)
+        except Exception as e:
+            logger.info("Keyring master key store failed, falling back to 0600 key file: %s", e)
 
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
@@ -156,10 +165,24 @@ def _get_or_create_vault_cipher() -> Fernet:
 
 
 def save_github_token(token: str) -> bool:
-    """Encrypts and safely stores GitHub PAT in the local machine vault with 0600 permissions."""
+    """Stores GitHub PAT in OS keyring first, falling back to encrypted local vault with 0600 permissions."""
     token = token.strip()
     if not token:
         return False
+
+    if _is_keyring_usable():
+        try:
+            import keyring
+            keyring.set_password(_KEYRING_SERVICE, _KEYRING_ACCOUNT, token)
+            if os.path.exists(TOKEN_VAULT_FILE):
+                try:
+                    os.remove(TOKEN_VAULT_FILE)
+                except Exception:
+                    pass
+            logger.info("GitHub PAT stored in OS credential store.")
+            return True
+        except Exception as e:
+            logger.info("OS keyring storage failed for GitHub PAT, using encrypted vault: %s", e)
 
     try:
         cipher = _get_or_create_vault_cipher()
@@ -180,7 +203,16 @@ store_github_token = save_github_token
 
 
 def _read_vault_token() -> Optional[str]:
-    """Reads and decrypts stored PAT from machine vault."""
+    """Reads PAT from OS keyring first, then decrypts from machine vault if present."""
+    if _is_keyring_usable():
+        try:
+            import keyring
+            kr_tok = keyring.get_password(_KEYRING_SERVICE, _KEYRING_ACCOUNT)
+            if kr_tok and kr_tok.strip():
+                return kr_tok.strip()
+        except Exception:
+            pass
+
     if not os.path.exists(TOKEN_VAULT_FILE):
         return None
     try:
@@ -191,7 +223,7 @@ def _read_vault_token() -> Optional[str]:
         clean = decrypted.strip()
         return clean if clean else None
     except Exception as e:
-        logger.warning("Failed to decrypt stored GitHub PAT from vault.")
+        logger.warning("Failed to decrypt stored GitHub PAT from vault (re-entry/rotation may be required).")
         return None
 
 
@@ -239,11 +271,19 @@ def get_github_credential_state() -> Dict[str, Any]:
 
 def clear_stored_github_token() -> Dict[str, Any]:
     """
-    Removes user-managed stored token from disk vault.
+    Removes user-managed stored token from OS keyring and disk vault.
     Accurately reports whether an environment-managed token remains active.
     Never mutates the user's host or process environment.
     """
     vault_cleared = False
+    if _is_keyring_usable():
+        try:
+            import keyring
+            keyring.delete_password(_KEYRING_SERVICE, _KEYRING_ACCOUNT)
+            vault_cleared = True
+        except Exception:
+            pass
+
     if os.path.exists(TOKEN_VAULT_FILE):
         try:
             os.remove(TOKEN_VAULT_FILE)

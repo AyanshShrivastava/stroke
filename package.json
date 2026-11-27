@@ -14,7 +14,7 @@
     "clean": "rm -rf dist server.js",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/data/models.test.ts src/utils/webSearch.test.ts src/utils/security.test.ts src/utils/mistServerApp.test.ts src/utils/publishIsolation.test.ts src/utils/notification.test.ts src/utils/projectOps.test.ts src/utils/aiErrors.test.ts src/server/migration.test.ts cloudflare/src/index.test.ts src/firebase/syncStore.test.ts src/utils/backendSecurity.test.ts src/server/deploymentMigration.test.ts src/server/cloudflarePublishing.test.ts src/server/renderIntegration.test.ts src/server/releaseReadiness.test.ts",
+    "test": "tsx --test src/data/models.test.ts src/utils/webSearch.test.ts src/utils/security.test.ts src/utils/mistServerApp.test.ts src/utils/streamingAndVerification.test.ts src/utils/publishIsolation.test.ts src/utils/notification.test.ts src/utils/projectOps.test.ts src/utils/aiErrors.test.ts src/server/migration.test.ts cloudflare/src/index.test.ts src/firebase/syncStore.test.ts src/utils/backendSecurity.test.ts src/server/deploymentMigration.test.ts src/server/cloudflarePublishing.test.ts src/server/renderIntegration.test.ts src/server/releaseReadiness.test.ts",
     "test:ci": "npm run typecheck && npm run test && npm run build",
     "migrate:identities": "tsx scripts/migrate-identities.ts",
     "migrate:deployments": "tsx scripts/migrate-deployments-to-r2.ts",

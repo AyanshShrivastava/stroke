@@ -1402,11 +1402,14 @@ async function queryStroke(prompt) {
         <div class="flex flex-wrap items-center gap-2 sm:space-x-3">
           <div class="flex items-center space-x-1.5">
             <span id="terminalConsoleDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-            <h3 class="font-mono font-bold text-white text-sm">Terminal Streaming Console</h3>
+            <h3 class="font-mono font-bold text-white text-sm">Interactive Terminal</h3>
           </div>
           <select id="terminalSessionSelect" class="bg-black/60 border border-brand-border rounded-lg px-2.5 py-1 text-xs font-mono text-emerald-400 focus:outline-none max-w-[140px] sm:max-w-xs truncate">
             <option value="">No Active Sessions</option>
           </select>
+          <button id="newTerminalSessionBtn" type="button" class="px-2.5 py-1 rounded-lg bg-brand-accent/20 border border-brand-accent/40 text-brand-accent hover:bg-brand-accent/30 text-xs font-mono transition-colors cursor-pointer">
+            + New Shell
+          </button>
           <span id="terminalStateBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border">Idle</span>
         </div>
         <div class="flex items-center space-x-2">
@@ -1427,12 +1430,21 @@ async function queryStroke(prompt) {
 
       <!-- Real-Time Monospace Output Console -->
       <div id="terminalOutputLog" class="flex-1 bg-[#050508] border border-brand-border/60 rounded-xl p-3.5 font-mono text-xs overflow-y-auto space-y-1 select-text leading-relaxed">
-        <div class="text-brand-muted italic">[Terminal Console Ready. Real-time incremental delta streaming active.]</div>
+        <div class="text-brand-muted italic">[Interactive Terminal Ready. Click "+ New Shell" or type a command below.]</div>
       </div>
+
+      <!-- Interactive Command Input Bar -->
+      <form id="terminalCommandForm" class="flex items-center gap-2">
+        <span class="text-emerald-400 font-mono text-xs select-none">$</span>
+        <input id="terminalCommandInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type command (e.g., ls, pytest, cd subdir, python --version)..." class="flex-1 bg-black/70 border border-brand-border focus:border-brand-accent rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-brand-muted focus:outline-none">
+        <button id="terminalSendBtn" type="submit" class="px-4 py-2 rounded-xl bg-brand-accent text-black font-mono font-semibold text-xs hover:bg-emerald-400 transition-colors cursor-pointer">
+          Run
+        </button>
+      </form>
 
       <!-- Terminal Footer Info -->
       <div class="flex items-center justify-between text-[11px] text-brand-muted font-mono pt-1">
-        <span id="terminalPathText">Workspace: ~/.gemini/antigravity/scratch</span>
+        <span id="terminalPathText">Workspace: Not selected</span>
         <span id="terminalSeqText">Stream Seq: 0</span>
       </div>
     </div>
@@ -1700,9 +1712,21 @@ async function queryStroke(prompt) {
 
       <div>
         <label class="block text-[10px] font-mono uppercase text-brand-muted mb-1.5">Approved Workspaces Catalog</label>
-        <div id="approvedWorkspacesList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+        <div id="approvedWorkspacesList" class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
           <!-- Populated dynamically via loadApprovedWorkspaces() -->
         </div>
+      </div>
+
+      <!-- Workspace File Browser & Preview -->
+      <div class="border-t border-brand-border/60 pt-3 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono uppercase text-brand-muted">Project File Browser</span>
+          <span id="workspaceBrowserPath" class="text-[10px] font-mono text-emerald-400 truncate max-w-[260px]">Select a workspace to browse</span>
+        </div>
+        <div id="workspaceFilesBrowserList" class="max-h-36 overflow-y-auto space-y-1 rounded-xl bg-black/50 border border-brand-border/60 p-2 text-xs font-mono">
+          <div class="text-brand-muted text-[11px] italic">Click "Browse" on any approved workspace above.</div>
+        </div>
+        <pre id="workspaceFilePreview" class="hidden max-h-36 overflow-y-auto rounded-xl bg-black/80 border border-brand-border/60 p-2.5 text-[11px] font-mono text-emerald-200 whitespace-pre-wrap"></pre>
       </div>
 
       <div class="pt-2 flex justify-end">
@@ -1898,6 +1922,31 @@ async function queryStroke(prompt) {
               <input id="keyInputDeepseek" type="password" placeholder="sk-... (DeepSeek API Key)" class="flex-1 bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500/50">
               <button onclick="saveProviderKey('deepseek')" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium cursor-pointer transition-colors">Save Key</button>
               <button onclick="testProviderConnection('deepseek')" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-medium border border-white/10 cursor-pointer transition-colors">Test</button>
+            </div>
+          </div>
+
+          <!-- Custom OpenAI / Anthropic Compatible Endpoint Card -->
+          <div class="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-fuchsia-400"></span>
+                <span class="text-xs font-bold text-white font-sans">Custom Compatible Endpoint</span>
+                <span class="text-[10px] text-zinc-400 font-mono">OpenAI / Anthropic API format</span>
+              </div>
+              <span id="statusBadgeCustom" class="text-[10px] px-2 py-0.5 rounded font-mono bg-zinc-800 text-zinc-400 border border-white/5">Not Configured</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input id="customBaseUrlInput" type="url" placeholder="https://api.example.com/v1" class="bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-fuchsia-500/50">
+              <input id="customModelIdInput" type="text" placeholder="Model ID (e.g. my-model)" class="bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-fuchsia-500/50">
+              <select id="customProviderTypeSelect" class="bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none">
+                <option value="openai">OpenAI Compatible</option>
+                <option value="anthropic">Anthropic Compatible</option>
+              </select>
+            </div>
+            <div class="flex items-center space-x-2">
+              <input id="keyInputCustom" type="password" placeholder="Custom Endpoint API Key" class="flex-1 bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-fuchsia-500/50">
+              <button onclick="saveCustomProviderKey()" class="px-3 py-1.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-medium cursor-pointer transition-colors">Save Custom</button>
+              <button onclick="testProviderConnection('custom')" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 text-xs font-medium border border-white/10 cursor-pointer transition-colors">Test</button>
             </div>
           </div>
         </div>
@@ -2140,7 +2189,8 @@ async function queryStroke(prompt) {
       let greetingView = document.getElementById('greetingView');
       let appWorkspace = document.getElementById('appWorkspace');
       let isAuth = !!(state.userEmail && state.idToken);
-      let shouldShowWorkspace = isAuth || state.hasLaunched || localStorage.getItem('stroke_has_launched') === 'true';
+      let hasLocalSession = !!_strokeSessionToken;
+      let shouldShowWorkspace = hasLocalSession || isAuth || state.hasLaunched || localStorage.getItem('stroke_has_launched') === 'true';
       if (!shouldShowWorkspace) {
         if (greetingView) {
           greetingView.classList.remove('hidden');
@@ -3774,10 +3824,11 @@ async function queryStroke(prompt) {
     function renderMcpServersSummary(serversObj, healthData = {}) {
       mcpServersList.innerHTML = '';
       const keys = Object.keys(serversObj);
+      const connectedCount = keys.filter(k => (healthData[k] || {}).connected === true).length;
       const badge = document.getElementById('mcpConnectedCountBadge');
       if (badge) {
-        badge.textContent = keys.length > 0 ? `${keys.length} Active` : '0 Active';
-        badge.className = keys.length > 0 
+        badge.textContent = connectedCount > 0 ? `${connectedCount} Connected` : `${keys.length} Configured`;
+        badge.className = connectedCount > 0
           ? 'text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/10 text-brand-accent border border-brand-accent/30 font-mono'
           : 'text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-brand-muted border border-brand-border font-mono';
       }
@@ -3788,22 +3839,92 @@ async function queryStroke(prompt) {
       keys.forEach(k => {
         const s = serversObj[k];
         const h = healthData[k] || {};
-        const isOnline = h.status === 'online' || h.status === 'ready' || h.connected === true;
-        const statusLabel = isOnline ? (h.status === 'ready' ? 'Ready' : 'Online') : 'Standby';
-        const dotColor = isOnline ? 'bg-brand-accent' : 'bg-amber-400';
-        const badgeClass = isOnline ? 'bg-brand-accent/20 text-brand-accent border-brand-accent/40' : 'bg-amber-400/20 text-amber-300 border-amber-400/30';
+        const isConnected = h.connected === true;
+        const statusLabel = isConnected ? 'Connected' : (h.status === 'ready' ? 'Ready' : 'Standby');
+        const dotColor = isConnected ? 'bg-brand-accent' : 'bg-amber-400';
+        const badgeClass = isConnected ? 'bg-brand-accent/20 text-brand-accent border-brand-accent/40' : 'bg-amber-400/20 text-amber-300 border-amber-400/30';
         const targetDesc = s.command || s.url || 'configured';
 
         const span = document.createElement('span');
-        span.className = 'px-2.5 py-1.5 rounded-lg bg-brand-card border border-brand-border text-white text-[11px] font-mono flex items-center space-x-2 max-w-full truncate';
+        span.className = 'px-2.5 py-1.5 rounded-lg bg-brand-card border border-brand-border text-white text-[11px] font-mono flex items-center space-x-2 max-w-full';
         span.innerHTML = `
           <span class="w-2 h-2 rounded-full ${dotColor} flex-shrink-0"></span>
           <span class="font-semibold text-white">${escapeHtml(k)}</span>
           <span class="text-[9px] px-1.5 py-0.5 rounded border ${badgeClass} font-sans uppercase font-bold flex-shrink-0">${statusLabel}</span>
-          <span class="text-brand-muted text-[10px] truncate max-w-[220px]" title="${escapeHtml(targetDesc)}">(${escapeHtml(targetDesc)})</span>
+          <span class="text-brand-muted text-[10px] truncate max-w-[180px]" title="${escapeHtml(targetDesc)}">(${escapeHtml(targetDesc)})</span>
         `;
+        if (s.url) {
+          const actionBtn = document.createElement('button');
+          actionBtn.type = 'button';
+          actionBtn.className = isConnected
+            ? 'ml-1 px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 hover:bg-red-500/30 text-[9px] font-sans cursor-pointer'
+            : 'ml-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-[9px] font-sans cursor-pointer';
+          actionBtn.textContent = isConnected ? 'Disconnect' : 'Connect';
+          actionBtn.addEventListener('click', async () => {
+            if (isConnected) {
+              await disconnectMcpServerFromUi(k);
+            } else {
+              await connectMcpServerFromUi(k, s.name || k, s.url);
+            }
+          });
+          span.appendChild(actionBtn);
+        }
         mcpServersList.appendChild(span);
       });
+    }
+
+    async function connectMcpServerFromUi(serverId, name, url) {
+      try {
+        const apprRes = await fetch('/mcp/approval/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ server_id: serverId, action: 'connect', target: url })
+        });
+        const apprData = await apprRes.json();
+        if (!apprRes.ok || !apprData.approval_id) {
+          showToast(apprData.detail || 'Could not obtain MCP approval.', 'error');
+          return;
+        }
+        const isLocal = url.includes('127.0.0.1') || url.includes('localhost') || url.includes('::1');
+        const connRes = await fetch('/mcp/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            server_id: serverId,
+            name: name || serverId,
+            url,
+            allow_local: isLocal,
+            approval_id: apprData.approval_id
+          })
+        });
+        const connData = await connRes.json();
+        if (connRes.ok) {
+          showToast(`Connected MCP server: ${name || serverId}`, 'success');
+          await loadMcpConfigJson();
+          await loadDiscoveredMcpTools();
+        } else {
+          showToast(connData.detail || 'MCP handshake failed.', 'error');
+        }
+      } catch (e) {
+        showToast('MCP connect error: ' + e.message, 'error');
+      }
+    }
+
+    async function disconnectMcpServerFromUi(serverId) {
+      try {
+        const res = await fetch('/mcp/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ server_id: serverId })
+        });
+        if (res.ok) {
+          showToast(`Disconnected MCP server: ${serverId}`);
+          await loadMcpConfigJson();
+          await loadDiscoveredMcpTools();
+        }
+      } catch (e) {
+        showToast('MCP disconnect error: ' + e.message, 'error');
+      }
     }
 
     saveMcpConfigBtn.addEventListener('click', async () => {
@@ -4096,6 +4217,103 @@ async function queryStroke(prompt) {
         } finally {
           terminalStopBtn.disabled = false;
           terminalStopBtn.textContent = 'Stop Process';
+        }
+      });
+    }
+
+    const newTerminalSessionBtn = document.getElementById('newTerminalSessionBtn');
+    const terminalCommandForm = document.getElementById('terminalCommandForm');
+    const terminalCommandInput = document.getElementById('terminalCommandInput');
+    let activeInteractivePtySessions = new Set();
+
+    async function createAndStartInteractiveTerminal() {
+      const wsRes = await fetch('/workspace/list-approved').catch(() => null);
+      let wsPath = null;
+      if (wsRes && wsRes.ok) {
+        const wsData = await wsRes.json().catch(() => ({}));
+        if (wsData.workspaces && wsData.workspaces.length > 0) {
+          wsPath = wsData.workspaces[0].path;
+        }
+      }
+      const createRes = await fetch('/terminal/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(wsPath ? { workspace_path: wsPath } : {})
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok) {
+        throw new Error(createData.detail || 'Failed to create terminal session');
+      }
+      currentTerminalSessionId = createData.session_id;
+      terminalCurrentSeq = 0;
+      const ptyRes = await fetch(`/terminal/${encodeURIComponent(currentTerminalSessionId)}/pty/start`, {
+        method: 'POST'
+      });
+      if (ptyRes.ok) {
+        activeInteractivePtySessions.add(currentTerminalSessionId);
+        const ptyData = await ptyRes.json().catch(() => ({}));
+        if (terminalPathText && ptyData.cwd) terminalPathText.textContent = `Workspace: ${ptyData.cwd}`;
+      }
+      await refreshTerminalSessions();
+      return currentTerminalSessionId;
+    }
+
+    if (newTerminalSessionBtn) {
+      newTerminalSessionBtn.addEventListener('click', async () => {
+        try {
+          await createAndStartInteractiveTerminal();
+          if (terminalCommandInput) terminalCommandInput.focus();
+          showToast('Interactive terminal session started.', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
+    }
+
+    if (terminalCommandForm && terminalCommandInput) {
+      terminalCommandForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const rawCmd = terminalCommandInput.value;
+        if (!rawCmd.trim()) return;
+        terminalCommandInput.value = '';
+        try {
+          if (!currentTerminalSessionId) {
+            await createAndStartInteractiveTerminal();
+          }
+          const trimmed = rawCmd.trim();
+          if (trimmed.startsWith('cd ')) {
+            const targetDir = trimmed.slice(3).trim();
+            const cdRes = await fetch(`/terminal/${encodeURIComponent(currentTerminalSessionId)}/cd`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: targetDir })
+            });
+            const cdData = await cdRes.json().catch(() => ({}));
+            if (!cdRes.ok) {
+              showToast(cdData.detail || 'Directory change denied.', 'error');
+              return;
+            }
+            if (terminalPathText && cdData.cwd) terminalPathText.textContent = `Workspace: ${cdData.cwd}`;
+          }
+          if (!activeInteractivePtySessions.has(currentTerminalSessionId)) {
+            const ptyRes = await fetch(`/terminal/${encodeURIComponent(currentTerminalSessionId)}/pty/start`, {
+              method: 'POST'
+            });
+            if (ptyRes.ok) activeInteractivePtySessions.add(currentTerminalSessionId);
+          }
+          const inRes = await fetch(`/terminal/${encodeURIComponent(currentTerminalSessionId)}/input`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: rawCmd + '\n' })
+          });
+          if (!inRes.ok) {
+            const errData = await inRes.json().catch(() => ({}));
+            showToast(errData.detail || 'Failed to send terminal input.', 'error');
+          } else {
+            setTimeout(pollTerminalDelta, 120);
+          }
+        } catch (err) {
+          showToast('Terminal error: ' + err.message, 'error');
         }
       });
     }
@@ -5160,7 +5378,10 @@ async function queryStroke(prompt) {
     let firebaseAuth = null;
     let authInitialized = false;
 
-    // Intercept window.fetch to attach verified Firebase ID token to all backend requests
+    const _strokeSessionMeta = (typeof document !== 'undefined') ? document.querySelector('meta[name="stroke-session-token"]') : null;
+    const _strokeSessionToken = _strokeSessionMeta ? (_strokeSessionMeta.getAttribute('content') || '').trim() : '';
+
+    // Intercept window.fetch to attach local session token and optional Bearer ID token to all backend requests
     const _originalFetch = (typeof window !== 'undefined' && typeof window.fetch === 'function') ? window.fetch.bind(window) : ((typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function') ? globalThis.fetch.bind(globalThis) : null);
     window.fetch = async function(input, init) {
       if (typeof input === 'string' && input.startsWith('/') && typeof window !== 'undefined' && window.location && window.location.origin) {
@@ -5168,21 +5389,24 @@ async function queryStroke(prompt) {
       }
       init = init || {};
       init.headers = init.headers || {};
-      if (state.idToken) {
+      const _setHeader = (name, value) => {
+        if (!value) return;
         if (init.headers instanceof Headers) {
-          if (!init.headers.has('Authorization')) {
-            init.headers.set('Authorization', `Bearer ${state.idToken}`);
-          }
+          if (!init.headers.has(name)) init.headers.set(name, value);
         } else if (Array.isArray(init.headers)) {
-          const hasAuth = init.headers.some(([k]) => k.toLowerCase() === 'authorization');
-          if (!hasAuth) {
-            init.headers.push(['Authorization', `Bearer ${state.idToken}`]);
-          }
+          const exists = init.headers.some(([k]) => k.toLowerCase() === name.toLowerCase());
+          if (!exists) init.headers.push([name, value]);
         } else {
-          if (!init.headers['Authorization'] && !init.headers['authorization']) {
-            init.headers['Authorization'] = `Bearer ${state.idToken}`;
+          if (!init.headers[name] && !init.headers[name.toLowerCase()]) {
+            init.headers[name] = value;
           }
         }
+      };
+      if (_strokeSessionToken) {
+        _setHeader('X-Stroke-Token', _strokeSessionToken);
+      }
+      if (state.idToken) {
+        _setHeader('Authorization', `Bearer ${state.idToken}`);
       }
       if (_originalFetch) {
         return _originalFetch(input, init);
@@ -6135,14 +6359,83 @@ async function queryStroke(prompt) {
                 </div>
                 <div class="text-[10px] text-brand-muted font-mono truncate mt-0.5">${escapeHtml(ws.path)}</div>
               </div>
-              <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-brand-muted font-mono shrink-0">Approved</span>
+              <div class="flex items-center space-x-1.5 shrink-0">
+                <button type="button" onclick="browseWorkspaceDir('${escapeHtml(ws.path).replace(/'/g, "\\'")}')" class="text-[10px] px-2 py-0.5 rounded bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 font-mono cursor-pointer">Browse</button>
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-brand-muted font-mono">Approved</span>
+              </div>
             </div>
           `).join('');
+          if (list.length > 0 && typeof window.browseWorkspaceDir === 'function') {
+            window.browseWorkspaceDir(list[0].path);
+          }
         }
       } catch (e) {
         console.error('Failed to load workspaces:', e);
       }
     }
+
+    window.browseWorkspaceDir = async function(dirPath) {
+      const listEl = document.getElementById('workspaceFilesBrowserList');
+      const pathLabel = document.getElementById('workspaceBrowserPath');
+      const previewEl = document.getElementById('workspaceFilePreview');
+      if (!listEl) return;
+      if (pathLabel) pathLabel.textContent = dirPath;
+      if (previewEl) previewEl.classList.add('hidden');
+      listEl.innerHTML = '<div class="text-brand-muted text-[11px] italic">Loading files...</div>';
+      try {
+        const res = await fetch('/fs/list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dir_path: dirPath, recursive: false })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          listEl.innerHTML = `<div class="text-red-400 text-[11px]">${escapeHtml(data.detail || 'Cannot list directory')}</div>`;
+          return;
+        }
+        const items = data.items || [];
+        if (items.length === 0) {
+          listEl.innerHTML = '<div class="text-brand-muted text-[11px] italic">Directory is empty.</div>';
+          return;
+        }
+        listEl.innerHTML = '';
+        items.slice(0, 100).forEach(it => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'w-full text-left px-2 py-1 rounded hover:bg-white/5 flex items-center justify-between text-[11px] text-white cursor-pointer';
+          row.innerHTML = `<span class="truncate">${it.is_dir ? '📁 ' : '📄 '}${escapeHtml(it.name)}</span><span class="text-[10px] text-brand-muted ml-2 shrink-0">${it.is_dir ? 'DIR' : (it.size_bytes + ' B')}</span>`;
+          row.addEventListener('click', () => {
+            if (it.is_dir) window.browseWorkspaceDir(it.path);
+            else window.previewWorkspaceFile(it.path);
+          });
+          listEl.appendChild(row);
+        });
+      } catch (err) {
+        listEl.innerHTML = `<div class="text-red-400 text-[11px]">${escapeHtml(err.message)}</div>`;
+      }
+    };
+
+    window.previewWorkspaceFile = async function(filePath) {
+      const previewEl = document.getElementById('workspaceFilePreview');
+      if (!previewEl) return;
+      previewEl.classList.remove('hidden');
+      previewEl.textContent = 'Loading file...';
+      try {
+        const res = await fetch('/fs/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: filePath, start_line: 1, end_line: 120 })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          previewEl.textContent = data.detail || 'Failed to read file.';
+          return;
+        }
+        previewEl.textContent = data.is_binary ? (data.message || '[Binary file]') : (data.content || '');
+      } catch (err) {
+        previewEl.textContent = 'Read error: ' + err.message;
+      }
+    };
 
     if (openWorkspacesBtn) {
       openWorkspacesBtn.addEventListener('click', () => {
@@ -6290,6 +6583,42 @@ async function queryStroke(prompt) {
     if (closeModelsModalBtn) closeModelsModalBtn.addEventListener('click', closeByokModelsModal);
     if (closeModelsDoneBtn) closeModelsDoneBtn.addEventListener('click', closeByokModelsModal);
 
+    // Save Custom BYOK Provider Key + Metadata
+    window.saveCustomProviderKey = async function() {
+      const baseUrl = (document.getElementById('customBaseUrlInput')?.value || '').trim();
+      const modelId = (document.getElementById('customModelIdInput')?.value || '').trim();
+      const provType = (document.getElementById('customProviderTypeSelect')?.value || 'openai').trim();
+      const apiKey = (document.getElementById('keyInputCustom')?.value || '').trim();
+      if (!baseUrl || !apiKey) {
+        showToast('Please enter both Base URL and API key for your Custom endpoint.', 'warning');
+        return;
+      }
+      try {
+        const res = await fetch('/api/models/credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: 'custom',
+            api_key: apiKey,
+            metadata: { base_url: baseUrl, model_id: modelId || 'custom-model', provider_type: provType }
+          })
+        });
+        if (res.ok) {
+          showToast('✓ Custom provider endpoint & API key saved!', 'success');
+          if (modelId) {
+            await window.selectActiveByokModel('custom', modelId, modelId);
+          } else {
+            await loadByokStatusAndCatalog();
+          }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(`Failed to save custom endpoint: ${err.detail || res.statusText}`, 'error');
+        }
+      } catch (e) {
+        showToast(`Network error saving custom provider: ${e.message}`, 'error');
+      }
+    };
+
     // Save BYOK Provider Key
     window.saveProviderKey = async function(provider) {
       const capProv = provider.charAt(0).toUpperCase() + provider.slice(1);
@@ -6416,7 +6745,7 @@ async function queryStroke(prompt) {
         if (resProv.ok) {
           const dataProv = await resProv.json();
           const provList = dataProv.providers || [];
-          ['gemini', 'anthropic', 'openai', 'groq', 'openrouter', 'deepseek'].forEach(p => {
+          ['gemini', 'anthropic', 'openai', 'groq', 'openrouter', 'deepseek', 'custom'].forEach(p => {
             const cap = p.charAt(0).toUpperCase() + p.slice(1);
             const badge = document.getElementById(`statusBadge${cap}`);
             const input = document.getElementById(`keyInput${cap}`);

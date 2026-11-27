@@ -203,31 +203,50 @@ async function consumeAiSseStream(
   let buffer = '';
   let completedResult: Record<string, unknown> | null = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  const processSseLine = (rawLine: string) => {
+    const line = rawLine.trim();
+    if (!line.startsWith('data:')) return;
+    const rawJson = line.slice(5).trim();
+    if (!rawJson) return;
+    const ev = JSON.parse(rawJson) as SseStreamPayload;
+    onEvent(ev);
+    if (ev.type === 'error') {
+      const err = new Error(ev.incident?.message || ev.error || 'AI request failed.') as Error & {
+        incident?: ModelHealthIncident;
+      };
+      err.incident = ev.incident;
+      throw err;
+    }
+    if (ev.type === 'complete' && ev.result) {
+      completedResult = ev.result;
+    }
+  };
 
-    let nlIndex: number;
-    while ((nlIndex = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, nlIndex).trim();
-      buffer = buffer.slice(nlIndex + 1);
-      if (!line.startsWith('data:')) continue;
-      const rawJson = line.slice(5).trim();
-      if (!rawJson) continue;
-      const ev = JSON.parse(rawJson) as SseStreamPayload;
-      onEvent(ev);
-      if (ev.type === 'error') {
-        const err = new Error(ev.incident?.message || ev.error || 'AI request failed.') as Error & {
-          incident?: ModelHealthIncident;
-        };
-        err.incident = ev.incident;
-        throw err;
-      }
-      if (ev.type === 'complete' && ev.result) {
-        completedResult = ev.result;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+      let nlIndex: number;
+      while ((nlIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nlIndex);
+        buffer = buffer.slice(nlIndex + 1);
+        processSseLine(line);
       }
     }
+
+    buffer += decoder.decode().replace(/\r\n/g, '\n');
+    if (buffer.trim()) {
+      for (const trailingLine of buffer.split('\n')) {
+        processSseLine(trailingLine);
+      }
+    }
+  } catch (err) {
+    await reader.cancel().catch(() => {});
+    throw err;
+  } finally {
+    reader.releaseLock();
   }
 
   if (!completedResult) {

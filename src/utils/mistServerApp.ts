@@ -1,6 +1,7 @@
 import express, { type Express } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import nodeCrypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import * as esbuild from 'esbuild';
 import { compile as compileTailwind } from 'tailwindcss';
@@ -694,7 +695,16 @@ export async function bundleProjectToHtml(params: {
     jsBundle = `
       const root = document.getElementById('root');
       if (root) {
-        root.innerHTML = '<div style="padding:32px;font-family:ui-monospace,monospace;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;margin:24px;border-radius:8px;"><strong>Build Error</strong><pre style="margin-top:12px;white-space:pre-wrap;font-size:12px;">' + ${JSON.stringify(msg)} + '</pre></div>';
+        const box = document.createElement('div');
+        box.setAttribute('style', 'padding:32px;font-family:ui-monospace,monospace;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;margin:24px;border-radius:8px;');
+        const title = document.createElement('strong');
+        title.textContent = 'Build Error';
+        const pre = document.createElement('pre');
+        pre.setAttribute('style', 'margin-top:12px;white-space:pre-wrap;font-size:12px;');
+        pre.textContent = ${JSON.stringify(msg)};
+        box.appendChild(title);
+        box.appendChild(pre);
+        root.replaceChildren(box);
       }
     `;
   }
@@ -897,6 +907,80 @@ export async function bundleProjectToHtml(params: {
 </html>`;
 
   return { html, bundleError };
+}
+
+export interface ProjectVerificationResult {
+  verified: boolean;
+  buildOk: boolean;
+  filesFingerprint: string;
+  bundleError?: string;
+  warnings: string[];
+  verifiedAt: string;
+}
+
+export function computeProjectFilesFingerprint(files: ProjectFile[]): string {
+  const normalized = [...files]
+    .map((f) => ({ path: normalizeProjectFilePath(f.path), content: String(f.content || '') }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  return nodeCrypto.createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
+
+export function isVerificationValidForFiles(
+  verification: ProjectVerificationResult | undefined | null,
+  files: ProjectFile[],
+): boolean {
+  if (!verification || !verification.verified || !verification.buildOk) {
+    return false;
+  }
+  return verification.filesFingerprint === computeProjectFilesFingerprint(files);
+}
+
+export async function verifyFinalProjectState(params: {
+  files: ProjectFile[];
+  title: string;
+  priorVerification?: ProjectVerificationResult | null;
+}): Promise<ProjectVerificationResult> {
+  const fingerprint = computeProjectFilesFingerprint(params.files);
+  if (
+    params.priorVerification &&
+    params.priorVerification.filesFingerprint === fingerprint &&
+    params.priorVerification.verified
+  ) {
+    return params.priorVerification;
+  }
+
+  const warnings: string[] = [];
+  if (!params.files.some((f) => normalizeProjectFilePath(f.path).toLowerCase() === 'src/index.css')) {
+    warnings.push('src/index.css is missing.');
+  }
+
+  try {
+    const { bundleError } = await bundleProjectToHtml({
+      files: params.files,
+      title: params.title,
+      includeInspector: false,
+      enableAppAi: false,
+      standaloneExport: true,
+    });
+    const buildOk = !bundleError;
+    return {
+      verified: buildOk,
+      buildOk,
+      filesFingerprint: fingerprint,
+      ...(bundleError ? { bundleError } : {}),
+      warnings,
+      verifiedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    return {
+      verified: false,
+      buildOk: false,
+      filesFingerprint: fingerprint,
+      bundleError: sanitizeErrorMessage(err) || 'Verification bundle failed.',
+      warnings,
+      verifiedAt: new Date().toISOString(),
+    };
+  }
 }
 
 // --- 4. Pure BYOK AI Generation & Prompt Templates ---
@@ -1357,6 +1441,12 @@ Return JSON: { "content": "..." }`;
     if (!parsed.projectName && typeof parsed.title === 'string') {
       parsed.projectName = parsed.title;
     }
+
+    // Run build verification ONLY after all post-generation file additions/repairs are complete
+    parsed.verification = await verifyFinalProjectState({
+      files: validatedFiles,
+      title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
+    });
     return parsed;
   }
 
@@ -2708,11 +2798,19 @@ Return JSON: { "content": "..." }`;
         finalized.searchOutcome = searchOutcome;
         clearIncident(config.provider, config.model);
 
+        const verification = finalized.verification as ProjectVerificationResult | undefined;
+        const isVerified = isVerificationValidForFiles(
+          verification,
+          (finalized.files as ProjectFile[]) || [],
+        );
+
         if (req.authUser?.uid) {
           notificationService
             .sendNotificationToUser(req.authUser.uid, {
-              title: 'Build Finished ✨',
-              body: `"${finalized.projectName || 'Website'}" generated successfully!`,
+              title: isVerified ? 'Build Verified ✨' : 'Build Completed with Errors ⚠️',
+              body: isVerified
+                ? `"${finalized.projectName || 'Website'}" built and verified cleanly!`
+                : `"${finalized.projectName || 'Website'}" finished, but build verification failed: ${verification?.bundleError || 'Unknown error'}`,
               data: { url: '/' },
               tag: 'generation-complete',
             })
@@ -2802,11 +2900,19 @@ Return JSON: { "content": "..." }`;
         finalized.searchOutcome = searchOutcome;
         clearIncident(config.provider, config.model);
 
+        const verification = finalized.verification as ProjectVerificationResult | undefined;
+        const isVerified = isVerificationValidForFiles(
+          verification,
+          (finalized.files as ProjectFile[]) || [],
+        );
+
         if (req.authUser?.uid) {
           notificationService
             .sendNotificationToUser(req.authUser.uid, {
-              title: 'Build Finished ✨',
-              body: `"${finalized.projectName || 'Website'}" generated successfully!`,
+              title: isVerified ? 'Build Verified ✨' : 'Build Completed with Errors ⚠️',
+              body: isVerified
+                ? `"${finalized.projectName || 'Website'}" built and verified cleanly!`
+                : `"${finalized.projectName || 'Website'}" finished, but build verification failed: ${verification?.bundleError || 'Unknown error'}`,
               data: { url: '/' },
               tag: 'generation-complete',
             })
@@ -2949,7 +3055,20 @@ Return JSON: { "content": "..." }`;
         });
 
         if (Array.isArray(parsed.files)) {
-          parsed.files = validateProjectFilesPayload(parsed.files);
+          const refinedFiles = validateProjectFilesPayload(parsed.files);
+          if (!refinedFiles.some((f) => f.path.toLowerCase() === 'src/index.css')) {
+            refinedFiles.push({
+              id: 'file_index_css',
+              path: 'src/index.css',
+              language: 'css',
+              content: '@import "tailwindcss";\n',
+            });
+          }
+          parsed.files = refinedFiles;
+          parsed.verification = await verifyFinalProjectState({
+            files: refinedFiles,
+            title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
+          });
         }
         parsed.searchOutcome = searchOutcome;
 
@@ -3052,7 +3171,20 @@ Return JSON: { "content": "..." }`;
         });
 
         if (Array.isArray(parsed.files)) {
-          parsed.files = validateProjectFilesPayload(parsed.files);
+          const refinedFiles = validateProjectFilesPayload(parsed.files);
+          if (!refinedFiles.some((f) => f.path.toLowerCase() === 'src/index.css')) {
+            refinedFiles.push({
+              id: 'file_index_css',
+              path: 'src/index.css',
+              language: 'css',
+              content: '@import "tailwindcss";\n',
+            });
+          }
+          parsed.files = refinedFiles;
+          parsed.verification = await verifyFinalProjectState({
+            files: refinedFiles,
+            title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
+          });
         }
         parsed.searchOutcome = searchOutcome;
 

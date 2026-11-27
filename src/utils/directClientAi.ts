@@ -142,13 +142,197 @@ function parseStreamJsonFiles(raw: string): DirectGeneratedProject {
   };
 }
 
+export interface ParsedSseEvent {
+  data: string;
+}
+
+/**
+ * Incremental SSE parser that buffers across arbitrary chunk boundaries,
+ * supports both CRLF and LF (including \r and \n split across chunks),
+ * multi-line data: events, single-newline JSON data lines, and final EOF flush.
+ */
+export function createIncrementalSseParser(onEvent: (event: ParsedSseEvent) => void): {
+  push: (textChunk: string) => void;
+  finish: () => void;
+} {
+  let lineBuffer = '';
+  let trailingCr = false;
+  let dataLines: string[] = [];
+
+  const flushEvent = () => {
+    if (dataLines.length === 0) return;
+    const joined = dataLines.join('\n');
+    dataLines = [];
+    if (joined.trim()) {
+      onEvent({ data: joined });
+    }
+  };
+
+  const processLine = (rawLine: string) => {
+    // Empty line marks end of SSE event
+    if (rawLine === '') {
+      flushEvent();
+      return;
+    }
+    // Comment / keepalive line
+    if (rawLine.startsWith(':')) {
+      return;
+    }
+    const colonIdx = rawLine.indexOf(':');
+    const field = colonIdx === -1 ? rawLine : rawLine.slice(0, colonIdx);
+    let value = colonIdx === -1 ? '' : rawLine.slice(colonIdx + 1);
+    if (value.startsWith(' ')) {
+      value = value.slice(1);
+    }
+
+    if (field === 'data') {
+      if (value.trim() === '[DONE]') {
+        flushEvent();
+        onEvent({ data: '[DONE]' });
+        return;
+      }
+      dataLines.push(value);
+      // If a server emits single-newline-delimited JSON without blank lines,
+      // emit immediately once the accumulated data lines form valid JSON.
+      const candidate = dataLines.join('\n');
+      try {
+        JSON.parse(candidate);
+        dataLines = [];
+        onEvent({ data: candidate });
+      } catch {
+        // Multi-line data: event continues on subsequent data: lines until blank line / EOF
+      }
+    }
+  };
+
+  const push = (textChunk: string) => {
+    if (!textChunk) return;
+    let chunk = textChunk;
+    if (trailingCr) {
+      trailingCr = false;
+      // Previous chunk ended with '\r'. Whether next char is '\n' or not, that '\r' was one line break.
+      chunk = chunk.startsWith('\n') ? chunk : '\n' + chunk;
+    }
+    if (chunk.endsWith('\r')) {
+      trailingCr = true;
+      chunk = chunk.slice(0, -1);
+    }
+    const normalized = chunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    lineBuffer += normalized;
+
+    let nlIdx: number;
+    while ((nlIdx = lineBuffer.indexOf('\n')) !== -1) {
+      const line = lineBuffer.slice(0, nlIdx);
+      lineBuffer = lineBuffer.slice(nlIdx + 1);
+      processLine(line);
+    }
+  };
+
+  const finish = () => {
+    if (trailingCr) {
+      trailingCr = false;
+      processLine(lineBuffer);
+      lineBuffer = '';
+      processLine('');
+    } else if (lineBuffer.length > 0) {
+      processLine(lineBuffer);
+      lineBuffer = '';
+    }
+    flushEvent();
+  };
+
+  return { push, finish };
+}
+
+export async function consumeOpenAiCompatibleSseStream(params: {
+  body: ReadableStream<Uint8Array>;
+  signal?: AbortSignal;
+  onTextDelta?: (delta: string, accumulated: string) => void;
+}): Promise<string> {
+  const { body, signal, onTextDelta } = params;
+  const reader = body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let accumulated = '';
+  let streamDone = false;
+
+  const parser = createIncrementalSseParser((event) => {
+    if (streamDone) return;
+    const dataStr = event.data.trim();
+    if (!dataStr || dataStr === '[DONE]') {
+      if (dataStr === '[DONE]') streamDone = true;
+      return;
+    }
+
+    const parsedChunk = JSON.parse(dataStr) as {
+      choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>;
+      error?: { message?: string };
+    };
+    if (parsedChunk.error?.message) {
+      throw new Error(parsedChunk.error.message);
+    }
+    const delta =
+      parsedChunk.choices?.[0]?.delta?.content ??
+      parsedChunk.choices?.[0]?.message?.content ??
+      '';
+    if (delta) {
+      accumulated += delta;
+      onTextDelta?.(delta, accumulated);
+    }
+  });
+
+  const onAbort = () => {
+    reader.cancel().catch(() => {});
+  };
+  if (signal) {
+    if (signal.aborted) {
+      await reader.cancel().catch(() => {});
+      throw new DOMException('Aborted', 'AbortError');
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      const { done, value } = await reader.read();
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      if (done) break;
+      if (value) {
+        parser.push(decoder.decode(value, { stream: true }));
+      }
+    }
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+    const remaining = decoder.decode();
+    if (remaining) {
+      parser.push(remaining);
+    }
+    parser.finish();
+    return accumulated;
+  } catch (err) {
+    await reader.cancel().catch(() => {});
+    throw err;
+  } finally {
+    if (signal) {
+      signal.removeEventListener('abort', onAbort);
+    }
+    reader.releaseLock();
+  }
+}
+
 export async function executeDirectGenerate(options: {
   prompt: string;
   config: AiProviderConfig;
   signal?: AbortSignal;
   onProgress?: (event: DirectStreamProgressEvent) => void;
+  fetchImpl?: typeof fetch;
 }): Promise<DirectGeneratedProject> {
-  const { prompt, config, signal, onProgress } = options;
+  const { prompt, config, signal, onProgress, fetchImpl } = options;
   const { url, headers } = resolveDirectEndpoint(config);
 
   onProgress?.({
@@ -172,7 +356,8 @@ Make sure src/App.tsx is the default export and first file. Return only valid JS
     stream: true,
   };
 
-  const response = await fetch(url, {
+  const activeFetch = fetchImpl || fetch;
+  const response = await activeFetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
@@ -187,62 +372,38 @@ Make sure src/App.tsx is the default export and first file. Return only valid JS
     throw new Error(message);
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) {
+  if (!response.body) {
     throw new Error('Response body is not readable.');
   }
 
-  const decoder = new TextDecoder('utf-8');
-  let accumulated = '';
   let seenPaths: string[] = [];
+  const accumulated = await consumeOpenAiCompatibleSseStream({
+    body: response.body,
+    signal,
+    onTextDelta: (_delta, fullText) => {
+      const pathMatches = Array.from(fullText.matchAll(/"path"\s*:\s*"([^"]+)"/g));
+      const currentPaths = pathMatches.map((m) => normalizeProjectFilePath(m[1]));
+      const newPaths = currentPaths.filter((p) => !seenPaths.includes(p));
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split('\n');
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith('data:')) continue;
-      const dataStr = trimmed.slice('data:'.length).trim();
-      if (dataStr === '[DONE]') continue;
-
-      try {
-        const parsedChunk = JSON.parse(dataStr);
-        const delta = parsedChunk.choices?.[0]?.delta?.content || '';
-        if (delta) {
-          accumulated += delta;
-
-          // Track newly discovered files in the stream
-          const pathMatches = Array.from(accumulated.matchAll(/"path"\s*:\s*"([^"]+)"/g));
-          const currentPaths = pathMatches.map((m) => normalizeProjectFilePath(m[1]));
-          const newPaths = currentPaths.filter((p) => !seenPaths.includes(p));
-
-          if (newPaths.length > 0) {
-            seenPaths = currentPaths;
-            const latest = newPaths[newPaths.length - 1];
-            onProgress?.({
-              type: 'file_start',
-              activeFile: latest,
-              completedFiles: seenPaths.slice(0, -1),
-              chars: accumulated.length,
-            });
-          } else {
-            onProgress?.({
-              type: 'progress',
-              activeFile: seenPaths[seenPaths.length - 1],
-              completedFiles: seenPaths,
-              chars: accumulated.length,
-            });
-          }
-        }
-      } catch {
-        // Partial SSE chunk, keep buffer
+      if (newPaths.length > 0) {
+        seenPaths = currentPaths;
+        const latest = newPaths[newPaths.length - 1];
+        onProgress?.({
+          type: 'file_start',
+          activeFile: latest,
+          completedFiles: seenPaths.slice(0, -1),
+          chars: fullText.length,
+        });
+      } else {
+        onProgress?.({
+          type: 'progress',
+          activeFile: seenPaths[seenPaths.length - 1],
+          completedFiles: seenPaths,
+          chars: fullText.length,
+        });
       }
-    }
-  }
+    },
+  });
 
   onProgress?.({
     type: 'phase',

@@ -185,15 +185,103 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None, check
     return claims
 
 
+def _verify_internal_session_token(request: Optional[Request]) -> Optional[AuthenticatedUser]:
+    """
+    Verifies a local per-session secret passed via X-Internal-Token or X-Stroke-Token.
+    Enables local BYOK desktop operation without requiring cloud authentication,
+    while rejecting any unauthenticated or cross-site local requests.
+    """
+    if not request:
+        return None
+    internal_token = request.headers.get("X-Internal-Token") or request.headers.get("X-Stroke-Token")
+    expected_token = os.environ.get("STROKE_INTERNAL_SECRET")
+    if expected_token and internal_token:
+        import hmac
+        if hmac.compare_digest(internal_token.strip(), expected_token.strip()):
+            return AuthenticatedUser(
+                uid="local_desktop_user",
+                email=None,
+                email_verified=False,
+                display_name="Local Desktop",
+                token="",
+                claims={"auth": "local_session", "sub": "local_desktop_user"}
+            )
+    return None
+
+
+def verify_clerk_jwt_token(token: str) -> Dict[str, Any]:
+    """
+    Cryptographically verifies a Clerk session JWT using configured JWKS or PEM public key.
+    Fails closed if no trusted Clerk verification key is configured.
+    """
+    import jwt as pyjwt
+
+    pem_key = os.getenv("CLERK_PEM_PUBLIC_KEY", "").strip()
+    issuer = os.getenv("CLERK_ISSUER", "").strip().rstrip("/")
+    jwks_url = os.getenv("CLERK_JWKS_URL", "").strip()
+    audience = os.getenv("CLERK_AUDIENCE", "").strip() or None
+
+    if not jwks_url and issuer:
+        jwks_url = f"{issuer}/.well-known/jwks.json"
+
+    if not pem_key and not jwks_url:
+        raise ValueError("Clerk JWT verification is not configured (missing CLERK_JWKS_URL, CLERK_ISSUER, or CLERK_PEM_PUBLIC_KEY).")
+
+    signing_key = pem_key
+    if not signing_key and jwks_url:
+        jwk_client = pyjwt.PyJWKClient(jwks_url)
+        signing_key = jwk_client.get_signing_key_from_jwt(token).key
+
+    decode_kwargs: Dict[str, Any] = {
+        "algorithms": ["RS256"],
+        "options": {"require": ["exp", "sub"]},
+        "leeway": 10,
+    }
+    if issuer:
+        decode_kwargs["issuer"] = issuer
+    if audience:
+        decode_kwargs["audience"] = audience
+    else:
+        decode_kwargs["options"]["verify_aud"] = False
+
+    claims = pyjwt.decode(token, signing_key, **decode_kwargs)
+    if not isinstance(claims, dict) or not str(claims.get("sub", "")).strip():
+        raise ValueError("Clerk token missing valid subject.")
+    return claims
+
+
+def _verify_bearer_token(token: str) -> Dict[str, Any]:
+    """
+    Verifies a Bearer JWT token cryptographically.
+    Tries Firebase ID token verification first; if that fails and Clerk verification
+    keys are configured, verifies via Clerk JWKS/PEM. Never trusts unsigned tokens.
+    """
+    try:
+        return verify_firebase_id_token(token)
+    except ValueError as fb_exc:
+        # Only attempt Clerk verification if Clerk trusted keys are explicitly configured
+        if os.getenv("CLERK_JWKS_URL") or os.getenv("CLERK_ISSUER") or os.getenv("CLERK_PEM_PUBLIC_KEY"):
+            try:
+                return verify_clerk_jwt_token(token)
+            except Exception as clerk_exc:
+                raise ValueError(f"Token verification failed (Firebase: {fb_exc}; Clerk: {clerk_exc})")
+        raise fb_exc
+
+
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)
 ) -> AuthenticatedUser:
     """
-    FastAPI dependency that enforces authenticated Firebase user identity.
-    Extracts Bearer token from the Authorization header and verifies it.
-    Raises HTTP 401 Unauthorized if missing, expired, or invalid.
+    FastAPI dependency that enforces authenticated identity:
+    1. Local per-session X-Internal-Token / X-Stroke-Token (for local BYOK desktop mode), OR
+    2. Cryptographically verified Firebase or Clerk Bearer JWT.
+    Raises HTTP 401 Unauthorized if missing, expired, unsigned, or invalid.
     """
+    local_user = _verify_internal_session_token(request)
+    if local_user is not None:
+        return local_user
+
     token: Optional[str] = None
     if credentials and credentials.credentials:
         token = credentials.credentials
@@ -205,42 +293,24 @@ async def get_current_user(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required: Missing Bearer ID token in Authorization header.",
+            detail="Authentication required: Missing Bearer ID token or local session token.",
             headers={"WWW-Authenticate": "Bearer"}
         )
 
-    claims = None
-    # Support Clerk Authentication (Exact architecture as Mist)
     try:
-        import jwt as pyjwt
-        unverified = pyjwt.decode(token, options={"verify_signature": False})
-        iss = str(unverified.get("iss", ""))
-        sub = str(unverified.get("sub", ""))
-        if "clerk" in iss.lower() or sub.startswith("user_"):
-            exp = unverified.get("exp")
-            if exp and time.time() > exp:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Clerk session token has expired.")
-            claims = unverified
-    except HTTPException:
-        raise
+        claims = _verify_bearer_token(token)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Unauthorized: {str(exc)}",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
     except Exception:
-        pass
-
-    if claims is None:
-        try:
-            claims = verify_firebase_id_token(token)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Unauthorized: {str(exc)}",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unauthorized: Failed to verify authentication token.",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Failed to verify authentication token.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
     uid = claims.get("user_id") or claims.get("sub") or claims.get("uid")
     email = claims.get("email")
@@ -265,9 +335,13 @@ async def get_optional_user(
 ) -> Optional[AuthenticatedUser]:
     """
     FastAPI dependency for endpoints where user identity is optional.
-    If Authorization header is provided, it must be valid (raises 401 if invalid).
+    If Authorization or internal token header is provided, it must be valid (raises 401 if invalid).
     If omitted, returns None without error.
     """
+    local_user = _verify_internal_session_token(request)
+    if local_user is not None:
+        return local_user
+
     token: Optional[str] = None
     if credentials and credentials.credentials:
         token = credentials.credentials
@@ -279,31 +353,20 @@ async def get_optional_user(
     if not token:
         return None
 
-    claims = None
     try:
-        import jwt as pyjwt
-        unverified = pyjwt.decode(token, options={"verify_signature": False})
-        iss = str(unverified.get("iss", ""))
-        sub = str(unverified.get("sub", ""))
-        if "clerk" in iss.lower() or sub.startswith("user_"):
-            exp = unverified.get("exp")
-            if exp and time.time() > exp:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Clerk session token has expired.")
-            claims = unverified
-    except HTTPException:
-        raise
+        claims = _verify_bearer_token(token)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Unauthorized: {str(exc)}",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
     except Exception:
-        pass
-
-    if claims is None:
-        try:
-            claims = verify_firebase_id_token(token)
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Unauthorized: {str(exc)}",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized: Failed to verify authentication token.",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
     uid = claims.get("user_id") or claims.get("sub") or claims.get("uid")
     email = claims.get("email")
