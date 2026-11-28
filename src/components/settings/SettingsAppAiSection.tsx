@@ -93,7 +93,7 @@ export default function SettingsAppAiSection({
     if (!user) {
       setAppAiTestOutput({
         ok: false,
-        message: 'Sign in with Google first to test /api/app-ai.',
+        message: 'Sign in to Mist first to test /api/app-ai.',
       });
       return;
     }

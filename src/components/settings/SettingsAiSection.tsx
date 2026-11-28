@@ -134,12 +134,12 @@ function ProviderEndpointInputs({
 
 function getApiKeyVaultNotice(user: User | null, sessionOnlyKey: boolean): string {
   if (!user?.email) {
-    return 'Sign in with Google to encrypt and sync this API key to your account email across sessions.';
+    return 'Sign in to Mist to encrypt and sync this API key to your account email across sessions.';
   }
   if (sessionOnlyKey) {
     return `Session-only mode enabled: key stays in RAM and will not be saved to ${user.email}.`;
   }
-  return `Encrypted with AES-256-GCM and bound to your Google account (${user.email}) — zero keys are stored in browser localStorage.`;
+  return `Encrypted with AES-256-GCM and bound to your Mist account (${user.email}) — zero keys are stored in browser localStorage.`;
 }
 
 function ProviderApiKeyCard({
@@ -365,7 +365,7 @@ export default function SettingsAiSection({
     if (!user) {
       setProviderTestResult({
         ok: false,
-        message: 'Sign in with Google first to test your live BYOK connection.',
+        message: 'Sign in to Mist first to test your live BYOK connection.',
       });
       return;
     }

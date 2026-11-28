@@ -33,7 +33,7 @@ function validateSearchDraft(
     return 'Enter a valid https:// search endpoint URL.';
   }
   if (!user) {
-    return 'Sign in with Google first to test your live Web Search connection.';
+    return 'Sign in to Mist first to test your live Web Search connection.';
   }
   return null;
 }

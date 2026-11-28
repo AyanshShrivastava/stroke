@@ -100,10 +100,10 @@ export const mistApi = {
   },
 
   async sealVault(
-    payload: { ai?: AiProviderConfig; search?: WebSearchConfig },
+    payload: { aiConfig?: AiProviderConfig; searchConfig?: WebSearchConfig },
     token?: string | null,
-  ): Promise<{ ciphertext: string; aiKeyHint?: string; searchKeyHint?: string }> {
-    return apiFetch<{ ciphertext: string; aiKeyHint?: string; searchKeyHint?: string }>(
+  ): Promise<{ encryptedPayload: string; aiKeyHint?: string; searchKeyHint?: string }> {
+    return apiFetch<{ encryptedPayload: string; aiKeyHint?: string; searchKeyHint?: string }>(
       '/api/user/vault/seal',
       {
         method: 'POST',
@@ -114,14 +114,14 @@ export const mistApi = {
   },
 
   async unsealVault(
-    ciphertext: string,
+    encryptedPayload: string,
     token?: string | null,
-  ): Promise<{ ai?: AiProviderConfig; search?: WebSearchConfig }> {
-    return apiFetch<{ ai?: AiProviderConfig; search?: WebSearchConfig }>(
+  ): Promise<{ aiConfig?: AiProviderConfig; searchConfig?: WebSearchConfig }> {
+    return apiFetch<{ aiConfig?: AiProviderConfig; searchConfig?: WebSearchConfig }>(
       '/api/user/vault/unseal',
       {
         method: 'POST',
-        body: JSON.stringify({ ciphertext }),
+        body: JSON.stringify({ encryptedPayload }),
       },
       token,
     );

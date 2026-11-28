@@ -295,3 +295,46 @@ class TestWorkspaceTerminalAndPackagingSecurity:
         assert len(violations) == 3
         clean_data = build_desktop.get_bundle_add_data("Darwin", sep)
         assert build_desktop.validate_bundle_manifest(clean_data, sep) == []
+
+    def test_pty_session_stop_terminates_process_and_reclaims_fd(self, tmp_path):
+        ws = str(tmp_path.resolve())
+        with patch.object(terminal_service, "is_allowed_workspace_root", return_value=True):
+            created = terminal_service.TerminalManager.create_terminal(ws)
+            sid = created["session_id"]
+            try:
+                started = terminal_service.TerminalManager.start_interactive_shell(sid)
+                assert started["status"] == "success"
+                sess = terminal_service.TerminalManager.get_session(sid)
+                assert sess is not None
+                proc = sess._pty_proc
+                assert proc is not None and proc.poll() is None
+
+                stopped = terminal_service.TerminalManager.stop_terminal(sid)
+                assert stopped["status"] == "terminated"
+                assert proc.poll() is not None
+                assert sess._pty_master_fd is None
+                assert sess._pty_proc is None
+            finally:
+                terminal_service.TerminalManager.delete_terminal(sid)
+
+    def test_stdio_transport_rejects_pending_requests_on_early_eof(self):
+        import asyncio
+
+        async def _run():
+            transport = mcp_client.StdioTransport(command=sys.executable, args=["-c", "pass"])
+            fake_stdout = MagicMock()
+            fake_stdout.readline = AsyncMock(return_value=b"")
+            fake_proc = MagicMock()
+            fake_proc.stdout = fake_stdout
+            fake_proc.returncode = None
+            transport.process = fake_proc
+            transport._closed = False
+
+            fut = asyncio.get_running_loop().create_future()
+            transport._pending_requests["req-1"] = fut
+            await transport._read_stdout_loop()
+            assert fut.done()
+            with pytest.raises(mcp_client.McpError):
+                fut.result()
+
+        asyncio.run(_run())

@@ -406,7 +406,7 @@ export async function fetchLiveModelCatalog(params: {
     });
   } else {
     if (gatewayId !== 'openrouter') {
-      throw new Error('Sign in with Google to inspect live models on non-public gateways.');
+      throw new Error('Sign in to Mist to inspect live models on non-public gateways.');
     }
     const qs = new URLSearchParams({
       baseUrl: cleanUrl,

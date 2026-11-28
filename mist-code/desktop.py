@@ -214,6 +214,7 @@ class BackendSupervisor:
         self.server_instance = None
         self.server_thread: Optional[threading.Thread] = None
         self._is_running = False
+        self._stopped = False
         self._crashed = False
         self._crash_reason: Optional[str] = None
         self._shutdown_event = threading.Event()
@@ -320,8 +321,7 @@ class BackendSupervisor:
         def _watchdog_loop():
             consecutive_probe_failures = 0
             while not self._watchdog_stop_event.is_set():
-                time.sleep(2.0)
-                if self._watchdog_stop_event.is_set() or self._shutdown_event.is_set():
+                if self._watchdog_stop_event.wait(2.0) or self._shutdown_event.is_set():
                     break
 
                 # 1. Thread crash detection

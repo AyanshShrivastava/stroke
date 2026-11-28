@@ -333,6 +333,8 @@ export default function App() {
     (deployProjectId ? projects.find((p) => p.id === deployProjectId) : null) || activeProject;
   const darkMode = studioSettings.theme === 'dark';
   const bundleTimerRef = useRef<number | null>(null);
+  const bundleAbortRef = useRef<AbortController | null>(null);
+  const bundleSeqRef = useRef(0);
   const cloudSaveTimerRef = useRef<number | null>(null);
   const generateAbortRef = useRef<AbortController | null>(null);
   const refineAbortRef = useRef<AbortController | null>(null);
@@ -521,8 +523,13 @@ export default function App() {
     })();
   }, []);
 
-  // Bundle active project for live preview
+  // Bundle active project for live preview (discarding stale in-flight responses)
   const runBundle = useCallback(async (project: MistProject) => {
+    bundleAbortRef.current?.abort();
+    const controller = new AbortController();
+    bundleAbortRef.current = controller;
+    const seq = ++bundleSeqRef.current;
+
     setIsBundling(true);
     const hasAppAi = Boolean(
       project.appAiEnabled ||
@@ -532,6 +539,7 @@ export default function App() {
       const resp = await fetch('/api/bundle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           files: project.files,
           title: project.name,
@@ -540,6 +548,7 @@ export default function App() {
         }),
       });
       const data = (await resp.json()) as { html?: string; bundleError?: string; error?: string };
+      if (seq !== bundleSeqRef.current || controller.signal.aborted) return;
       if (!resp.ok) {
         setBundleError(data.error || 'Preview build failed.');
       } else {
@@ -547,10 +556,20 @@ export default function App() {
         setBundleError(data.bundleError || null);
       }
     } catch (err) {
+      if (seq !== bundleSeqRef.current || controller.signal.aborted) return;
+      if (err instanceof Error && err.name === 'AbortError') return;
       setBundleError(err instanceof Error ? err.message : 'Preview request failed.');
     } finally {
-      setIsBundling(false);
+      if (seq === bundleSeqRef.current) {
+        setIsBundling(false);
+      }
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      bundleAbortRef.current?.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -951,6 +970,10 @@ export default function App() {
       activeAccountUidRef.current = null;
       setBatchedSyncUserProvider(() => null);
       setDeployments([]);
+      if (prevUid) {
+        setProviderConfig({ ...DEFAULT_BYOK_CONFIG });
+        setWebSearchConfig({ ...DEFAULT_WEB_SEARCH_CONFIG });
+      }
       clearKnownCloudProjects();
       scrubLegacyCredentialStorage();
 
@@ -1194,8 +1217,8 @@ export default function App() {
   ) => {
     if (!activeProject) return;
     if (!user) {
-      setRefineError('Sign in with Google before using AI refinement.');
-      setAuthPromptReason('Sign in with Google to use Mist AI refinement.');
+      setRefineError('Sign in to Mist before using AI refinement.');
+      setAuthPromptReason('Sign in to Mist to use AI refinement.');
       setAccountOpen(true);
       return;
     }
@@ -1525,7 +1548,7 @@ export default function App() {
 
   const handleDeleteDeployment = async (slug: string) => {
     if (!user) {
-      setAuthPromptReason('Sign in with Google to unpublish your website.');
+      setAuthPromptReason('Sign in to Mist to unpublish your website.');
       setAccountOpen(true);
       return;
     }

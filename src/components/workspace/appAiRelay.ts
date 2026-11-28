@@ -52,7 +52,7 @@ export function validateAppAiPrerequisites(hasAppAi: boolean, user: User | null)
     throw new Error('Live App AI is disabled for this project.');
   }
   if (!user) {
-    throw new Error('Sign in with Google in Mist before using App AI in preview.');
+    throw new Error('Sign in to Mist before using App AI in preview.');
   }
   return user;
 }

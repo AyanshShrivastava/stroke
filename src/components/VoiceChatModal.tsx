@@ -155,7 +155,7 @@ export default function VoiceChatModal({
       setIncident(null);
 
       if (!user) {
-        setVoiceNote('Sign in with Google to receive live AI suggestions, or apply your voice note directly below.');
+        setVoiceNote('Sign in to Mist to receive live AI suggestions, or apply your voice note directly below.');
         return;
       }
 

@@ -1685,7 +1685,7 @@ Return JSON: { "content": "..." }`;
 
     if (detectGatewayFromBaseUrl(baseUrl) !== 'openrouter') {
       res.status(401).json({
-        error: 'Sign in with Google to inspect models on non-public gateways.',
+        error: 'Sign in to Mist to inspect models on non-public gateways.',
       });
       return;
     }

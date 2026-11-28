@@ -227,7 +227,7 @@ export function ProvidersModal({
     if (!user) {
       setTestResult({
         ok: false,
-        message: 'Sign in with Google first to run live provider verification.',
+        message: 'Sign in to Mist first to run live provider verification.',
       });
       return;
     }
@@ -479,7 +479,7 @@ export function ProvidersModal({
                     ? sessionOnlyKey
                       ? `Session-only active: key stays strictly in RAM and will not sync to ${user.email}.`
                       : `Encrypted with AES-256-GCM & synced to your signed-in account (${user.email}) — zero keys are stored in browser localStorage.`
-                    : 'Sign in with Google to encrypt & sync this key to your account email (zero localStorage key storage).'}
+                    : 'Sign in to Mist to encrypt & sync this key to your account email (zero localStorage key storage).'}
                 </div>
               </div>
 

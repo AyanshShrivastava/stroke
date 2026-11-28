@@ -72,11 +72,9 @@ export default function MistCodeModal({ isOpen, onClose }: MistCodeModalProps) {
     setTimeout(() => setCopiedCmd(false), 2000);
   };
 
-  const handleDownload = (platform: string, filename: string) => {
-    // Generate a download artifact trigger or link to GitHub Releases
-    const releasesUrl = `https://github.com/AyanshShrivastava/stroke/releases/latest/download/${filename}`;
-    const fallbackUrl = `https://github.com/AyanshShrivastava/stroke/releases`;
-    window.open(fallbackUrl, '_blank');
+  const handleDownload = (_platform: string, _filename: string) => {
+    const releasesUrl = 'https://github.com/AyanshShrivastava/stroke/releases';
+    window.open(releasesUrl, '_blank', 'noopener,noreferrer');
   };
 
   if (!isOpen) return null;
@@ -178,7 +176,7 @@ export default function MistCodeModal({ isOpen, onClose }: MistCodeModalProps) {
                 {engineHealth.connected && (
                   <button
                     type="button"
-                    onClick={() => window.open('http://127.0.0.1:8501', '_blank')}
+                    onClick={() => window.open('http://127.0.0.1:8501', '_blank', 'noopener,noreferrer')}
                     className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-xs font-medium transition cursor-pointer"
                   >
                     <span>Open Dashboard</span>

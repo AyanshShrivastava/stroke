@@ -68,7 +68,7 @@ export default function SettingsAccountSection({
         ) : (
           <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/90 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/70">
             <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              Sign in with Google to save your websites, settings, and published deployments across devices.
+              Sign in to Mist to save your websites, settings, and published deployments across devices.
             </p>
             <button
               type="button"

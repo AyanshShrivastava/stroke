@@ -431,6 +431,8 @@ class TerminalSession:
         
         # Process handles
         self.current_process: Optional[subprocess.Popen] = None
+        self._pty_master_fd: Optional[int] = None
+        self._pty_proc: Optional[subprocess.Popen] = None
         self.reader_threads: List[threading.Thread] = []
         self.last_exit_code: Optional[int] = None
         self.last_command: Optional[str] = None
@@ -1294,33 +1296,39 @@ class TerminalSession:
             }
 
     def stop(self) -> Dict[str, Any]:
-        """Terminates any active running process in this session and its process group."""
+        """Terminates any active running process or interactive PTY in this session."""
         with self.lock:
             killed = False
-            proc = self.current_process
-            if proc:
-                if proc.poll() is None:
-                    try:
-                        self._terminate_process_tree(proc)
+            for proc_attr in ("current_process", "_pty_proc"):
+                proc = getattr(self, proc_attr, None)
+                if proc:
+                    if proc.poll() is None:
                         try:
-                            proc.wait(timeout=1.5)
-                        except subprocess.TimeoutExpired:
-                            proc.kill()
-                            proc.wait(timeout=1.0)
-                        killed = True
-                    except Exception:
-                        pass
+                            self._terminate_process_tree(proc)
+                            try:
+                                proc.wait(timeout=1.5)
+                            except subprocess.TimeoutExpired:
+                                proc.kill()
+                                proc.wait(timeout=1.0)
+                            killed = True
+                        except Exception:
+                            pass
+                    for stream in (getattr(proc, "stdin", None), getattr(proc, "stdout", None), getattr(proc, "stderr", None)):
+                        try:
+                            if stream:
+                                stream.close()
+                        except Exception:
+                            pass
+                    setattr(self, proc_attr, None)
+
+            master_fd = getattr(self, "_pty_master_fd", None)
+            if master_fd is not None:
+                self._pty_master_fd = None
                 try:
-                    if proc.stdout:
-                        proc.stdout.close()
-                except Exception:
+                    os.close(master_fd)
+                except OSError:
                     pass
-                try:
-                    if proc.stderr:
-                        proc.stderr.close()
-                except Exception:
-                    pass
-                self.current_process = None
+
             self.state = "terminated"
             self._append_output("system", "Session process terminated.")
             return {
@@ -1799,17 +1807,28 @@ class TerminalManager:
                 import pty
                 master_fd, slave_fd = pty.openpty()
                 shell_bin = "/bin/zsh" if (sys.platform == "darwin" and os.path.exists("/bin/zsh")) else "/bin/sh"
-                proc = subprocess.Popen(
-                    [shell_bin, "-i"],
-                    stdin=slave_fd,
-                    stdout=slave_fd,
-                    stderr=slave_fd,
-                    cwd=cwd,
-                    env=clean_env,
-                    start_new_session=True,
-                    close_fds=True,
-                )
-                os.close(slave_fd)
+                try:
+                    proc = subprocess.Popen(
+                        [shell_bin, "-i"],
+                        stdin=slave_fd,
+                        stdout=slave_fd,
+                        stderr=slave_fd,
+                        cwd=cwd,
+                        env=clean_env,
+                        start_new_session=True,
+                        close_fds=True,
+                    )
+                except Exception:
+                    try:
+                        os.close(master_fd)
+                    except OSError:
+                        pass
+                    raise
+                finally:
+                    try:
+                        os.close(slave_fd)
+                    except OSError:
+                        pass
                 session._pty_master_fd = master_fd
                 session._pty_proc = proc
                 session.process = proc
@@ -1827,10 +1846,15 @@ class TerminalManager:
                             text = redact_sensitive_data(chunk.decode("utf-8", errors="replace"))
                             session._append_output("stdout", text)
                     finally:
-                        try:
-                            os.close(master_fd)
-                        except OSError:
-                            pass
+                        with session.lock:
+                            still_owned = getattr(session, "_pty_master_fd", None) == master_fd
+                            if still_owned:
+                                session._pty_master_fd = None
+                        if still_owned:
+                            try:
+                                os.close(master_fd)
+                            except OSError:
+                                pass
                         session.state = "completed"
 
                 threading.Thread(target=_pty_reader, daemon=True, name=f"Stroke-PTY-{session_id}").start()
@@ -1888,12 +1912,18 @@ class TerminalManager:
             master_fd = getattr(session, "_pty_master_fd", None)
             proc = getattr(session, "_pty_proc", None)
             if master_fd is not None and proc and proc.poll() is None:
-                os.write(master_fd, data.encode("utf-8"))
-                return {"status": "success", "session_id": session_id, "bytes_written": len(data)}
+                try:
+                    os.write(master_fd, data.encode("utf-8"))
+                    return {"status": "success", "session_id": session_id, "bytes_written": len(data)}
+                except OSError as exc:
+                    return {"status": "error", "error": "pty_write_failed", "message": f"PTY write failed: {exc}"}
             if proc and proc.poll() is None and proc.stdin:
-                proc.stdin.write(data.encode("utf-8"))
-                proc.stdin.flush()
-                return {"status": "success", "session_id": session_id, "bytes_written": len(data)}
+                try:
+                    proc.stdin.write(data.encode("utf-8"))
+                    proc.stdin.flush()
+                    return {"status": "success", "session_id": session_id, "bytes_written": len(data)}
+                except OSError as exc:
+                    return {"status": "error", "error": "pty_write_failed", "message": f"Shell stdin write failed: {exc}"}
             return {"status": "error", "error": "no_active_pty", "message": "No active interactive shell in this session."}
 
     @classmethod

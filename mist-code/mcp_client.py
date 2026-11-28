@@ -706,48 +706,59 @@ class StdioTransport(McpTransport):
         await self.send(msg)
 
     async def _read_stdout_loop(self):
-        while self.is_connected() and self.process and self.process.stdout:
-            try:
-                line = await self.process.stdout.readline()
-                if not line:
-                    break
-                raw = line.decode("utf-8", errors="replace").strip()
-                if not raw:
-                    continue
+        try:
+            while self.is_connected() and self.process and self.process.stdout:
                 try:
-                    payload = json.loads(raw)
-                except json.JSONDecodeError:
-                    logger.debug(f"[McpStdio non-JSON stdout]: {raw[:150]}")
-                    continue
+                    line = await self.process.stdout.readline()
+                    if not line:
+                        break
+                    raw = line.decode("utf-8", errors="replace").strip()
+                    if not raw:
+                        continue
+                    try:
+                        payload = json.loads(raw)
+                    except json.JSONDecodeError:
+                        logger.debug(f"[McpStdio non-JSON stdout]: {raw[:150]}")
+                        continue
 
-                req_id = payload.get("id")
-                if req_id is not None and req_id in self._pending_requests:
-                    fut = self._pending_requests[req_id]
+                    req_id = payload.get("id")
+                    if req_id is not None and req_id in self._pending_requests:
+                        fut = self._pending_requests[req_id]
+                        if not fut.done():
+                            if "error" in payload:
+                                err = payload["error"]
+                                fut.set_exception(McpError(
+                                    message=err.get("message", "Unknown MCP RPC error"),
+                                    code=err.get("code", -32000),
+                                    data=err.get("data")
+                                ))
+                            else:
+                                fut.set_result(payload.get("result"))
+                    else:
+                        # Server notification or asynchronous response
+                        for handler in self._notification_handlers:
+                            try:
+                                res = handler(payload)
+                                if asyncio.iscoroutine(res):
+                                    asyncio.create_task(res)
+                            except Exception as ne:
+                                logger.error(f"[McpStdio notification handler error]: {ne}")
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"[McpStdio read loop error]: {e}")
+                    break
+        finally:
+            if self._pending_requests:
+                stderr_tail = self.get_recent_stderr()[-400:]
+                err_msg = "Stdio transport closed unexpectedly"
+                if stderr_tail:
+                    err_msg = f"{err_msg}: {stderr_tail}"
+                for req_id, fut in list(self._pending_requests.items()):
                     if not fut.done():
-                        if "error" in payload:
-                            err = payload["error"]
-                            fut.set_exception(McpError(
-                                message=err.get("message", "Unknown MCP RPC error"),
-                                code=err.get("code", -32000),
-                                data=err.get("data")
-                            ))
-                        else:
-                            fut.set_result(payload.get("result"))
-                else:
-                    # Server notification or asynchronous response
-                    for handler in self._notification_handlers:
-                        try:
-                            res = handler(payload)
-                            if asyncio.iscoroutine(res):
-                                asyncio.create_task(res)
-                        except Exception as ne:
-                            logger.error(f"[McpStdio notification handler error]: {ne}")
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"[McpStdio read loop error]: {e}")
-                break
+                        fut.set_exception(McpError(err_msg))
+                self._pending_requests.clear()
 
     async def _read_stderr_loop(self):
         while self.process and self.process.stderr:
