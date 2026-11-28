@@ -993,7 +993,8 @@ LIGHTWEIGHT & HIGH-RELIABILITY ARCHITECTURE RULES:
 - Write complete, rich, production-grade TypeScript code — NEVER use "// TODO", "...rest of code", empty click handlers, or placeholder cards.
 - Build genuine mobile-first + desktop responsive layouts (sm:, md:, lg: grids/flex, touch-friendly >=40px tap targets, no horizontal overflow on 390px viewports).
 - Use React 19, TypeScript (.tsx), and Tailwind CSS utility classes.
-- Allowed imports: 'react', 'react-dom/client', 'lucide-react', 'three', 'three/addons/*' (e.g., OrbitControls, RoomEnvironment), and local relative imports like './components/Navbar'.
+- Allowed imports ONLY: 'react', 'react-dom/client', 'lucide-react', 'three', 'three/addons/*' (e.g., OrbitControls, RoomEnvironment), and local relative imports like './components/Navbar'.
+- NEVER import '@react-three/fiber', '@react-three/drei', 'framer-motion', 'axios', or any other external npm packages — they are NOT installed in Mist's runtime and WILL fail the build. For 3D scenes/games, ALWAYS use pure 'three' ('import * as THREE from "three"') inside useEffect.
 - NEVER use Sparkles, Star, or Wand icons from lucide-react; prefer crisp functional icons (Send, Play, RotateCcw, Cpu, ArrowRight, Terminal, Layers, Check, Pause, Trophy, Volume2).
 - NEVER return raw HTML documents ('<!doctype html>', '<script>', or raw HTML strings in JSX) — write pure TypeScript React components with working event handlers.
 - NEVER use <a href="/..."> links on interactive buttons (such as "Play Game", "Start", "Restart") — ALWAYS use <button type="button" onClick={...}> so clicks never navigate away from the app.
@@ -1356,10 +1357,107 @@ export function createMistApp(deps: MistAppDeps = {}): Express {
     recentModelIncidents.delete(`${provider}:${model}`);
   }
 
+  async function verifyAndAutoRepairFiles(params: {
+    files: ProjectFile[];
+    title: string;
+    config: AiProviderConfig;
+    instruction: string;
+    signal?: AbortSignal;
+    onPhase?: (phase: string) => void;
+    maxRepairs?: number;
+  }): Promise<{
+    files: ProjectFile[];
+    verification: ProjectVerificationResult;
+    repairAttempts: number;
+  }> {
+    let currentFiles = params.files;
+    let verification = await verifyFinalProjectState({
+      files: currentFiles,
+      title: params.title,
+    });
+    let repairAttempts = 0;
+    const maxRepairs = params.maxRepairs ?? 2;
+
+    while (!verification.buildOk && verification.bundleError && repairAttempts < maxRepairs) {
+      if (params.signal?.aborted) break;
+      repairAttempts += 1;
+      params.onPhase?.(`Build error detected — repairing automatically (attempt ${repairAttempts}/${maxRepairs})...`);
+
+      const filesSnapshot = currentFiles
+        .map((f) => `--- ${f.path} ---\n${f.content.slice(0, 6000)}`)
+        .join('\n\n');
+
+      const repairPrompt = `Your generated React + TypeScript project failed esbuild verification with this EXACT build error:
+${verification.bundleError}
+
+Original user goal: "${params.instruction.trim()}"
+
+RULES TO FIX THIS:
+- Allowed imports ONLY: 'react', 'react-dom/client', 'lucide-react', 'three', 'three/addons/*', and local relative files in your returned "files" array.
+- If the error mentions '@react-three/fiber' or '@react-three/drei' or any missing package ("mist-missing:..."), rewrite the 3D scene using pure 'three' (import * as THREE from 'three') mounted inside a <div ref={mountRef} /> with useEffect and requestAnimationFrame.
+- Fix any broken relative imports, missing exports, or TypeScript/JSX syntax errors.
+- Keep "src/App.tsx" as default export and ensure "src/index.css" starts with @import "tailwindcss";.
+
+Current project files:
+${filesSnapshot}
+
+Return ONLY valid JSON: { "summary": "Brief description of fix", "files": [{ "path": string, "language": string, "content": string }] }`;
+
+      try {
+        const repairRaw = await callByokCompletionRaw({
+          config: params.config,
+          messages: [
+            { role: 'system', content: `${SYSTEM_GENERATOR_PROMPT}\nRespond strictly with valid JSON.` },
+            { role: 'user', content: repairPrompt },
+          ],
+          jsonMode: true,
+          maxTokens: 12288,
+          signal: params.signal,
+          fetchImpl: aiFetchImpl,
+          skipDnsLookup,
+        });
+        const repairedObj = extractJsonObject(repairRaw);
+        if (Array.isArray(repairedObj.files) && repairedObj.files.length > 0) {
+          const repairedValidated = validateProjectFilesPayload(
+            repairedObj.files.map((f) => {
+              const entry = (f || {}) as { path?: string; language?: string; content?: string };
+              return {
+                path: entry.path || 'src/App.tsx',
+                language: entry.language,
+                content: String(entry.content || ''),
+              };
+            }),
+          );
+          if (!repairedValidated.some((f) => f.path.toLowerCase() === 'src/index.css')) {
+            repairedValidated.push({
+              id: 'file_index_css',
+              path: 'src/index.css',
+              language: 'css',
+              content: '@import "tailwindcss";\n',
+            });
+          }
+          currentFiles = repairedValidated;
+          verification = await verifyFinalProjectState({
+            files: currentFiles,
+            title: params.title,
+          });
+        } else {
+          break;
+        }
+      } catch {
+        break;
+      }
+    }
+
+    return { files: currentFiles, verification, repairAttempts };
+  }
+
   async function postProcessGeneratedProject(params: {
     parsed: Record<string, unknown>;
     prompt: string;
     config: AiProviderConfig;
+    signal?: AbortSignal;
+    onPhase?: (phase: string) => void;
   }): Promise<Record<string, unknown>> {
     const { parsed, prompt, config } = params;
     const rawFiles = Array.isArray(parsed.files) ? parsed.files : [];
@@ -1442,11 +1540,21 @@ Return JSON: { "content": "..." }`;
       parsed.projectName = parsed.title;
     }
 
-    // Run build verification ONLY after all post-generation file additions/repairs are complete
-    parsed.verification = await verifyFinalProjectState({
+    // Run build verification AFTER all post-generation file additions/repairs are complete,
+    // and auto-repair any esbuild/missing-module errors before returning.
+    const verifiedResult = await verifyAndAutoRepairFiles({
       files: validatedFiles,
       title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
+      config,
+      instruction: prompt,
+      signal: params.signal,
+      onPhase: params.onPhase,
     });
+    parsed.files = verifiedResult.files;
+    parsed.verification = verifiedResult.verification;
+    if (verifiedResult.repairAttempts > 0) {
+      parsed.repairAttempts = verifiedResult.repairAttempts;
+    }
     return parsed;
   }
 
@@ -2794,7 +2902,19 @@ Return JSON: { "content": "..." }`;
           chars: 0,
         });
 
-        const finalized = await postProcessGeneratedProject({ parsed, prompt, config });
+        const finalized = await postProcessGeneratedProject({
+          parsed,
+          prompt,
+          config,
+          signal: abortController.signal,
+          onPhase: (phase) =>
+            sendEvent({
+              type: 'phase',
+              phase,
+              completedFiles: seenPaths,
+              chars: 0,
+            }),
+        });
         finalized.searchOutcome = searchOutcome;
         clearIncident(config.provider, config.model);
 
@@ -2896,7 +3016,12 @@ Return JSON: { "content": "..." }`;
           stream: false,
         });
 
-        const finalized = await postProcessGeneratedProject({ parsed, prompt, config });
+        const finalized = await postProcessGeneratedProject({
+          parsed,
+          prompt,
+          config,
+          signal: abortController.signal,
+        });
         finalized.searchOutcome = searchOutcome;
         clearIncident(config.provider, config.model);
 
@@ -3064,11 +3189,25 @@ Return JSON: { "content": "..." }`;
               content: '@import "tailwindcss";\n',
             });
           }
-          parsed.files = refinedFiles;
-          parsed.verification = await verifyFinalProjectState({
+          const refinedVerified = await verifyAndAutoRepairFiles({
             files: refinedFiles,
             title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
+            config,
+            instruction,
+            signal: abortController.signal,
+            onPhase: (phase) =>
+              sendEvent({
+                type: 'phase',
+                phase,
+                completedFiles: seenPaths,
+                chars: 0,
+              }),
           });
+          parsed.files = refinedVerified.files;
+          parsed.verification = refinedVerified.verification;
+          if (refinedVerified.repairAttempts > 0) {
+            parsed.repairAttempts = refinedVerified.repairAttempts;
+          }
         }
         parsed.searchOutcome = searchOutcome;
 
@@ -3180,11 +3319,18 @@ Return JSON: { "content": "..." }`;
               content: '@import "tailwindcss";\n',
             });
           }
-          parsed.files = refinedFiles;
-          parsed.verification = await verifyFinalProjectState({
+          const refinedVerified = await verifyAndAutoRepairFiles({
             files: refinedFiles,
             title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
+            config,
+            instruction,
+            signal: abortController.signal,
           });
+          parsed.files = refinedVerified.files;
+          parsed.verification = refinedVerified.verification;
+          if (refinedVerified.repairAttempts > 0) {
+            parsed.repairAttempts = refinedVerified.repairAttempts;
+          }
         }
         parsed.searchOutcome = searchOutcome;
 

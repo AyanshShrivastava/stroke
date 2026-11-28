@@ -781,8 +781,95 @@ export default function App() {
           throw new Error('AI did not return project files.');
         }
 
+        // Verify the generated bundle against /api/bundle and auto-repair any build/import errors
+        let finalFiles = data.files.map((f) => {
+          const cleanPath = normalizeProjectFilePath(f.path);
+          return {
+            id: createSafeId('file'),
+            path: cleanPath,
+            language: f.language || inferLanguageFromPath(cleanPath),
+            content: f.content,
+          };
+        });
+        let verifiedBuild = true;
+        let lastBundleError: string | undefined;
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          if (abortController.signal.aborted) break;
+          setAiStreamProgress((prev) => ({
+            ...(prev || { completedFiles: [], charsReceived: 0, startedAt }),
+            phase: attempt === 0 ? 'Verifying build...' : `Re-verifying repaired build (attempt ${attempt})...`,
+          }));
+          try {
+            const verifyIdToken = await currentUser.getIdToken();
+            const verifyResp = await fetch('/api/bundle', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${verifyIdToken}`,
+              },
+              signal: abortController.signal,
+              body: JSON.stringify({
+                files: finalFiles,
+                title: data.projectName || 'Mist Preview',
+                standaloneExport: true,
+              }),
+            });
+            if (!verifyResp.ok) break;
+            const verifyData = (await verifyResp.json()) as { bundleError?: string };
+            if (!verifyData.bundleError) {
+              verifiedBuild = true;
+              lastBundleError = undefined;
+              break;
+            }
+            verifiedBuild = false;
+            lastBundleError = verifyData.bundleError;
+
+            if (attempt >= 1) break;
+            setAiStreamProgress((prev) => ({
+              ...(prev || { completedFiles: [], charsReceived: 0, startedAt }),
+              phase: 'Build error detected — repairing automatically...',
+            }));
+            const repairResp = await fetch('/api/ai/refine', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${verifyIdToken}`,
+              },
+              signal: abortController.signal,
+              body: JSON.stringify({
+                instruction: `Fix these exact esbuild errors (never import @react-three/fiber or @react-three/drei; use pure 'three' inside useEffect instead):\n${verifyData.bundleError}`,
+                files: finalFiles,
+                providerConfig: cfg,
+              }),
+            });
+            if (!repairResp.ok) break;
+            const repaired = (await repairResp.json()) as {
+              files?: Array<{ path: string; language?: ProjectFile['language']; content: string }>;
+            };
+            if (Array.isArray(repaired.files) && repaired.files.length > 0) {
+              finalFiles = repaired.files.map((f) => {
+                const cleanPath = normalizeProjectFilePath(f.path);
+                return {
+                  id: createSafeId('file'),
+                  path: cleanPath,
+                  language: f.language || inferLanguageFromPath(cleanPath),
+                  content: f.content,
+                };
+              });
+            } else {
+              break;
+            }
+          } catch {
+            break;
+          }
+        }
+
         setModelIncident(null);
         const now = new Date().toISOString();
+        const verificationNote = verifiedBuild
+          ? '\n\n✓ Build verified cleanly.'
+          : `\n\n⚠️ Build verification reported an error:\n${lastBundleError}`;
         const newProject: MistProject = {
           id: createSafeId('proj'),
           name: (data.projectName || 'Generated Website').slice(0, 120),
@@ -792,15 +879,7 @@ export default function App() {
           isPublished: false,
           createdAt: now,
           updatedAt: now,
-          files: data.files.map((f) => {
-            const cleanPath = normalizeProjectFilePath(f.path);
-            return {
-              id: createSafeId('file'),
-              path: cleanPath,
-              language: f.language || inferLanguageFromPath(cleanPath),
-              content: f.content,
-            };
-          }),
+          files: finalFiles,
           chatHistory: [
             {
               id: createSafeId('msg'),
@@ -812,10 +891,11 @@ export default function App() {
               id: createSafeId('msg'),
               role: 'assistant',
               content:
-                data.summary ||
-                `Generated ${data.files.length} files for ${data.projectName || 'your site'}.`,
+                (data.summary ||
+                  `Generated ${finalFiles.length} files for ${data.projectName || 'your site'}.`) +
+                verificationNote,
               timestamp: now,
-              changedFiles: data.files.map((f) => f.path),
+              changedFiles: finalFiles.map((f) => f.path),
               searchOutcome: data.searchOutcome,
             },
           ],

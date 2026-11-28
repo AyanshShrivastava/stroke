@@ -17,7 +17,9 @@ LIGHTWEIGHT & HIGH-RELIABILITY ARCHITECTURE RULES:
 - Write complete, rich, production-grade TypeScript code — NEVER use "// TODO", "...rest of code", or placeholder cards.
 - Build genuine mobile-first + desktop responsive layouts (sm:, md:, lg: grids/flex, touch-friendly >=40px tap targets).
 - Use React 19, TypeScript (.tsx), and Tailwind CSS utility classes.
-- Allowed imports: 'react', 'react-dom/client', 'lucide-react', 'three', 'three/addons/*' (e.g., OrbitControls, RoomEnvironment), and local relative imports like './components/Navbar'.
+- Allowed imports ONLY: 'react', 'react-dom/client', 'lucide-react', 'three', 'three/addons/*' (e.g., OrbitControls, RoomEnvironment), and local relative imports like './components/Navbar'.
+- NEVER import '@react-three/fiber', '@react-three/drei', 'framer-motion', 'axios', or any other external npm packages — they are NOT installed and WILL fail the build.
+- For 3D scenes/games, ALWAYS use pure 'three' ('import * as THREE from "three"') mounted to a <div ref={mountRef} className="w-full h-full" /> inside useEffect(..., []) with requestAnimationFrame and cleanup on unmount.
 - Ensure src/index.css starts with @import "tailwindcss";.
 - NEVER use <a href="/..."> links on interactive buttons (such as "Play Game", "Start", "Restart") — ALWAYS use <button type="button" onClick={...}>.
 

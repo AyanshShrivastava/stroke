@@ -265,3 +265,114 @@ test('POST /api/ai/generate runs verification after post-processing and never se
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
+
+test('POST /api/ai/generate automatically detects mist-missing:@react-three/fiber and self-repairs to valid pure three.js', async () => {
+  const brokenR3fPayload = JSON.stringify({
+    projectName: 'Neon Strike 3D',
+    description: '3D game',
+    summary: 'Initial R3F attempt',
+    files: [
+      {
+        path: 'src/App.tsx',
+        language: 'tsx',
+        content: `import React from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { PerspectiveCamera, Stars } from '@react-three/drei';
+export default function App() { return <Canvas><PerspectiveCamera /><Stars /></Canvas>; }`,
+      },
+    ],
+  });
+
+  const repairedThreePayload = JSON.stringify({
+    summary: 'Rewrote 3D scene using pure three.js',
+    files: [
+      {
+        path: 'src/App.tsx',
+        language: 'tsx',
+        content: `import React, { useEffect, useRef } from 'react';
+import * as THREE from 'three';
+export default function App() {
+  const mountRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const scene = new THREE.Scene();
+    void scene;
+  }, []);
+  return <div ref={mountRef} className="w-full h-screen bg-black" />;
+}`,
+      },
+      {
+        path: 'src/index.css',
+        language: 'css',
+        content: '@import "tailwindcss";\n',
+      },
+    ],
+  });
+
+  let modelCallCount = 0;
+  let repairPromptSawMissingModule = false;
+
+  const app = createMistApp({
+    skipDnsLookup: true,
+    verifyAuthHeader: async () => ({
+      userId: 'user_test_2',
+      uid: 'user_test_2',
+      email: 'dev@example.com',
+      emailVerified: true,
+    }),
+    aiFetchImpl: (async (_url, init) => {
+      modelCallCount += 1;
+      const bodyStr = String(init?.body || '');
+      if (modelCallCount === 1) {
+        return new Response(
+          JSON.stringify({ choices: [{ message: { content: brokenR3fPayload } }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (bodyStr.includes('@react-three/fiber') || bodyStr.includes('mist-missing')) {
+        repairPromptSawMissingModule = true;
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: repairedThreePayload } }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch,
+  });
+
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const addr = server.address() as AddressInfo;
+
+  try {
+    const resp = await fetch(`http://127.0.0.1:${addr.port}/api/ai/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer mock-token',
+      },
+      body: JSON.stringify({
+        prompt: 'Build Neon Strike 3D game',
+        providerConfig: {
+          provider: 'custom',
+          name: 'Gemini (BYOK)',
+          baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+          model: 'gemini-2.5-flash',
+          apiKey: 'AIza-mock-user-key',
+        },
+      }),
+    });
+    assert.equal(resp.status, 200);
+    const json = (await resp.json()) as {
+      repairAttempts?: number;
+      verification?: { verified: boolean; buildOk: boolean; bundleError?: string };
+      files: ProjectFile[];
+    };
+    assert.equal(modelCallCount, 2);
+    assert.equal(repairPromptSawMissingModule, true);
+    assert.equal(json.repairAttempts, 1);
+    assert.equal(json.verification?.verified, true);
+    assert.equal(json.verification?.buildOk, true);
+    assert.ok(json.files.some((f) => f.path === 'src/App.tsx' && f.content.includes("from 'three'")));
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});
