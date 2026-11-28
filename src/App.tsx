@@ -1340,6 +1340,8 @@ export default function App() {
       })) as {
         summary?: string;
         searchOutcome?: WebSearchOutcome;
+        verification?: { verified?: boolean; buildOk?: boolean; bundleError?: string };
+        repairAttempts?: number;
         files?: Array<{ path: string; language?: ProjectFile['language']; content: string }>;
       };
 
@@ -1349,7 +1351,18 @@ export default function App() {
 
       setModelIncident(null);
       const now = new Date().toISOString();
-      const changedPaths = data.files.map((f) => f.path.replace(/^\/+/, ''));
+      const changedPaths = data.files.map((f) => normalizeProjectFilePath(f.path));
+      const baseSummary = data.summary || 'Applied your refinement.';
+      const verificationNote =
+        data.verification?.buildOk === false
+          ? `\n\nBuild verification warning: ${data.verification.bundleError || 'Preview build still has errors.'}`
+          : data.repairAttempts && data.repairAttempts > 0
+            ? `\n\nAuto-repaired and verified preview build (${data.repairAttempts} attempt${data.repairAttempts === 1 ? '' : 's'}).`
+            : '';
+      const assistantMessage = `${baseSummary}${verificationNote}`;
+      if (data.verification?.buildOk === false && data.verification.bundleError) {
+        setRefineError(data.verification.bundleError);
+      }
 
       updateActiveProject((prev) => ({
         ...prev,
@@ -1361,7 +1374,7 @@ export default function App() {
           {
             id: createSafeId('msg'),
             role: 'assistant',
-            content: data.summary || 'Applied your refinement.',
+            content: assistantMessage,
             timestamp: now,
             changedFiles: changedPaths,
             searchOutcome: data.searchOutcome,

@@ -39,18 +39,25 @@ class TestGitHubTokenLifecycleAndVault(unittest.TestCase):
         github_service.clear_stored_github_token()
 
     def test_vault_encryption_roundtrip_and_0600_permissions(self):
-        saved = github_service.save_github_token(self.test_token)
-        self.assertTrue(saved)
-        self.assertTrue(os.path.exists(github_service.TOKEN_VAULT_FILE))
-
-        # Check file permissions (owner read/write only, 0600)
-        mode = os.stat(github_service.TOKEN_VAULT_FILE).st_mode & 0o777
-        self.assertEqual(mode, 0o600)
-
-        # Retrieve and verify roundtrip decryption
+        # 1. Default path (OS keyring on supported systems, else encrypted vault)
+        saved_default = github_service.save_github_token(self.test_token)
+        self.assertTrue(saved_default)
         with patch.dict(os.environ, {}, clear=True):
-            retrieved = github_service.get_stored_github_token()
-            self.assertEqual(retrieved, self.test_token)
+            self.assertEqual(github_service.get_stored_github_token(), self.test_token)
+        github_service.clear_stored_github_token()
+
+        # 2. Encrypted local file vault fallback enforces 0600 permissions & decrypts cleanly
+        with patch("github_service._is_keyring_usable", return_value=False):
+            saved = github_service.save_github_token(self.test_token)
+            self.assertTrue(saved)
+            self.assertTrue(os.path.exists(github_service.TOKEN_VAULT_FILE))
+
+            mode = os.stat(github_service.TOKEN_VAULT_FILE).st_mode & 0o777
+            self.assertEqual(mode, 0o600)
+
+            with patch.dict(os.environ, {}, clear=True):
+                retrieved = github_service.get_stored_github_token()
+                self.assertEqual(retrieved, self.test_token)
 
     def test_environment_vs_vault_credential_distinction(self):
         # Case 1: Vault only

@@ -187,21 +187,44 @@ class TestDiscoveryEngine:
         resolved_root = Path(os.path.realpath(str(root_dir)))
         if not terminal_service.is_allowed_workspace_root(str(resolved_root)):
             raise PermissionError(f"Frontend test discovery target '{resolved_root}' is outside approved workspace roots.")
-        test_dir = resolved_root / "src" / "test"
-        if not test_dir.exists():
+
+        search_bases: List[Tuple[Path, Path]] = []
+        if (resolved_root / "src" / "test").exists():
+            search_bases.append((resolved_root / "src" / "test", resolved_root))
+        if (resolved_root / "src").exists():
+            search_bases.append((resolved_root / "src", resolved_root))
+
+        # Support running from mist-code/ inside the unified repository root.
+        parent_root = resolved_root.parent
+        if (
+            (parent_root / "src").exists()
+            and (parent_root / "package.json").exists()
+            and terminal_service.is_allowed_workspace_root(str(parent_root))
+        ):
+            search_bases.append((parent_root / "src", parent_root))
+
+        seen_files: set = set()
+        test_files: List[Tuple[Path, Path]] = []
+        for scan_dir, rel_base in search_bases:
+            for tf in sorted(scan_dir.rglob("*.test.ts*")):
+                real_tf = Path(os.path.realpath(str(tf)))
+                if real_tf not in seen_files:
+                    seen_files.add(real_tf)
+                    test_files.append((tf, rel_base))
+
+        if not test_files:
             return {"total_files": 0, "total_tests": 0, "files": {}}
 
-        test_files = sorted(list(test_dir.glob("*.test.ts*")))
         catalog: Dict[str, Any] = {}
         total_tests = 0
 
-        for tf in test_files:
-            rel_path = str(tf.relative_to(root_dir))
+        for tf, rel_base in test_files:
+            rel_path = str(tf.relative_to(rel_base))
             test_names = []
             try:
                 with open(tf, "r", encoding="utf-8") as f:
                     content = f.read()
-                matches = re.findall(r'(?:it|test)\s*\(\s*["\']([^"\']+)["\']', content)
+                matches = re.findall(r'(?:^|\n)\s*(?:it|test)\s*\(\s*["\']([^"\']+)["\']', content)
                 test_names = matches
                 total_tests += len(matches)
             except Exception:

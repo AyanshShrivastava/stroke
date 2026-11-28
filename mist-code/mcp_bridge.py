@@ -1365,16 +1365,17 @@ def select_active_tools_for_query(prompt: str, history: Optional[List[Dict[str, 
         for m in history[-2:]:
             p_lower += " " + str(m.get("content", "")).lower()
 
-    selected_names = {
+    core_names = {
         "list_directory", "read_file", "create_file", "edit_file", "apply_patch", "search_files",
         "terminal_run", "terminal_read_output", "web_search", "tools_search"
     }
+    priority_names = {"tools_search"}
 
     # Include any live discovered MCP tools from connected servers
     try:
         for t in global_mcp_registry.list_all_tools():
             if t.get("name"):
-                selected_names.add(t["name"])
+                priority_names.add(t["name"])
     except Exception:
         pass
 
@@ -1383,11 +1384,13 @@ def select_active_tools_for_query(prompt: str, history: Optional[List[Dict[str, 
     is_vfx = any(k in p_lower for k in ["vfx", "particle", "lightning", "fire", "spark", "explosion", "aura", "spell"])
 
     if is_roblox:
-        selected_names.update(["execute_luau", "studio_execute_luau", "script_search", "insert_asset", "list_roblox_studios", "inspect_instance"])
+        priority_names.update(["execute_luau", "studio_execute_luau", "script_search", "insert_asset", "list_roblox_studios", "inspect_instance"])
     if is_vfx:
-        selected_names.update(["search_vfx_database", "generate_material", "insert_asset"])
+        priority_names.update(["search_vfx_database", "generate_material", "insert_asset"])
     if is_github:
-        selected_names.update(["github_commit_file", "github_get_file_contents", "github_create_pull_request", "github_list_repos"])
+        priority_names.update(["github_commit_file", "github_get_file_contents", "github_create_pull_request", "github_list_repos"])
+
+    selected_names = core_names | priority_names
 
     all_schemas = get_all_mcp_ai_tool_schemas()
     has_tools_search = any(s.get("function", {}).get("name") == "tools_search" for s in all_schemas)
@@ -1407,13 +1410,11 @@ def select_active_tools_for_query(prompt: str, history: Optional[List[Dict[str, 
             }
         })
 
-    filtered = []
-    for s in all_schemas:
-        fn_name = s.get("function", {}).get("name", "")
-        if fn_name in selected_names:
-            filtered.append(s)
-            if len(filtered) >= max_tools:
-                break
+    # Prioritize intent-specific, live MCP, and tools_search schemas before general core tools
+    # so strict max_tools caps never drop domain tools or dynamic discovery.
+    prioritized = [s for s in all_schemas if s.get("function", {}).get("name", "") in priority_names]
+    secondary = [s for s in all_schemas if s.get("function", {}).get("name", "") in (selected_names - priority_names)]
+    filtered = (prioritized + secondary)[:max_tools]
 
     return filtered if filtered else all_schemas[:max_tools]
 

@@ -25,7 +25,12 @@ import {
   validateAndExtractCitations,
 } from '../data/webSearch';
 import { classifyModelError, type ModelHealthIncident } from './aiErrors';
-import { maskApiKey, normalizeProjectFilePath, resolveAppEntryPath } from './projectOps';
+import {
+  maskApiKey,
+  mergeProjectFiles,
+  normalizeProjectFilePath,
+  resolveAppEntryPath,
+} from './projectOps';
 import {
   BODY_LIMITS,
   BUILDER_CSP,
@@ -456,6 +461,7 @@ export async function bundleProjectToHtml(params: {
 
   const fileMap = new Map<string, ProjectFile>();
   const lowerFileMap = new Map<string, string>();
+  const missingImports = new Set<string>();
   const normalizedFiles: ProjectFile[] = params.files.map((f) => {
     const cleanPath = normalizeProjectFilePath(f.path);
     return { ...f, path: cleanPath };
@@ -596,6 +602,7 @@ export async function bundleProjectToHtml(params: {
             return { path: matched, namespace: 'mist-fs' };
           }
         }
+        missingImports.add(args.path);
         return { path: args.path, namespace: 'mist-missing' };
       });
 
@@ -677,22 +684,7 @@ export async function bundleProjectToHtml(params: {
   let jsBundle = '';
   let bundleError: string | undefined;
 
-  try {
-    const buildResult = await esbuild.build({
-      entryPoints: [entryPath],
-      bundle: true,
-      write: false,
-      minify: true,
-      format: 'iife',
-      jsx: 'automatic',
-      plugins: [virtualPlugin],
-      logLevel: 'silent',
-    });
-    jsBundle = buildResult.outputFiles[0]?.text || '';
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    bundleError = msg;
-    jsBundle = `
+  const formatBuildErrorScript = (msg: string) => `
       const root = document.getElementById('root');
       if (root) {
         const box = document.createElement('div');
@@ -707,6 +699,28 @@ export async function bundleProjectToHtml(params: {
         root.replaceChildren(box);
       }
     `;
+
+  try {
+    const buildResult = await esbuild.build({
+      entryPoints: [entryPath],
+      bundle: true,
+      write: false,
+      minify: true,
+      format: 'iife',
+      jsx: 'automatic',
+      plugins: [virtualPlugin],
+      logLevel: 'silent',
+    });
+    if (missingImports.size > 0) {
+      bundleError = `Missing or unsupported external import(s): ${Array.from(missingImports).join(', ')}`;
+      jsBundle = formatBuildErrorScript(bundleError);
+    } else {
+      jsBundle = buildResult.outputFiles[0]?.text || '';
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    bundleError = msg;
+    jsBundle = formatBuildErrorScript(msg);
   }
 
   let compiledTwCss = '';
@@ -1428,15 +1442,15 @@ Return ONLY valid JSON: { "summary": "Brief description of fix", "files": [{ "pa
               };
             }),
           );
-          if (!repairedValidated.some((f) => f.path.toLowerCase() === 'src/index.css')) {
-            repairedValidated.push({
+          currentFiles = mergeProjectFiles(currentFiles, repairedValidated);
+          if (!currentFiles.some((f) => f.path.toLowerCase() === 'src/index.css')) {
+            currentFiles.push({
               id: 'file_index_css',
               path: 'src/index.css',
               language: 'css',
               content: '@import "tailwindcss";\n',
             });
           }
-          currentFiles = repairedValidated;
           verification = await verifyFinalProjectState({
             files: currentFiles,
             title: params.title,
@@ -1450,6 +1464,52 @@ Return ONLY valid JSON: { "summary": "Brief description of fix", "files": [{ "pa
     }
 
     return { files: currentFiles, verification, repairAttempts };
+  }
+
+  async function verifyRefinementResult(params: {
+    inputFiles: ProjectFile[];
+    refinedRawFiles: Array<{ path: string; language?: ProjectFile['language']; content: string }>;
+    title: string;
+    config: AiProviderConfig;
+    instruction: string;
+    signal?: AbortSignal;
+    onPhase?: (phase: string) => void;
+  }): Promise<{
+    files: ProjectFile[];
+    verification: ProjectVerificationResult;
+    repairAttempts: number;
+  }> {
+    const validatedRefined = validateProjectFilesPayload(params.refinedRawFiles);
+    const mergedForVerification = mergeProjectFiles(params.inputFiles, validatedRefined);
+    if (!mergedForVerification.some((f) => f.path.toLowerCase() === 'src/index.css')) {
+      mergedForVerification.push({
+        id: 'file_index_css',
+        path: 'src/index.css',
+        language: 'css',
+        content: '@import "tailwindcss";\n',
+      });
+    }
+    const verified = await verifyAndAutoRepairFiles({
+      files: mergedForVerification,
+      title: params.title,
+      config: params.config,
+      instruction: params.instruction,
+      signal: params.signal,
+      onPhase: params.onPhase,
+    });
+    const inputByPath = new Map(
+      params.inputFiles.map((f) => [normalizeProjectFilePath(f.path), f.content]),
+    );
+    const refinedPathSet = new Set(validatedRefined.map((f) => normalizeProjectFilePath(f.path)));
+    const deltaFiles = verified.files.filter((f) => {
+      const cleanPath = normalizeProjectFilePath(f.path);
+      return refinedPathSet.has(cleanPath) || inputByPath.get(cleanPath) !== f.content;
+    });
+    return {
+      files: deltaFiles.length > 0 ? deltaFiles : validatedRefined,
+      verification: verified.verification,
+      repairAttempts: verified.repairAttempts,
+    };
   }
 
   async function postProcessGeneratedProject(params: {
@@ -3180,17 +3240,13 @@ Return JSON: { "content": "..." }`;
         });
 
         if (Array.isArray(parsed.files)) {
-          const refinedFiles = validateProjectFilesPayload(parsed.files);
-          if (!refinedFiles.some((f) => f.path.toLowerCase() === 'src/index.css')) {
-            refinedFiles.push({
-              id: 'file_index_css',
-              path: 'src/index.css',
-              language: 'css',
-              content: '@import "tailwindcss";\n',
-            });
-          }
-          const refinedVerified = await verifyAndAutoRepairFiles({
-            files: refinedFiles,
+          const refinedVerified = await verifyRefinementResult({
+            inputFiles: validatedInputFiles,
+            refinedRawFiles: parsed.files as Array<{
+              path: string;
+              language?: ProjectFile['language'];
+              content: string;
+            }>,
             title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
             config,
             instruction,
@@ -3310,17 +3366,13 @@ Return JSON: { "content": "..." }`;
         });
 
         if (Array.isArray(parsed.files)) {
-          const refinedFiles = validateProjectFilesPayload(parsed.files);
-          if (!refinedFiles.some((f) => f.path.toLowerCase() === 'src/index.css')) {
-            refinedFiles.push({
-              id: 'file_index_css',
-              path: 'src/index.css',
-              language: 'css',
-              content: '@import "tailwindcss";\n',
-            });
-          }
-          const refinedVerified = await verifyAndAutoRepairFiles({
-            files: refinedFiles,
+          const refinedVerified = await verifyRefinementResult({
+            inputFiles: validatedInputFiles,
+            refinedRawFiles: parsed.files as Array<{
+              path: string;
+              language?: ProjectFile['language'];
+              content: string;
+            }>,
             title: typeof parsed.projectName === 'string' ? parsed.projectName : 'Mist Preview',
             config,
             instruction,

@@ -102,9 +102,15 @@ class TestDynamicToolSelectionAndDiscovery(unittest.TestCase):
     def test_two_tier_selection_caps_prompt_size(self):
         tools = select_active_tools_for_query("I need to write and search a luau script in Roblox")
         names = [t["function"]["name"] for t in tools]
-        self.assertLessEqual(len(tools), 9)
+        self.assertLessEqual(len(tools), 16)
         self.assertTrue(any("execute_luau" in n for n in names))
         self.assertIn("tools_search", names)
+
+        tight_tools = select_active_tools_for_query("I need to write and search a luau script in Roblox", max_tools=9)
+        tight_names = [t["function"]["name"] for t in tight_tools]
+        self.assertLessEqual(len(tight_tools), 9)
+        self.assertTrue(any("execute_luau" in n for n in tight_names))
+        self.assertIn("tools_search", tight_names)
 
     def test_two_tier_selection_github(self):
         tools = select_active_tools_for_query("Commit this file to my git repository")

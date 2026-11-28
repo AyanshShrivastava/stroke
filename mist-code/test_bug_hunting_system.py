@@ -95,12 +95,12 @@ class TestBugHuntingSystem(unittest.TestCase):
         self.assertTrue(any("test_" in m["name"] for m in first_cls["methods"]))
 
     def test_02_frontend_test_discovery(self):
-        """TestDiscoveryEngine discovers frontend Vitest test files and counts."""
+        """TestDiscoveryEngine discovers frontend TypeScript test files and counts."""
         res = TestDiscoveryEngine.discover_frontend_tests(ROOT_DIR)
         self.assertGreaterEqual(res["total_files"], 1)
         self.assertGreaterEqual(res["total_tests"], 10)
-        matched = any("theme-and-activity" in k for k in res["files"].keys())
-        self.assertTrue(matched, f"Expected theme-and-activity test file in: {list(res['files'].keys())}")
+        matched = any("streamingAndVerification.test.ts" in k or "models.test.ts" in k for k in res["files"].keys())
+        self.assertTrue(matched, f"Expected repository TypeScript tests in: {list(res['files'].keys())}")
 
     # --------------------------------------------------------------------------
     # 2. Test Execution Runner (Truthful Pass/Fail/Skip Counting)

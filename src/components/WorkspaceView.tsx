@@ -360,6 +360,20 @@ export default function WorkspaceView({
                   <span>Inspector</span>
                 </button>
               )}
+              {bundleError && (
+                <button
+                  type="button"
+                  disabled={isRefining}
+                  onClick={() =>
+                    onRefineWithAi(
+                      `Fix this build error without using unavailable external npm packages:\n${bundleError}`,
+                    )
+                  }
+                  className="inline-flex h-7 items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/60 dark:bg-red-950/50 dark:text-red-300 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <span>{isRefining ? 'Fixing...' : 'Fix with AI'}</span>
+                </button>
+              )}
               {viewMode !== 'code' && (
                 <button
                   type="button"
@@ -427,9 +441,26 @@ export default function WorkspaceView({
                       : `Live Preview · ${viewport}`}
                   </span>
                   {bundleError && (
-                    <span className="text-red-600 dark:text-red-400 font-medium whitespace-nowrap">
-                      Build error
-                    </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        title={bundleError}
+                        className="truncate max-w-xs text-red-600 dark:text-red-400 font-medium"
+                      >
+                        Build error
+                      </span>
+                      <button
+                        type="button"
+                        disabled={isRefining}
+                        onClick={() =>
+                          onRefineWithAi(
+                            `Fix this build error without using unavailable external npm packages:\n${bundleError}`,
+                          )
+                        }
+                        className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/60 dark:bg-red-950/50 dark:text-red-300 whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <span>{isRefining ? 'Fixing...' : 'Fix with AI'}</span>
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

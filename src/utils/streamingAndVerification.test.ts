@@ -376,3 +376,147 @@ export default function App() {
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
+
+test('POST /api/ai/refine verifies partial refined files against full project and auto-repairs broken external imports', async () => {
+  let callCount = 0;
+  let repairSawPartialContextAndMissingPkg = false;
+  const app = createMistApp({
+    skipDnsLookup: true,
+    verifyAuthHeader: async () => ({
+      userId: 'user-a',
+      uid: 'user-a',
+      email: 'alice@example.com',
+      emailVerified: true,
+      idToken: 'token-a',
+    }),
+    aiFetchImpl: async (_url, init) => {
+      callCount += 1;
+      const bodyStr = typeof init?.body === 'string' ? init.body : '';
+      if (callCount === 1) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: 'Added Scene component',
+                    files: [
+                      {
+                        path: 'src/components/Scene.tsx',
+                        language: 'tsx',
+                        content: `import React from 'react';
+import gsap from 'gsap';
+export function Scene() {
+  void gsap;
+  return <div>Scene</div>;
+}`,
+                      },
+                    ],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      repairSawPartialContextAndMissingPkg =
+        bodyStr.includes('gsap') && bodyStr.includes('src/App.tsx');
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  summary: 'Replaced gsap with CSS transition',
+                  files: [
+                    {
+                      path: 'src/components/Scene.tsx',
+                      language: 'tsx',
+                      content: `import React from 'react';
+export function Scene() {
+  return <div className="transition-all">Scene Fixed</div>;
+}`,
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    },
+  });
+
+  const server = http.createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+  const addr = server.address();
+  assert.ok(addr && typeof addr !== 'string');
+  const baseUrl = `http://127.0.0.1:${addr.port}`;
+
+  try {
+    const resp = await fetch(`${baseUrl}/api/ai/refine`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer mock-token',
+      },
+      body: JSON.stringify({
+        instruction: 'Update Scene animation',
+        files: [
+          {
+            id: 'f1',
+            path: 'src/App.tsx',
+            language: 'tsx',
+            content: `import React from 'react';
+import { Scene } from './components/Scene';
+export default function App() {
+  return <Scene />;
+}`,
+          },
+          {
+            id: 'f2',
+            path: 'src/components/Scene.tsx',
+            language: 'tsx',
+            content: `import React from 'react';
+export function Scene() {
+  return <div>Old Scene</div>;
+}`,
+          },
+          {
+            id: 'f3',
+            path: 'src/index.css',
+            language: 'css',
+            content: '@import "tailwindcss";\n',
+          },
+        ],
+        providerConfig: {
+          provider: 'custom',
+          name: 'Gemini (BYOK)',
+          baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+          model: 'gemini-2.5-flash',
+          apiKey: 'AIza-mock-user-key',
+        },
+      }),
+    });
+    assert.equal(resp.status, 200);
+    const json = (await resp.json()) as {
+      repairAttempts?: number;
+      verification?: { verified: boolean; buildOk: boolean; bundleError?: string };
+      files: Array<{ path: string; content: string }>;
+    };
+    assert.equal(callCount, 2);
+    assert.equal(repairSawPartialContextAndMissingPkg, true);
+    assert.equal(json.repairAttempts, 1);
+    assert.equal(json.verification?.verified, true);
+    assert.equal(json.verification?.buildOk, true);
+    assert.ok(
+      json.files.some(
+        (f) => f.path === 'src/components/Scene.tsx' && !f.content.includes("'gsap'"),
+      ),
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+  }
+});

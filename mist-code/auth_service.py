@@ -16,11 +16,14 @@ Trust Boundary Architecture:
 
 import os
 import time
+import json
+import base64
 import logging
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import requests as _requests
 import google.oauth2.id_token
 from google.auth.transport.requests import Request as GoogleAuthRequest
 
@@ -34,8 +37,17 @@ FIREBASE_AUTH_EMULATOR_HOST = os.getenv("FIREBASE_AUTH_EMULATOR_HOST")
 # HTTP Bearer scheme for token extraction
 bearer_scheme = HTTPBearer(auto_error=False)
 
-# Cached google auth HTTP transport request object
-_google_auth_request = GoogleAuthRequest()
+
+class _BoundedTimeoutSession(_requests.Session):
+    """Requests session enforcing a bounded default HTTP timeout for cert fetches."""
+
+    def request(self, *args, **kwargs):
+        kwargs.setdefault("timeout", 5.0)
+        return super().request(*args, **kwargs)
+
+
+# Cached google auth HTTP transport request object with bounded timeout
+_google_auth_request = GoogleAuthRequest(session=_BoundedTimeoutSession())
 
 
 class AuthenticatedUser(BaseModel):
@@ -75,6 +87,23 @@ def verify_firebase_id_token(token: str, project_id: Optional[str] = None, check
     # Strip leading Bearer if provided in raw token
     if token.startswith("Bearer "):
         token = token[7:].strip()
+
+    # Fail-closed fast check: reject forged/symmetric JWT headers (e.g. HS256, alg=none)
+    # before making any network call to fetch Google public x509 certificates.
+    segments = token.split(".")
+    if len(segments) >= 2:
+        try:
+            padded = segments[0] + "=" * (-len(segments[0]) % 4)
+            header_obj = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+        except Exception:
+            header_obj = None
+        if isinstance(header_obj, dict):
+            alg = str(header_obj.get("alg") or "").strip()
+            emulator_env = os.getenv("FIREBASE_AUTH_EMULATOR_HOST") or FIREBASE_AUTH_EMULATOR_HOST
+            if not emulator_env and alg != "RS256":
+                raise ValueError(
+                    f"Token verification failed: unsupported JWT algorithm '{alg or 'missing'}' (expected RS256)."
+                )
 
     should_check_revoked = check_revoked or (os.getenv("STROKE_AUTH_CHECK_REVOKED", "0").lower() in ("1", "true", "yes"))
 
